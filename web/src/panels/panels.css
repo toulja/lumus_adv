@@ -1,0 +1,551 @@
+/*
+ * Seitenpanel der Projektansicht.
+ * Nutzt ausschliesslich die Design-Variablen aus styles.css. Eigene Klassen
+ * tragen das Praefix .pnl-, damit sie sich nicht mit den gemeinsamen
+ * Basisklassen (.knopf, .karte, .feld ...) beissen.
+ */
+
+.pnl-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--fl-1);
+  border-left: 1px solid var(--rand);
+  font-family: var(--schrift);
+  color: var(--text);
+}
+
+.pnl-reiterleiste {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid var(--rand);
+  background: var(--fl-0);
+}
+
+.pnl-reiterleiste .reiter {
+  font-size: 12px;
+}
+
+.pnl-inhalt {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pnl-abschnitt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pnl-titel {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-schwach);
+  margin: 0;
+}
+
+.pnl-hilfe {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-leise);
+  margin: 0;
+}
+
+.pnl-zahl {
+  font-family: var(--schrift-zahl);
+  font-variant-numeric: tabular-nums;
+}
+
+.pnl-zeile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pnl-zeile--verteilt {
+  justify-content: space-between;
+}
+
+.pnl-knopfreihe {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pnl-trennlinie {
+  height: 1px;
+  background: var(--rand);
+  border: 0;
+  margin: 4px 0;
+}
+
+/* -- Werkzeugleisten-artige Filterzeile ---------------------------------- */
+
+.pnl-filter {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.pnl-filter .feld {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.pnl-filter .pnl-feldblock {
+  flex: 1 1 140px;
+}
+
+/* -- Bibliothek ---------------------------------------------------------- */
+
+.pnl-kacheln {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pnl-kachel {
+  background: var(--fl-2);
+  border: 1px solid var(--rand);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.pnl-kachel--aktiv {
+  border-color: var(--akzent);
+  box-shadow: 0 0 0 1px var(--akzent-weich);
+}
+
+.pnl-kachel__haupt {
+  display: flex;
+  width: 100%;
+  gap: 10px;
+  align-items: stretch;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+
+.pnl-kachel__haupt:hover {
+  background: var(--fl-3);
+}
+
+.pnl-kachel__streifen {
+  flex: 0 0 6px;
+  align-self: stretch;
+}
+
+.pnl-kachel__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px 8px 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pnl-kachel__name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pnl-kachel__masse {
+  font-family: var(--schrift-zahl);
+  font-size: 12px;
+  color: var(--text-schwach);
+}
+
+.pnl-kachel__meta {
+  font-size: 11px;
+  color: var(--text-leise);
+}
+
+.pnl-kachel__fuss {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 8px 6px;
+}
+
+.pnl-nachweis {
+  border-top: 1px solid var(--rand);
+  padding: 8px 10px;
+  font-size: 12px;
+  background: var(--fl-1);
+}
+
+/* -- Werteliste / Formular ---------------------------------------------- */
+
+.pnl-gitter2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pnl-gitter3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.pnl-feldblock {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pnl-feldblock > label {
+  font-size: 11px;
+  color: var(--text-schwach);
+}
+
+.pnl-feldblock .feld {
+  width: 100%;
+}
+
+.pnl-feldblock input[type='number'],
+.pnl-feldblock input[type='text'] {
+  font-family: var(--schrift-zahl);
+}
+
+.pnl-schalterzeile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.pnl-schalterzeile input {
+  flex: 0 0 auto;
+}
+
+.pnl-schalterzeile label {
+  cursor: pointer;
+}
+
+.pnl-gesperrt {
+  border: 1px solid var(--warn);
+  background: rgba(240, 180, 0, 0.1);
+  border-radius: var(--radius-klein);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+/* -- Pruefung ------------------------------------------------------------ */
+
+.pnl-ampel {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+.pnl-ampel__feld {
+  background: var(--fl-2);
+  border: 1px solid var(--rand);
+  border-radius: var(--radius-klein);
+  padding: 6px 4px;
+  text-align: center;
+}
+
+.pnl-ampel__zahl {
+  font-family: var(--schrift-zahl);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.pnl-ampel__text {
+  font-size: 10px;
+  color: var(--text-leise);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.pnl-ampel__feld--fehler .pnl-ampel__zahl {
+  color: var(--fehler);
+}
+.pnl-ampel__feld--warnung .pnl-ampel__zahl {
+  color: var(--warn);
+}
+.pnl-ampel__feld--hinweis .pnl-ampel__zahl {
+  color: var(--akzent);
+}
+.pnl-ampel__feld--ok .pnl-ampel__zahl {
+  color: var(--ok);
+}
+
+.pnl-befund {
+  background: var(--fl-2);
+  border: 1px solid var(--rand);
+  border-left: 3px solid var(--rand);
+  border-radius: var(--radius-klein);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pnl-befund--fehler {
+  border-left-color: var(--fehler);
+}
+.pnl-befund--warnung {
+  border-left-color: var(--warn);
+}
+.pnl-befund--hinweis {
+  border-left-color: var(--akzent);
+}
+.pnl-befund--nicht_pruefbar {
+  border-left-color: var(--text-leise);
+}
+
+.pnl-befund__kopf {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.pnl-befund__regel {
+  font-family: var(--schrift-zahl);
+  font-size: 11px;
+  color: var(--text-leise);
+}
+
+.pnl-befund__titel {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pnl-befund__meldung {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-schwach);
+}
+
+.pnl-messwert {
+  font-family: var(--schrift-zahl);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.pnl-messwert__ist {
+  color: var(--fehler);
+}
+
+.pnl-messwert__soll {
+  color: var(--text-schwach);
+}
+
+.pnl-fundstelle {
+  font-size: 11px;
+  color: var(--text-leise);
+}
+
+.pnl-empfehlung {
+  background: var(--fl-1);
+  border: 1px solid var(--rand);
+  border-radius: var(--radius-klein);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pnl-quelle {
+  font-size: 11px;
+  color: var(--text-leise);
+}
+
+.pnl-haftung {
+  background: var(--fl-0);
+  border: 1px solid var(--rand);
+  border-radius: var(--radius-klein);
+  padding: 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-leise);
+}
+
+/* -- KI ------------------------------------------------------------------ */
+
+.pnl-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--fl-0);
+  border: 1px solid var(--rand);
+  border-radius: var(--radius-klein);
+}
+
+.pnl-blase {
+  max-width: 88%;
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pnl-blase--nutzer {
+  align-self: flex-end;
+  background: var(--akzent-weich);
+  border: 1px solid var(--akzent);
+}
+
+.pnl-blase--assistent {
+  align-self: flex-start;
+  background: var(--fl-2);
+  border: 1px solid var(--rand);
+}
+
+.pnl-eingabe {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.pnl-eingabe .feld {
+  width: 100%;
+}
+
+.pnl-eingabe .pnl-feldblock {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pnl-vorschlag {
+  background: var(--fl-2);
+  border: 1px solid var(--akzent);
+  border-radius: var(--radius-klein);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.pnl-warnkasten {
+  border: 1px solid var(--warn);
+  background: rgba(240, 180, 0, 0.09);
+  border-radius: var(--radius-klein);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* -- Listen -------------------------------------------------------------- */
+
+.pnl-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pnl-eintrag {
+  background: var(--fl-2);
+  border: 1px solid var(--rand);
+  border-radius: var(--radius-klein);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.pnl-eintrag__kopf {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.pnl-eintrag__name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pnl-eintrag__zeit {
+  font-family: var(--schrift-zahl);
+  font-size: 11px;
+  color: var(--text-leise);
+  white-space: nowrap;
+}
+
+.pnl-antwort {
+  border-left: 2px solid var(--rand);
+  padding-left: 8px;
+  margin-left: 2px;
+  font-size: 12px;
+  color: var(--text-schwach);
+}
+
+.pnl-diff {
+  font-family: var(--schrift-zahl);
+  font-size: 11px;
+  color: var(--text-schwach);
+  margin: 0;
+  padding-left: 16px;
+}
+
+.pnl-tabellenrahmen {
+  overflow-x: auto;
+}
+
+.pnl-quellennachweis {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-schwach);
+}
+
+.pnl-quellennachweis dt {
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 6px;
+}
+
+.pnl-quellennachweis dd {
+  margin: 0 0 2px;
+}
+
+.pnl-farbtupfer {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid var(--rand);
+  flex: 0 0 auto;
+}
+
+.pnl-regler {
+  width: 100%;
+}

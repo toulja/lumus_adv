@@ -1,0 +1,2846 @@
+{
+ "version": "1.0.0",
+ "stand": "2026-08-07",
+ "typen": [
+  {
+   "id": "imbissstand",
+   "kategorie": "gastronomie",
+   "name": "Imbissstand",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 3,
+    "breite": 2.5,
+    "hoehe": 3
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     2,
+     8
+    ],
+    "breite": [
+     2,
+     4
+    ],
+    "hoehe": [
+     2.5,
+     4
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.25
+     ],
+     "breite": 2.4,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      0,
+      -1.25
+     ],
+     "breite": 0.8,
+     "richtung": 180,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 12,
+    "wasser": true,
+    "gasflaschen": true
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Grundflaeche 3,0 x 2,5 m nach Lastenheft-Vorgabe Heinerfest. Hoehe 3,0 m und Anschlusswert 12 kW: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#d9822b",
+   "hinweis": "einAusstiege bilden bei Staenden die Verkaufsfront (einstieg = Publikums-/Anstellseite) und die Personaltuer (ausstieg) ab. Vor der Theke mind. 1,5 m Anstellflaeche freihalten, die nicht auf die Rettungswegbreite angerechnet wird."
+  },
+  {
+   "id": "verkaufsstand",
+   "kategorie": "verkauf",
+   "name": "Verkaufsstand",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 4,
+    "breite": 3,
+    "hoehe": 3
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     2,
+     12
+    ],
+    "breite": [
+     2,
+     5
+    ],
+    "hoehe": [
+     2.5,
+     4
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.5
+     ],
+     "breite": 3.2,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      0,
+      -1.5
+     ],
+     "breite": 0.8,
+     "richtung": 180,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 4,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Grundflaeche 4,0 x 3,0 m nach Lastenheft-Vorgabe Heinerfest. Hoehe 3,0 m und Anschlusswert 4 kW: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#c9a227",
+   "hinweis": "Nicht-gastronomischer Warenverkauf, ohne Wasseranschluss."
+  },
+  {
+   "id": "bierwagen",
+   "kategorie": "gastronomie",
+   "name": "Bierwagen (Ausschankwagen)",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 8,
+    "breite": 2.5,
+    "hoehe": 3.4
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     5,
+     13
+    ],
+    "breite": [
+     2.2,
+     2.55
+    ],
+    "hoehe": [
+     3,
+     4
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.25
+     ],
+     "breite": 6,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      3.6,
+      0
+     ],
+     "breite": 0.8,
+     "richtung": 90,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 2,
+   "technik": {
+    "stromKW": 18,
+    "wasser": true,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Breite 2,50 m: Fahrzeugbreite eines Anhaengers ist nach § 32 Abs. 1 StVZO auf 2,55 m begrenzt (https://www.gesetze-im-internet.de/stvzo_2012/__32.html). Laenge 8,0 m, Hoehe 3,40 m und 18 kW: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#c8761f",
+   "hinweis": "Anschlusswert steigt deutlich mit Zahl der Schankkoepfe/Durchlaufkuehler. Vor der Theke 2,0 m Anstellflaeche freihalten."
+  },
+  {
+   "id": "getraenkeausschank-theke",
+   "kategorie": "gastronomie",
+   "name": "Getraenkeausschank-Theke",
+   "geometrieTyp": "parametrisch",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 6,
+    "breite": 1.2,
+    "hoehe": 2.4
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     2,
+     24
+    ],
+    "breite": [
+     0.8,
+     2.5
+    ],
+    "hoehe": [
+     1.1,
+     3
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      0.6
+     ],
+     "breite": 6,
+     "richtung": 0,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 2,
+   "technik": {
+    "stromKW": 6,
+    "wasser": true,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (uebliche modulare Ausschanktheken 1,0-2,0 m Modulbreite, Thekenhoehe ca. 1,10 m, mit Rueckbau/Dach ca. 2,40 m).",
+   "farbe": "#cf8a3b",
+   "hinweis": "Frei ausgerichtete Theke im Zelt oder unter Pagode. Rueckseite (Bedienseite) 1,0 m frei halten."
+  },
+  {
+   "id": "kuehlanhaenger",
+   "kategorie": "gastronomie",
+   "name": "Kuehlanhaenger",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 5,
+    "breite": 2.3,
+    "hoehe": 2.7
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     3,
+     8
+    ],
+    "breite": [
+     2,
+     2.55
+    ],
+    "hoehe": [
+     2.2,
+     3.2
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      -2.5,
+      0
+     ],
+     "breite": 1.3,
+     "richtung": 270,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 5,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Breite <= 2,55 m nach § 32 Abs. 1 StVZO (https://www.gesetze-im-internet.de/stvzo_2012/__32.html); Kofferlaenge 5,0 m, Hoehe 2,70 m und 5 kW Dauerlast: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#b56b26",
+   "hinweis": "Hinter dem Gastrostand platzieren, Kaeltemaschine braucht freie Luftansaugung; Dauerlast laeuft auch nachts."
+  },
+  {
+   "id": "zuckerwatte-crepes-stand",
+   "kategorie": "gastronomie",
+   "name": "Zuckerwatte-/Crepes-Stand",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 3.5,
+    "breite": 2.5,
+    "hoehe": 3
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     2.5,
+     6
+    ],
+    "breite": [
+     2,
+     3.5
+    ],
+    "hoehe": [
+     2.5,
+     4
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.25
+     ],
+     "breite": 2.8,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      0,
+      -1.25
+     ],
+     "breite": 0.8,
+     "richtung": 180,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 8,
+    "wasser": true,
+    "gasflaschen": true
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (typische Anhaenger-Verkaufswagen dieser Sparte 3,0-4,0 m Front).",
+   "farbe": "#e09a4a",
+   "hinweis": "Crepes-Platten meist gasbetrieben; Zuckerwattemaschinen elektrisch. Fluessiggasflaschen nach TRGS 510 aufstellen."
+  },
+  {
+   "id": "suesswarenstand",
+   "kategorie": "gastronomie",
+   "name": "Suesswarenstand / Mandelbrennerei",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 6,
+    "breite": 3,
+    "hoehe": 3.2
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     4,
+     12
+    ],
+    "breite": [
+     2.5,
+     4
+    ],
+    "hoehe": [
+     2.8,
+     4
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.5
+     ],
+     "breite": 5,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      0,
+      -1.5
+     ],
+     "breite": 0.8,
+     "richtung": 180,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 6,
+    "wasser": true,
+    "gasflaschen": true
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (uebliche Frontlaengen 6-8 m bei Suesswaren-/Mandelgeschaeften).",
+   "farbe": "#a95f1d",
+   "hinweis": "Offene Gasbrenner (Mandelkessel): Abstand zu Zeltplanen und Nachbarstaenden pruefen."
+  },
+  {
+   "id": "haehnchengrill-wagen",
+   "kategorie": "gastronomie",
+   "name": "Haehnchengrill-/Grillwagen",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 8,
+    "breite": 3,
+    "hoehe": 3.5
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     5,
+     13
+    ],
+    "breite": [
+     2.5,
+     4
+    ],
+    "hoehe": [
+     3,
+     4.2
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.5
+     ],
+     "breite": 6,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      3.6,
+      0
+     ],
+     "breite": 0.8,
+     "richtung": 90,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 2,
+   "technik": {
+    "stromKW": 15,
+    "wasser": true,
+    "gasflaschen": true
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (Grosskuechen-Verkaufswagen typ. 7-9 m Front, Breite <= 2,55 m im Transport, ausgeklappt ca. 3 m).",
+   "farbe": "#e0a35c",
+   "hinweis": "Fettabscheidung und Abluft beachten; nicht in Hauptwindrichtung vor Buehne oder Sitzbereich stellen."
+  },
+  {
+   "id": "losbude",
+   "kategorie": "verkauf",
+   "name": "Losbude",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 5,
+    "breite": 3,
+    "hoehe": 3.2
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     3,
+     10
+    ],
+    "breite": [
+     2.5,
+     4.5
+    ],
+    "hoehe": [
+     2.8,
+     4.5
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.5
+     ],
+     "breite": 4,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      0,
+      -1.5
+     ],
+     "breite": 0.8,
+     "richtung": 180,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 5,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (uebliche Losbuden-Frontlaengen 4-8 m).",
+   "farbe": "#b8912a",
+   "hinweis": "Hoher Anteil Beleuchtung/Effektlicht -> Stromwert eher zu niedrig angesetzt."
+  },
+  {
+   "id": "schiessbude",
+   "kategorie": "verkauf",
+   "name": "Schiessbude",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 6,
+    "breite": 3,
+    "hoehe": 3.5
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     4,
+     12
+    ],
+    "breite": [
+     2.5,
+     5
+    ],
+    "hoehe": [
+     3,
+     4.5
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.5
+     ],
+     "breite": 5,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      -2.6,
+      -1.5
+     ],
+     "breite": 0.8,
+     "richtung": 180,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 5,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Grundflaeche 6,0 x 3,0 m nach Lastenheft-Vorgabe Heinerfest. Hoehe 3,50 m und 5 kW: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#d4b83c",
+   "hinweis": "Schussrichtung zeigt nach hinten (-Y): hinter dem Stand keinen Weg, keine Sitzflaeche und keinen Nachbarstand anordnen; Kugelfang gehoert zum Geschaeft."
+  },
+  {
+   "id": "marktstand-pagode",
+   "kategorie": "verkauf",
+   "name": "Marktstand / Faltpavillon 3x3",
+   "geometrieTyp": "parametrisch",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 3,
+    "breite": 3,
+    "hoehe": 3.2
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     3,
+     6
+    ],
+    "breite": [
+     3,
+     6
+    ],
+    "hoehe": [
+     2.6,
+     4
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.5
+     ],
+     "breite": 3,
+     "richtung": 0,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1,
+   "technik": {
+    "stromKW": 2,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "3,00 x 3,00 m ist die Standard-Rastergroesse handelsueblicher Faltpavillons/Marktstaende (Bezugsgroesse zahlreicher Anbieter, z. B. https://www.zelthandel.de/). Firsthoehe 3,20 m: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#a88a2e",
+   "hinweis": "Faltpavillons sind Fliegende Bauten erst ab groesseren Abmessungen; Ballastierung gegen Wind trotzdem zwingend."
+  },
+  {
+   "id": "kinderspielstand",
+   "kategorie": "verkauf",
+   "name": "Kinderspielstand (Entenangeln, Fadenziehen)",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 5,
+    "breite": 3,
+    "hoehe": 3
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     3,
+     10
+    ],
+    "breite": [
+     2.5,
+     4.5
+    ],
+    "hoehe": [
+     2.6,
+     4
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.5
+     ],
+     "breite": 4,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      0,
+      -1.5
+     ],
+     "breite": 0.8,
+     "richtung": 180,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 3,
+    "wasser": true,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (Sparte 'Belustigungsgeschaefte', typ. Frontlaenge 4-6 m; Entenangeln braucht Wasser).",
+   "farbe": "#c2a03a",
+   "hinweis": "Anstellflaeche fuer Kinder mit Begleitpersonen grosszuegiger ansetzen als bei reinem Warenverkauf."
+  },
+  {
+   "id": "riesenrad",
+   "kategorie": "fahrgeschaeft",
+   "name": "Riesenrad",
+   "geometrieTyp": "parametrisch",
+   "form": "kreis",
+   "masse": {
+    "laenge": 33,
+    "breite": 33,
+    "hoehe": 38
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     20,
+     60
+    ],
+    "breite": [
+     20,
+     60
+    ],
+    "hoehe": [
+     25,
+     65
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      -3,
+      5
+     ],
+     "breite": 1.5,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      3,
+      5
+     ],
+     "breite": 1.5,
+     "richtung": 0,
+     "typ": "ausstieg"
+    },
+    {
+     "pos": [
+      0,
+      -8
+     ],
+     "breite": 1.2,
+     "richtung": 180,
+     "typ": "notausgang"
+    }
+   ],
+   "flaechenbedarfZusatz": 4,
+   "technik": {
+    "stromKW": 60,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 144,
+   "quelleMasse": "Durchmesser 33 m und Hoehe 38 m nach Lastenheft EventPlan3D Kap. F3.2 und Abnahmekriterium 3 (verbindliche Auftraggebervorgabe). PRUEFHINWEIS 07.08.2026: Belegte Vergleichsgeschaefte sind niedriger - transportables Europa Rad (Nauta-Bussink): 33 m Durchmesser, 35 m Hoehe, 24 Gondeln zu je 6 Personen = 144 Plaetze (https://www.schausteller-hanstein.de/portfolio/europa-rad/); Lamberink RL-33: 30 m Durchmesser, 32,2 m Hoehe, 1.150 Personen/h. Geometrisch entspricht 38 m Gesamthoehe eher einem Rad von ca. 36 m Durchmesser. Der Lastenheft-Wert ist gesetzt; die Abweichung ist mit dem Auftraggeber zu klaeren. Anschlusswert 60 kW: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#d13b2f",
+   "hinweis": "Der Kreisdurchmesser ist die Radebene; die Standflaeche (Fundamente, Ballast, Kassenhaeuschen, Abspannung) ist deutlich kleiner als der Durchmesser, ragt aber ueber die Radprojektion hinaus - daher 4 m Umlauf. Hoehenfreiheit gegen Freileitungen und Baumkronen pruefen. Hoehe 38 m ist Lastenheft-Vorgabe; recherchierte Vergleichsgeschaefte mit 33 m Durchmesser liegen bei 32-35 m Hoehe."
+  },
+  {
+   "id": "kinderkarussell",
+   "kategorie": "fahrgeschaeft",
+   "name": "Kinderkarussell",
+   "geometrieTyp": "parametrisch",
+   "form": "kreis",
+   "masse": {
+    "laenge": 12,
+    "breite": 12,
+    "hoehe": 5
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     4,
+     16
+    ],
+    "breite": [
+     4,
+     16
+    ],
+    "hoehe": [
+     3,
+     8
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      6
+     ],
+     "breite": 2,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      -4.24,
+      4.24
+     ],
+     "breite": 1.2,
+     "richtung": 0,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 10,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 30,
+   "quelleMasse": "Durchmesser 12 m nach Lastenheft-Vorgabe. Hoehe 5 m, 10 kW und 30 Plaetze: Annahme, nicht belegt - zu pruefen. HINWEIS 07.08.2026: Der frueher hier gefuehrte Vergleichswert (Kettenkarussell Fa. Boehm, 16 x 16 x 7 m, 20 kW, 32 Sitze; https://www.schausteller.de/geschaefte/49) belegt dieses Objekt NICHT - ein Kettenkarussell ist eine andere Geschaeftsart mit anderem Ausflugradius und wird in LUMUS als eigener Typ 'kettenkarussell' gefuehrt. 12 m Durchmesser liegen am oberen Rand dessen, was Kinderrundfahrgeschaefte ueblicherweise belegen; beim konkret gebuchten Geschaeft Herstellerdatenblatt anfordern.",
+   "farbe": "#f39c12",
+   "hinweis": "Begleitpersonen stehen waehrend der Fahrt am Rand -> Umlauf nicht als Rettungsweg verplanen."
+  },
+  {
+   "id": "kettenkarussell",
+   "kategorie": "fahrgeschaeft",
+   "name": "Kettenkarussell / Wellenflug",
+   "geometrieTyp": "parametrisch",
+   "form": "kreis",
+   "masse": {
+    "laenge": 19,
+    "breite": 19,
+    "hoehe": 16
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     12,
+     26
+    ],
+    "breite": [
+     12,
+     26
+    ],
+    "hoehe": [
+     7,
+     30
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      9.5
+     ],
+     "breite": 2,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      0,
+      -9.5
+     ],
+     "breite": 2,
+     "richtung": 180,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 70,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 32,
+   "quelleMasse": "Wellenflug (Schaustellerbetriebe Blume): Hoehe 16 m, Grundflaeche 15,7 m Durchmesser, Eckplatzbedarf 19 x 19 m, Durchmesser im Ausflug 22 m, Stromanschluss 70 kW (https://www.wellenflug.com/). Sitzplatzzahl 32: Annahme, nicht belegt - zu pruefen (Vergleichswert 32 Sitze bei Fa. Boehm, https://www.schausteller.de/geschaefte/49).",
+   "farbe": "#16a085",
+   "hinweis": "Kritisch ist nicht die Standflaeche, sondern der Ausflugradius: 19 m Grundmass + 1,5 m Umlauf = 22 m Durchmesser im Betrieb. In diesem Ring duerfen keine Staende, Masten oder Baeume stehen."
+  },
+  {
+   "id": "autoscooter",
+   "kategorie": "fahrgeschaeft",
+   "name": "Autoscooter",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 24,
+    "breite": 12,
+    "hoehe": 6
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     16,
+     32
+    ],
+    "breite": [
+     8,
+     18
+    ],
+    "hoehe": [
+     4.5,
+     8
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      -6,
+      6
+     ],
+     "breite": 1.5,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      6,
+      6
+     ],
+     "breite": 1.5,
+     "richtung": 0,
+     "typ": "ausstieg"
+    },
+    {
+     "pos": [
+      0,
+      -6
+     ],
+     "breite": 1.2,
+     "richtung": 180,
+     "typ": "notausgang"
+    }
+   ],
+   "flaechenbedarfZusatz": 2,
+   "technik": {
+    "stromKW": 60,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 50,
+   "quelleMasse": "Fahrflaeche 24 x 12 m und ca. 60 kW Anschlusswert belegt am Autoscooter 'Bumper 1' (Hamburger DOM), https://www.hamburg-dom-aktuell.de/bumper-1-autoscooter/ (geprueft 07.08.2026). KORREKTUR 07.08.2026: Dieselbe Quelle nennt 'mindestens 25 Fahrzeuge' -> 25 Chaisen zu 2 Personen = 50 Plaetze. Der frueher hinterlegte Wert 36 (18 Chaisen) widersprach der eigenen Quelle und unterschaetzte die gleichzeitig auf der Bahn befindliche Personenzahl. Hoehe 6 m: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#7b3fbf",
+   "hinweis": "Der Kassenwagen steht bei realen Geschaeften seitlich vor der Bahn und vergroessert die Front auf bis zu 30 m - als separates Objekt 'Kassenhaeuschen' planen."
+  },
+  {
+   "id": "breakdance",
+   "kategorie": "fahrgeschaeft",
+   "name": "Breakdance",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 20,
+    "breite": 20,
+    "hoehe": 14.8
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     18,
+     24
+    ],
+    "breite": [
+     18,
+     24
+    ],
+    "hoehe": [
+     11,
+     16
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      -4,
+      10
+     ],
+     "breite": 1.5,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      4,
+      10
+     ],
+     "breite": 1.5,
+     "richtung": 0,
+     "typ": "ausstieg"
+    },
+    {
+     "pos": [
+      0,
+      -10
+     ],
+     "breite": 1.2,
+     "richtung": 180,
+     "typ": "notausgang"
+    },
+    {
+     "pos": [
+      -10,
+      0
+     ],
+     "breite": 1.2,
+     "richtung": 270,
+     "typ": "notausgang"
+    }
+   ],
+   "flaechenbedarfZusatz": 2,
+   "technik": {
+    "stromKW": 120,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 32,
+   "quelleMasse": "Huss Break Dance: Abmessungen 20 x 20 x 14,8 m; Anschlusswert 120 kW bei 20 x 20 m Grundflaeche und 14 m Hoehe (https://ride-index.de/category/fahrgeschaefte-aktiv/rundfahrgeschaefte/break-dancer/ und https://www.kirmesforum.de/threads/technische-daten-von-fahrgeschaeften.5815/page-2). Original Dreher/Vespermann zum Vergleich: 19,80 x 20,10 x 11,00 m, 125 kW. KORREKTUR 07.08.2026: Platzzahl 32 = 16 Gondeln zu je 2 Personen, belegt fuer den Huss Break Dancer Typ 1 (https://www.kirmesforum.de/threads/technische-daten-von-fahrgeschaeften.5815/page-2, https://breakdancer-info.jimdofree.com/huss-break-dancer/). Der frueher hinterlegte Wert 64 ('4 Ausleger x 4 Gondeln x 4 Personen') war doppelt zu hoch - die Gondeln fassen 2, nicht 4 Personen. Der groessere Break Dancer Typ 2 hat 24 Gondeln = 48 Plaetze; bei Buchung dieses Typs Wert anpassen.",
+   "farbe": "#c2185b",
+   "hinweis": "Hoher Anschlusswert und starke Schallemission (Musikanlage) - Abstand zu Wohnbebauung und Sitzbereichen pruefen, eigener Trafo-/Verteilerkreis sinnvoll."
+  },
+  {
+   "id": "wilde-maus",
+   "kategorie": "fahrgeschaeft",
+   "name": "Wilde Maus (Achterbahn)",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 45,
+    "breite": 22,
+    "hoehe": 21
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     35,
+     60
+    ],
+    "breite": [
+     18,
+     32
+    ],
+    "hoehe": [
+     15,
+     28
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      -5,
+      11
+     ],
+     "breite": 1.5,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      5,
+      11
+     ],
+     "breite": 1.5,
+     "richtung": 0,
+     "typ": "ausstieg"
+    },
+    {
+     "pos": [
+      0,
+      -11
+     ],
+     "breite": 1.2,
+     "richtung": 180,
+     "typ": "notausgang"
+    },
+    {
+     "pos": [
+      -22.5,
+      0
+     ],
+     "breite": 1.2,
+     "richtung": 270,
+     "typ": "notausgang"
+    }
+   ],
+   "flaechenbedarfZusatz": 2.5,
+   "technik": {
+    "stromKW": 100,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 48,
+   "quelleMasse": "Wilde Maus (Goebel/Worms): Front 22 m, Tiefe 45 m, Hoehe 21 m, Grundflaeche 990 m² (https://www.goebel-worms.de/wilde-maus-technische-daten). Vergleich Wilde Maus XXL (Eberhard): 57 x 30 m, 27 m hoch, 1.710 m². Anschlusswert 100 kW und 48 gleichzeitige Fahrgaeste: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#1f7fd4",
+   "hinweis": "Groesstes Einzelobjekt des Platzes; Anlieferung ueber ca. 10 Sattelzuege - Zufahrt und Aufbaufenster mitplanen."
+  },
+  {
+   "id": "musikexpress",
+   "kategorie": "fahrgeschaeft",
+   "name": "Musikexpress",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 20,
+    "breite": 18,
+    "hoehe": 8
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     16,
+     22
+    ],
+    "breite": [
+     14,
+     20
+    ],
+    "hoehe": [
+     6,
+     10
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      -3,
+      9
+     ],
+     "breite": 1.5,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      3,
+      9
+     ],
+     "breite": 1.5,
+     "richtung": 0,
+     "typ": "ausstieg"
+    },
+    {
+     "pos": [
+      0,
+      -9
+     ],
+     "breite": 1.2,
+     "richtung": 180,
+     "typ": "notausgang"
+    }
+   ],
+   "flaechenbedarfZusatz": 2,
+   "technik": {
+    "stromKW": 70,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 40,
+   "quelleMasse": "Musikexpress (Weber): 20 x 18 x 8 m, Anschlusswert 70 kW (https://ride-index.de/2005/01/13/hip-hop-express/). Vergleichswerte anderer Betriebe: Front 20 m / Tiefe 18 m / Hoehe 8 m bei 65-140 kW. Platzzahl 40: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#e05a1f",
+   "hinweis": "Sehr laut; nicht direkt neben Buehne, Sanitaetsstation oder Sitzgarnituren-Feld platzieren."
+  },
+  {
+   "id": "buehne",
+   "kategorie": "buehne",
+   "name": "Buehne mit Ueberdachung",
+   "geometrieTyp": "parametrisch",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 10,
+    "breite": 8,
+    "hoehe": 7
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     6,
+     24
+    ],
+    "breite": [
+     4,
+     16
+    ],
+    "hoehe": [
+     5,
+     12
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      -5,
+      -2.5
+     ],
+     "breite": 1.2,
+     "richtung": 270,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      5,
+      -2.5
+     ],
+     "breite": 1.2,
+     "richtung": 90,
+     "typ": "ausstieg"
+    },
+    {
+     "pos": [
+      0,
+      -4
+     ],
+     "breite": 1.2,
+     "richtung": 180,
+     "typ": "notausgang"
+    }
+   ],
+   "flaechenbedarfZusatz": 3,
+   "technik": {
+    "stromKW": 40,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 30,
+   "quelleMasse": "Grundflaeche 10 x 8 m und Dachhoehe 7 m nach Lastenheft-Vorgabe Heinerfest. Buehnenpodesthoehe 1,00-1,20 m, Anschlusswert 40 kW (63-A-CEE) und 30 Personen auf der Buehne: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#8e5bd0",
+   "hinweis": "Der Umlauf von 3 m ist Ballast-/Abspannflaeche der Dachkonstruktion (Traversenfuesse, Betongewichte) und darf nicht als Besucherflaeche gerechnet werden. Ueberdachte Buehnen ab 5 m Hoehe sind in der Regel Fliegende Bauten nach § 76 MBO."
+  },
+  {
+   "id": "tonregie-flaeche",
+   "kategorie": "buehne",
+   "name": "Tonregie / FOH-Platz",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 4,
+    "breite": 4,
+    "hoehe": 3
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     2.5,
+     8
+    ],
+    "breite": [
+     2.5,
+     8
+    ],
+    "hoehe": [
+     2.5,
+     4.5
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      -2
+     ],
+     "breite": 1,
+     "richtung": 180,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1,
+   "technik": {
+    "stromKW": 10,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 4,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (uebliche FOH-Zelte/Podeste 3 x 3 bis 6 x 4 m).",
+   "farbe": "#7a4bbd",
+   "hinweis": "Steht in der Besucherflaeche vor der Buehne und verengt dort den Rettungsweg - Position und Umlauf im Rettungswegnachweis beruecksichtigen."
+  },
+  {
+   "id": "schankzelt",
+   "kategorie": "zelt",
+   "name": "Schankzelt",
+   "geometrieTyp": "parametrisch",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 20,
+    "breite": 10,
+    "hoehe": 5
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     10,
+     40
+    ],
+    "breite": [
+     6,
+     20
+    ],
+    "hoehe": [
+     3.5,
+     8
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      5
+     ],
+     "breite": 3,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      -6,
+      -5
+     ],
+     "breite": 1.2,
+     "richtung": 180,
+     "typ": "notausgang"
+    },
+    {
+     "pos": [
+      6,
+      -5
+     ],
+     "breite": 1.2,
+     "richtung": 180,
+     "typ": "notausgang"
+    },
+    {
+     "pos": [
+      10,
+      0
+     ],
+     "breite": 1.2,
+     "richtung": 90,
+     "typ": "notausgang"
+    }
+   ],
+   "flaechenbedarfZusatz": 2,
+   "technik": {
+    "stromKW": 30,
+    "wasser": true,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 160,
+   "quelleMasse": "Grundflaeche 10 x 20 m nach Lastenheft-Vorgabe Heinerfest. Firsthoehe 5,0 m (Seitenhoehe ca. 3,0 m + Dachneigung ca. 20 Grad ueber 5 m Halbspannweite) und 30 kW: Annahme, nicht belegt - zu pruefen. Personenzahl aus § 1 Abs. 2 MVStaettVO 2014 (bei Sitzplaetzen an Tischen 'ein Besucher je m² Grundflaeche des Versammlungsraumes') = 200, abzueglich Theke/Bedienungsgang ca. 160.",
+   "farbe": "#46907e",
+   "hinweis": "Umlauf 2,0 m = Abspannung/Erdnaegel. Ab 75 m² ueberdachter Flaeche Fliegender Bau mit Ausfuehrungsgenehmigung (§ 76 MBO)."
+  },
+  {
+   "id": "festzelt",
+   "kategorie": "zelt",
+   "name": "Festzelt",
+   "geometrieTyp": "parametrisch",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 50,
+    "breite": 25,
+    "hoehe": 7
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     20,
+     90
+    ],
+    "breite": [
+     10,
+     40
+    ],
+    "hoehe": [
+     5,
+     12
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      12.5
+     ],
+     "breite": 4,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      -16,
+      12.5
+     ],
+     "breite": 2.4,
+     "richtung": 0,
+     "typ": "notausgang"
+    },
+    {
+     "pos": [
+      16,
+      12.5
+     ],
+     "breite": 2.4,
+     "richtung": 0,
+     "typ": "notausgang"
+    },
+    {
+     "pos": [
+      -16,
+      -12.5
+     ],
+     "breite": 2.4,
+     "richtung": 180,
+     "typ": "notausgang"
+    },
+    {
+     "pos": [
+      0,
+      -12.5
+     ],
+     "breite": 2.4,
+     "richtung": 180,
+     "typ": "notausgang"
+    },
+    {
+     "pos": [
+      16,
+      -12.5
+     ],
+     "breite": 2.4,
+     "richtung": 180,
+     "typ": "notausgang"
+    },
+    {
+     "pos": [
+      25,
+      0
+     ],
+     "breite": 2.4,
+     "richtung": 90,
+     "typ": "notausgang"
+    },
+    {
+     "pos": [
+      -25,
+      0
+     ],
+     "breite": 2.4,
+     "richtung": 270,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 3,
+   "technik": {
+    "stromKW": 120,
+    "wasser": true,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 1000,
+   "quelleMasse": "Grundflaeche 25 x 50 m nach Lastenheft-Vorgabe Heinerfest. Firsthoehe 7,0 m (Seitenhoehe ca. 3,0 m + ca. 18 Grad Dachneigung ueber 12,5 m Halbspannweite) und 120 kW: Annahme, nicht belegt - zu pruefen. Personenzahl aus § 1 Abs. 2 MVStaettVO 2014 ('ein Besucher je m²' bei Sitzplaetzen an Tischen) = 1.250 rechnerisch, abzueglich Theken, Kuechenbereich und Gaengen ca. 1.000 angesetzt.",
+   "farbe": "#3f8270",
+   "hinweis": "Rettungswegbreite nach MVStaettVO mind. 1,20 m je 200 Personen: bei 1.000 Besuchern also mind. 6,00 m Gesamtausgangsbreite - die hinterlegten Ausgaenge summieren sich auf ca. 21 m und sind bewusst grosszuegig. Genaue Ausgangszahl und -lage kommen aus der Ausfuehrungsgenehmigung des Zeltherstellers."
+  },
+  {
+   "id": "pagodenzelt",
+   "kategorie": "zelt",
+   "name": "Pagodenzelt 5x5",
+   "geometrieTyp": "parametrisch",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 5,
+    "breite": 5,
+    "hoehe": 4
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     3,
+     8
+    ],
+    "breite": [
+     3,
+     8
+    ],
+    "hoehe": [
+     3,
+     6
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      2.5
+     ],
+     "breite": 2.5,
+     "richtung": 0,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1,
+   "technik": {
+    "stromKW": 3,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 25,
+   "quelleMasse": "5,00 x 5,00 m ist eine Standard-Baugroesse handelsueblicher Pagodenzelte (marktueblicher Rasterwert, z. B. https://www.zelthandel.de/). Firsthoehe 4,0 m und 3 kW: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#55a08c",
+   "hinweis": "Vielzweckobjekt: Kasse, Backstage, Vereinsstand, Ausgabe."
+  },
+  {
+   "id": "lagerzelt",
+   "kategorie": "zelt",
+   "name": "Lagerzelt",
+   "geometrieTyp": "parametrisch",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 12,
+    "breite": 6,
+    "hoehe": 4
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     6,
+     30
+    ],
+    "breite": [
+     4,
+     12
+    ],
+    "hoehe": [
+     3,
+     6
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      -6,
+      0
+     ],
+     "breite": 3,
+     "richtung": 270,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      6,
+      0
+     ],
+     "breite": 3,
+     "richtung": 90,
+     "typ": "notausgang"
+    }
+   ],
+   "flaechenbedarfZusatz": 2,
+   "technik": {
+    "stromKW": 2,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (uebliche Lagerzeltraster 5 x 10 m bis 6 x 12 m).",
+   "farbe": "#6aa992",
+   "hinweis": "Kein Aufenthaltsraum fuer Besucher; Zufahrt fuer Anlieferung waehrend der Festzeiten klaeren."
+  },
+  {
+   "id": "toilettenwagen",
+   "kategorie": "sanitaer",
+   "name": "Toilettenwagen",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 8,
+    "breite": 2.5,
+    "hoehe": 3.2
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     5,
+     11
+    ],
+    "breite": [
+     2.4,
+     2.55
+    ],
+    "hoehe": [
+     3,
+     3.4
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      -2,
+      1.25
+     ],
+     "breite": 0.9,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      2,
+      1.25
+     ],
+     "breite": 0.9,
+     "richtung": 0,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 2,
+   "technik": {
+    "stromKW": 3,
+    "wasser": true,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 10,
+   "quelleMasse": "Laenge 8,0 m nach Lastenheft-Vorgabe. Breite 2,50 m und Hoehe 3,20 m belegt am XXL-Toilettenwagen 9,30 x 2,50 x 3,20 m (12 Unisex-Kabinen + 4 Urinale + 4 Waschbecken, ausgelegt fuer bis zu 1.000 Gaeste, https://toilettenwagen-mieten.com/toilettenwagen-xxl-bis-1000-personen/, geprueft 07.08.2026). KORREKTUR 07.08.2026: Die Quelle nennt 12 Kabinen (nicht 16 'WC-Einheiten'), und der frueher hinterlegte Wert 8 war keine Interpolation - 16 x 8,0/9,3 waere 13,8 gewesen. Neu angesetzt: 'personenkapazitaet' = 10 WC-Kabinen, linear interpoliert zwischen belegten Wagen (6,10 m Laenge = 6 Kabinen, 9,30 m = 12 Kabinen). Weiterhin Annahme - beim tatsaechlich gebuchten Wagen pruefen. Anschlusswert 3 kW: Annahme, nicht belegt (die Quelle nennt fuer den XXL-Wagen 230 V / max. 1.000 W).",
+   "farbe": "#2e8fbf",
+   "hinweis": "Personenkapazitaet meint hier die Zahl der WC-Einheiten, nicht der Besucher. Vor der Treppenseite Warteflaeche und Beleuchtung vorsehen; Frischwasser und Abwasser/Entsorgungsfahrt einplanen."
+  },
+  {
+   "id": "mobiltoilette-einzel",
+   "kategorie": "sanitaer",
+   "name": "Mobiltoilette (Einzelkabine)",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 1.2,
+    "breite": 1.2,
+    "hoehe": 2.3
+   },
+   "parametrisierbar": false,
+   "minMax": {
+    "laenge": [
+     1.1,
+     1.3
+    ],
+    "breite": [
+     1.1,
+     1.3
+    ],
+    "hoehe": [
+     2.2,
+     2.4
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      0.6
+     ],
+     "breite": 0.6,
+     "richtung": 0,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 0.8,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 1,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (Standard-Kunststoffkabine der gaengigen Anbieter ca. 1,10-1,20 m x 1,10-1,20 m x 2,20-2,35 m, vgl. https://www.toitoidixi.de/mobile-toiletten/).",
+   "farbe": "#3f9bc7",
+   "hinweis": "In Reihen mit 0,8 m Umlauf aufstellen; Tuerseite nicht zum Hauptweg oeffnen lassen."
+  },
+  {
+   "id": "behinderten-toilettenkabine",
+   "kategorie": "sanitaer",
+   "name": "Barrierefreie Toilettenkabine",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 1.6,
+    "breite": 1.6,
+    "hoehe": 2.4
+   },
+   "parametrisierbar": false,
+   "minMax": {
+    "laenge": [
+     1.5,
+     2
+    ],
+    "breite": [
+     1.5,
+     2
+    ],
+    "hoehe": [
+     2.3,
+     2.6
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      0.8
+     ],
+     "breite": 0.9,
+     "richtung": 0,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 1,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (Kabinengrundflaeche marktueblicher barrierefreier Mobilkabinen ca. 1,60 x 1,60 m). Bewegungsflaeche vor der Kabine 1,50 x 1,50 m orientiert sich an DIN 18040-1 (barrierefreies Bauen).",
+   "farbe": "#55a9cf",
+   "hinweis": "Schwellenlos anfahrbar aufstellen (feste, ebene Flaeche) und ausschildern; Bewegungsflaeche 1,50 m davor freihalten."
+  },
+  {
+   "id": "handwaschstation",
+   "kategorie": "sanitaer",
+   "name": "Handwaschstation",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 1.2,
+    "breite": 0.8,
+    "hoehe": 1.5
+   },
+   "parametrisierbar": false,
+   "minMax": {
+    "laenge": [
+     0.8,
+     2
+    ],
+    "breite": [
+     0.6,
+     1
+    ],
+    "hoehe": [
+     1.2,
+     1.8
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      0.4
+     ],
+     "breite": 1.2,
+     "richtung": 0,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1,
+   "technik": {
+    "stromKW": 0,
+    "wasser": true,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 2,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (mobile Doppel-Waschstationen der gaengigen Sanitaervermieter).",
+   "farbe": "#2b7fa8",
+   "hinweis": "Bei Gastronomie-Clustern zwingend; Abwasser fassen, nicht versickern lassen."
+  },
+  {
+   "id": "container-20ft",
+   "kategorie": "infrastruktur",
+   "name": "Container 20 ft (ISO 1CC)",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 6.058,
+    "breite": 2.438,
+    "hoehe": 2.591
+   },
+   "parametrisierbar": false,
+   "minMax": {
+    "laenge": [
+     6.058,
+     6.058
+    ],
+    "breite": [
+     2.438,
+     2.438
+    ],
+    "hoehe": [
+     2.591,
+     2.591
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      3.029,
+      0
+     ],
+     "breite": 2.34,
+     "richtung": 90,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1,
+   "technik": {
+    "stromKW": 2,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Normmass nach ISO 668 (Typ 1CC): Aussenmasse 6.058 x 2.438 x 2.591 mm. Belegt u. a. https://de.wikipedia.org/wiki/ISO-Container und https://chs-containergroup.com/de/iso-668/.",
+   "farbe": "#7b8794",
+   "hinweis": "Tuerseite ist die Stirnseite (+X); dort mind. 2,5 m Schwenkraum fuer die Fluegeltueren freihalten. Absetzen nur mit Kranfahrzeug - Zufahrt und Aufstellflaeche pruefen."
+  },
+  {
+   "id": "stromverteiler",
+   "kategorie": "infrastruktur",
+   "name": "Stromverteiler (Baustromverteiler)",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 1.2,
+    "breite": 0.8,
+    "hoehe": 1.6
+   },
+   "parametrisierbar": false,
+   "minMax": {
+    "laenge": [
+     0.6,
+     2
+    ],
+    "breite": [
+     0.5,
+     1.2
+    ],
+    "hoehe": [
+     1,
+     2
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      0.4
+     ],
+     "breite": 1,
+     "richtung": 0,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Abmessungen: Annahme, nicht belegt - zu pruefen (gaengige 63-A-/125-A-Verteiler dieser Groessenordnung). Normbezug: Baustromverteiler nach DIN EN 61439-4 (VDE 0660-600-4), Errichtung nach DIN VDE 0100-704 bzw. DIN VDE 0100-711 fuer Veranstaltungen.",
+   "farbe": "#6b7280",
+   "hinweis": "Bedienseite 1,0 m frei halten. Kabelwege zu den Staenden ueber Kabelbruecken fuehren, nie offen ueber Rettungswege."
+  },
+  {
+   "id": "wasserentnahmestelle",
+   "kategorie": "infrastruktur",
+   "name": "Wasserentnahmestelle (Standrohr am Hydranten)",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 0.6,
+    "breite": 0.6,
+    "hoehe": 1.2
+   },
+   "parametrisierbar": false,
+   "minMax": {
+    "laenge": [
+     0.4,
+     1
+    ],
+    "breite": [
+     0.4,
+     1
+    ],
+    "hoehe": [
+     0.8,
+     1.5
+    ]
+   },
+   "einAusstiege": [],
+   "flaechenbedarfZusatz": 1,
+   "technik": {
+    "stromKW": 0,
+    "wasser": true,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Standrohr DN 80 fuer Unterflurhydranten nach DIN 14375; Aufbaumasse (0,6 x 0,6 x 1,2 m Huellkoerper): Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#868e96",
+   "hinweis": "Hydranten der Loeschwasserversorgung duerfen NICHT ueberbaut oder zugestellt werden - Trink-/Brauchwasserentnahme und Loeschwasserhydrant getrennt kennzeichnen."
+  },
+  {
+   "id": "trinkwasserbrunnen",
+   "kategorie": "infrastruktur",
+   "name": "Trinkwasserbrunnen",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 1,
+    "breite": 1,
+    "hoehe": 1.2
+   },
+   "parametrisierbar": false,
+   "minMax": {
+    "laenge": [
+     0.6,
+     1.5
+    ],
+    "breite": [
+     0.6,
+     1.5
+    ],
+    "hoehe": [
+     1,
+     1.6
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      0.5
+     ],
+     "breite": 1,
+     "richtung": 0,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 0,
+    "wasser": true,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (mobile Trinkwasserspender/Refill-Saeulen fuer Veranstaltungen).",
+   "farbe": "#909aa5",
+   "hinweis": "Bei Hitzelagen Teil des Gesundheitskonzepts; im Umfeld staut sich Publikum -> nicht in einen Rettungsweg stellen."
+  },
+  {
+   "id": "muellsammelplatz",
+   "kategorie": "infrastruktur",
+   "name": "Muellsammelplatz",
+   "geometrieTyp": "parametrisch",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 6,
+    "breite": 4,
+    "hoehe": 1.5
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     3,
+     20
+    ],
+    "breite": [
+     2,
+     12
+    ],
+    "hoehe": [
+     1.2,
+     2.5
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      2
+     ],
+     "breite": 3,
+     "richtung": 0,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 2,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Flaeche 6 x 4 m fasst ca. 6 Muellgrossbehaelter 1.100 l (Behaeltermass ca. 1,37 x 1,07 x 1,45 m, Behaelternorm DIN EN 840-3). Flaechenansatz und Hoehe: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#5c6670",
+   "hinweis": "Anfahrbar fuer das Entsorgungsfahrzeug halten (Wendekreis!), Brandlast: Abstand >= 5 m zu Zelten und Holzbauten empfohlen."
+  },
+  {
+   "id": "trafostation",
+   "kategorie": "infrastruktur",
+   "name": "Trafostation (Kompaktstation)",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 3.2,
+    "breite": 2.2,
+    "hoehe": 2.6
+   },
+   "parametrisierbar": false,
+   "minMax": {
+    "laenge": [
+     2,
+     6
+    ],
+    "breite": [
+     1.6,
+     3
+    ],
+    "hoehe": [
+     2,
+     3.2
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.1
+     ],
+     "breite": 1.2,
+     "richtung": 0,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 2,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (Groessenordnung marktueblicher begehbarer/kompakter Netzstationen; genaue Masse haengen vom Netzbetreiber-Typ ab).",
+   "farbe": "#5c6670",
+   "hinweis": "Zugang fuer den Netzbetreiber jederzeit frei halten; nur befugtes Personal. Fuer Grossfahrgeschaefte (Breakdance, Wilde Maus) meist erforderlich."
+  },
+  {
+   "id": "schaustellerwohnwagen",
+   "kategorie": "infrastruktur",
+   "name": "Schaustellerwohnwagen",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 8,
+    "breite": 2.5,
+    "hoehe": 3.5
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     5,
+     12
+    ],
+    "breite": [
+     2.4,
+     2.55
+    ],
+    "hoehe": [
+     2.6,
+     4
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.25
+     ],
+     "breite": 0.8,
+     "richtung": 0,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 6,
+    "wasser": true,
+    "gasflaschen": true
+   },
+   "personenkapazitaet": 4,
+   "quelleMasse": "Typische Schaustellerwagen: Breite ca. 2,50 m, Laenge 5,00 m ohne Deichsel (plus ca. 0,90 m Deichsel), Hoehe bis ca. 3,98 m; XXL-Varianten bis 9,205 m Laenge (https://ekirmes.com/schaustellerwagen/, https://kulturgut-volksfest.de/enzyklopaedie/wohnsituation-der-schausteller/). Angesetzte 8,0 x 2,5 x 3,5 m sind ein Mittelwert - im Einzelfall pruefen.",
+   "farbe": "#7b8794",
+   "hinweis": "Gehoert auf den abgetrennten Wohnwagenplatz, nicht in den Besucherbereich; Fluessiggas und Stromversorgung mitplanen."
+  },
+  {
+   "id": "lichtmast-mobil",
+   "kategorie": "infrastruktur",
+   "name": "Mobiler Lichtmast",
+   "geometrieTyp": "parametrisch",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 1.5,
+    "breite": 1.5,
+    "hoehe": 8
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     1,
+     3
+    ],
+    "breite": [
+     1,
+     3
+    ],
+    "hoehe": [
+     4,
+     12
+    ]
+   },
+   "einAusstiege": [],
+   "flaechenbedarfZusatz": 1,
+   "technik": {
+    "stromKW": 2,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (mobile Lichtmasten/Ballonleuchten mit 4-9 m Ausfahrhoehe und ballastierter Grundplatte).",
+   "farbe": "#868e96",
+   "hinweis": "Ballastierung gegen Wind; Standfuss darf keinen Rettungsweg einengen."
+  },
+  {
+   "id": "kabelbruecke",
+   "kategorie": "infrastruktur",
+   "name": "Kabelbruecke",
+   "geometrieTyp": "parametrisch",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 0.9,
+    "breite": 0.5,
+    "hoehe": 0.07
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     0.5,
+     30
+    ],
+    "breite": [
+     0.3,
+     1.2
+    ],
+    "hoehe": [
+     0.04,
+     0.15
+    ]
+   },
+   "einAusstiege": [],
+   "flaechenbedarfZusatz": 0,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (marktuebliche Mehrkanal-Kabelbruecken ca. 900 x 500 x 65-100 mm je Modul; laengengeschaltet aneinandergereiht).",
+   "farbe": "#909aa5",
+   "hinweis": "Ueberfahrten von Kabeln in Besucher- und Feuerwehrflaechen zwingend; mit Rampen und barrierefreier Neigung ausfuehren."
+  },
+  {
+   "id": "kassenhaeuschen",
+   "kategorie": "infrastruktur",
+   "name": "Kassenhaeuschen",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 2,
+    "breite": 2,
+    "hoehe": 2.8
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     1.2,
+     4
+    ],
+    "breite": [
+     1.2,
+     4
+    ],
+    "hoehe": [
+     2.2,
+     3.5
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1
+     ],
+     "breite": 1.2,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      0,
+      -1
+     ],
+     "breite": 0.7,
+     "richtung": 180,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 2,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 2,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (Kassenwagen/-haeuschen der Fahrgeschaefte, typ. 2-4 m Front). Reale Referenz: beim Autoscooter vergroessert der Kassenwagen die Front von 24 m auf ca. 30 m (https://www.hamburg-dom-aktuell.de/bumper-1-autoscooter/).",
+   "farbe": "#7b8794",
+   "hinweis": "Vor der Kasse bildet sich eine Warteschlange - Stauflaeche ausserhalb des Rettungswegs vorsehen."
+  },
+  {
+   "id": "info-stand",
+   "kategorie": "infrastruktur",
+   "name": "Info-Stand",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 4,
+    "breite": 3,
+    "hoehe": 3
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     2,
+     8
+    ],
+    "breite": [
+     2,
+     5
+    ],
+    "hoehe": [
+     2.5,
+     4
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.5
+     ],
+     "breite": 3,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      0,
+      -1.5
+     ],
+     "breite": 0.9,
+     "richtung": 180,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 3,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 3,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (Groesse wie Verkaufsstand 4 x 3 m angesetzt).",
+   "farbe": "#6b7280",
+   "hinweis": "An einem Hauptzugang platzieren, weithin sichtbar beschildern; Fundstelle/Durchsagen meist hier verortet."
+  },
+  {
+   "id": "polizeiwache-mobil",
+   "kategorie": "einsatz",
+   "name": "Mobile Polizeiwache",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 8,
+    "breite": 3,
+    "hoehe": 3.2
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     5,
+     12
+    ],
+    "breite": [
+     2.4,
+     4
+    ],
+    "hoehe": [
+     2.6,
+     4
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.5
+     ],
+     "breite": 0.9,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      -3.5,
+      0
+     ],
+     "breite": 0.9,
+     "richtung": 270,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 3,
+   "technik": {
+    "stromKW": 8,
+    "wasser": true,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 8,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (mobile Wachen sind ueblicherweise Anhaenger-/Containerloesungen in der Groesse eines Buerocontainers bzw. eines 20-ft-Containers).",
+   "farbe": "#1b4f9c",
+   "hinweis": "An zentraler, gut sichtbarer Stelle mit direkter Anfahrt fuer Einsatzfahrzeuge; Umlauf 3 m als Halte-/Rangierflaeche."
+  },
+  {
+   "id": "sanitaetszelt",
+   "kategorie": "einsatz",
+   "name": "Sanitaetszelt",
+   "geometrieTyp": "parametrisch",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 6,
+    "breite": 6,
+    "hoehe": 3.5
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     4,
+     12
+    ],
+    "breite": [
+     4,
+     12
+    ],
+    "hoehe": [
+     3,
+     5
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      3
+     ],
+     "breite": 2,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      0,
+      -3
+     ],
+     "breite": 1.2,
+     "richtung": 180,
+     "typ": "notausgang"
+    }
+   ],
+   "flaechenbedarfZusatz": 3,
+   "technik": {
+    "stromKW": 6,
+    "wasser": true,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 10,
+   "quelleMasse": "Grundflaeche 6 x 6 m nach Lastenheft-Vorgabe Heinerfest (entspricht dem verbreiteten SG-30-/6x6-Rettungsdienstzelt). Firsthoehe 3,50 m, 6 kW und 10 Personen (Behandlungsplaetze + Personal): Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#c0392b",
+   "hinweis": "Muss mit dem Rettungswagen direkt anfahrbar sein (Trageweg <= ca. 50 m) und liegt sinnvollerweise an einer Feuerwehrzufahrt, aber ausserhalb des Besucherstroms."
+  },
+  {
+   "id": "erste-hilfe-punkt",
+   "kategorie": "einsatz",
+   "name": "Erste-Hilfe-Punkt",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 3,
+    "breite": 3,
+    "hoehe": 3
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     2,
+     6
+    ],
+    "breite": [
+     2,
+     6
+    ],
+    "hoehe": [
+     2.5,
+     4
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      1.5
+     ],
+     "breite": 2,
+     "richtung": 0,
+     "typ": "einstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 2,
+   "technik": {
+    "stromKW": 2,
+    "wasser": true,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 4,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (vorgeschobener Helferpunkt, typischerweise 3 x 3 m Faltpavillon).",
+   "farbe": "#d0473b",
+   "hinweis": "Kennzeichnung mit Rettungszeichen E003 'Erste Hilfe' nach DIN EN ISO 7010 / ASR A1.3."
+  },
+  {
+   "id": "einsatzleitwagen-stellflaeche",
+   "kategorie": "einsatz",
+   "name": "Einsatzleitwagen-Stellflaeche",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 8,
+    "breite": 3.5,
+    "hoehe": 0.1
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     6,
+     12
+    ],
+    "breite": [
+     3,
+     5
+    ],
+    "hoehe": [
+     0.05,
+     0.2
+    ]
+   },
+   "einAusstiege": [],
+   "flaechenbedarfZusatz": 2,
+   "technik": {
+    "stromKW": 16,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Bemessung nach Fahrzeuggroesse ELW 2 (ca. 7,5-8,0 m lang, ca. 2,5 m breit, ca. 3,3 m hoch, Normreihe DIN 14507-3). Hoehe 0,10 m ist nur die Markierungsdicke der Flaeche. Stellflaechenmass 8,0 x 3,5 m inkl. Tueroeffnung: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#0b57a4",
+   "hinweis": "Reine Stellflaeche, kein Bauwerk. Mit Blick auf den Platz, aber ausserhalb des Besucherstroms; Netzanschluss (CEE 32 A) und Mobilfunk-/Funkabdeckung pruefen."
+  },
+  {
+   "id": "feuerwehr-bewegungsflaeche",
+   "kategorie": "einsatz",
+   "name": "Feuerwehr-Bewegungsflaeche",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 12,
+    "breite": 7,
+    "hoehe": 0.1
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     12,
+     30
+    ],
+    "breite": [
+     7,
+     14
+    ],
+    "hoehe": [
+     0.05,
+     0.2
+    ]
+   },
+   "einAusstiege": [],
+   "flaechenbedarfZusatz": 0,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Muster-Richtlinien ueber Flaechen fuer die Feuerwehr (Fassung Februar 2007), Nr. 4: Bewegungsflaechen muessen je Fahrzeug mindestens 7 m x 12 m gross sein (https://www.is-argebau.de/Dokumente/4231196.pdf; hessische Fassung: https://www.umwelt-online.de/recht/bau/laender/he/ffl.htm). Hoehe 0,10 m ist nur die Markierungsdicke.",
+   "farbe": "#b3261e",
+   "hinweis": "Zufahrten zaehlen NICHT als Bewegungsflaeche. Vor und hinter Bewegungsflaechen an weiterfuehrenden Zufahrten sind mind. 4 m lange Uebergangsbereiche anzuordnen. Tragfaehigkeit fuer Achslast bis 10 t; Flaeche dauerhaft freihalten (keine Staende, keine Sitzgarnituren, keine Kabeltrassen ohne Ueberfahrschutz)."
+  },
+  {
+   "id": "sammelplatz-marker",
+   "kategorie": "einsatz",
+   "name": "Sammelplatz-Marker",
+   "geometrieTyp": "parametrisch",
+   "form": "kreis",
+   "masse": {
+    "laenge": 2,
+    "breite": 2,
+    "hoehe": 2.5
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     1,
+     4
+    ],
+    "breite": [
+     1,
+     4
+    ],
+    "hoehe": [
+     2,
+     4
+    ]
+   },
+   "einAusstiege": [],
+   "flaechenbedarfZusatz": 0,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Kennzeichnung mit Rettungszeichen E007 'Sammelstelle' nach DIN EN ISO 7010 bzw. ASR A1.3 (Sicherheits- und Gesundheitsschutzkennzeichnung). Physische Markergroesse 2,0 m Durchmesser / 2,5 m Hoehe: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#1f8a4c",
+   "hinweis": "Der Marker ist nur der Kennzeichnungspunkt; die eigentliche Sammelplatzflaeche wird separat als Flaeche geplant (Planungsansatz 0,5 m² je Person - Annahme, nicht belegt - zu pruefen). Sammelplatz nie innerhalb des Gefaehrdungsbereichs oder auf einer Feuerwehrflaeche."
+  },
+  {
+   "id": "fluchtweg-beschilderungspunkt",
+   "kategorie": "einsatz",
+   "name": "Fluchtweg-Beschilderungspunkt",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 0.4,
+    "breite": 0.15,
+    "hoehe": 2.5
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     0.2,
+     0.8
+    ],
+    "breite": [
+     0.1,
+     0.4
+    ],
+    "hoehe": [
+     2,
+     3.5
+    ]
+   },
+   "einAusstiege": [],
+   "flaechenbedarfZusatz": 0,
+   "technik": {
+    "stromKW": 0.05,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Rettungszeichen E001/E002 'Notausgang' nach DIN EN ISO 7010, Anbringung nach ASR A1.3. Erkennungsweite = Hoehe des Zeichens x 100 (ASR A1.3): ein 200 mm hohes Zeichen traegt ca. 20 m, ein 400 mm hohes ca. 40 m. Mastmasse 0,40 x 0,15 x 2,50 m: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#1f8a4c",
+   "hinweis": "Abstand der Schilder aus der Erkennungsweite ableiten - lueckenlose Sichtkette entlang des Rettungswegs. Sicherheitsbeleuchtung/hinterleuchtete Ausfuehrung bei Dunkelheit."
+  },
+  {
+   "id": "bauzaun-segment",
+   "kategorie": "absperrung",
+   "name": "Bauzaun-Segment",
+   "geometrieTyp": "parametrisch",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 3.5,
+    "breite": 0.25,
+    "hoehe": 2
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     3.5,
+     3.5
+    ],
+    "breite": [
+     0.24,
+     0.4
+    ],
+    "hoehe": [
+     2,
+     2
+    ]
+   },
+   "einAusstiege": [],
+   "flaechenbedarfZusatz": 0.3,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Standard-Mobilzaun/Bauzaun-Element 3,50 m Breite x 2,00 m Hoehe, belegt bei mehreren Herstellern/Haendlern: https://www.1a-absperrtechnik.de/absperrtechnik/bauzaun/mobilzaun-bauzaun-elemente/3924/mobilzaun/bauzaun-element-standard-b-3-50-m-x-h-2-00-m und https://geruest-welt.de/Produkte-Geruest-Welt/Bautechnik/Bauzaun/Mobilzaun-Bauzaun-Standard-Pro-3-50-x-2-00-m.html (Rahmenrohr 40/30 mm, Maschenweite 100 x 300 mm, ca. 13-14 kg je Element). Tiefe 0,25 m = Betonfussplatte: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#e8b21f",
+   "hinweis": "Linear aneinanderreihen; die Fussplatten ragen beidseitig heraus (0,3 m Umlauf). Bei Windlast und Bannerbespannung zusaetzlich verstreben/ballastieren."
+  },
+  {
+   "id": "absperrgitter",
+   "kategorie": "absperrung",
+   "name": "Absperrgitter",
+   "geometrieTyp": "parametrisch",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 2,
+    "breite": 0.4,
+    "hoehe": 1.1
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     1.25,
+     2.5
+    ],
+    "breite": [
+     0.35,
+     0.6
+    ],
+    "hoehe": [
+     1.1,
+     1.1
+    ]
+   },
+   "einAusstiege": [],
+   "flaechenbedarfZusatz": 0.3,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Schake Absperrgitter Typ D: Gesamthoehe 1,10 m, Laenge 2,00 m, Rohr Ø 33,7 mm, Fuellstaebe Ø 16 mm, verzinkter Stahl, ca. 15,5 kg (https://www.bau-online-bestellen.de/absperrgitter-eventbereich/286-absperrgitter-typ-d-laenge-200-m.html, https://www.schake.com/de/produkte/bautechnik-verkehrssicherung/mobilzaun/absperrgitter). Laengen 1,25-2,50 m marktueblich. Fussausladung 0,40 m: Annahme, nicht belegt - zu pruefen.",
+   "farbe": "#d9a520",
+   "hinweis": "Nur Leitfunktion, kein Druckschutz - bei erwartetem Publikumsdruck (Buehnenfront) Gitter mit Stuetzfuss/Druckgitter einsetzen."
+  },
+  {
+   "id": "fahrzeugsperre-mobil",
+   "kategorie": "absperrung",
+   "name": "Mobile Fahrzeugsperre (Ueberfahrschutz)",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 2,
+    "breite": 1.5,
+    "hoehe": 1
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     1,
+     4
+    ],
+    "breite": [
+     0.8,
+     3
+    ],
+    "hoehe": [
+     0.8,
+     1.5
+    ]
+   },
+   "einAusstiege": [],
+   "flaechenbedarfZusatz": 0.5,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (Abmessungen mobiler Fahrzeugsperren variieren stark je Fabrikat). Normbezug fuer die Nachweisfuehrung: DIN SPEC 91414-2 bzw. ISO IWA 14-1 (Anprallpruefung von Fahrzeugsicherheitsbarrieren).",
+   "farbe": "#c99a1c",
+   "hinweis": "An Zufahrten zum Festbereich; Aufstellung darf Feuerwehrzufahrt nicht dauerhaft blockieren - Durchfahrt fuer Einsatzkraefte oeffenbar halten."
+  },
+  {
+   "id": "sitzgarnitur-feld",
+   "kategorie": "moeblierung",
+   "name": "Sitzgarnitur-Feld",
+   "geometrieTyp": "parametrisch",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 10,
+    "breite": 8,
+    "hoehe": 0.8
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     2.5,
+     60
+    ],
+    "breite": [
+     2.5,
+     40
+    ],
+    "hoehe": [
+     0.8,
+     0.8
+    ]
+   },
+   "einAusstiege": [
+    {
+     "pos": [
+      0,
+      4
+     ],
+     "breite": 2,
+     "richtung": 0,
+     "typ": "einstieg"
+    },
+    {
+     "pos": [
+      0,
+      -4
+     ],
+     "breite": 2,
+     "richtung": 180,
+     "typ": "ausstieg"
+    }
+   ],
+   "flaechenbedarfZusatz": 1.5,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 144,
+   "quelleMasse": "Bierzeltgarnitur Standardmass: Tisch 220 x 50 x 77 cm, Baenke 220 x 25 x 48 cm (https://www.ruku1952.de/de/blog/bierzeltgarnituren-masse). Platzbedarf je Garnitur ca. 2,20 x 2,00 m inkl. Sitzraum bei 8 Personen (https://bi-verleih.de/bierzeltgarnitur_platzbedarf_und_zeltgroesse) -> 10 x 8 m = 80 m² fassen ca. 18 Garnituren = ca. 144 Personen. Aufbauhoehe 0,80 m (Tischplatte 0,77 m) belegt; Belegungsdichte gerundet.",
+   "farbe": "#8b6f47",
+   "hinweis": "Deckt sich mit § 1 Abs. 2 MVStaettVO 2014 (Sitzplaetze an Tischen: 1 Besucher je m²) nur, wenn Gaenge separat gerechnet werden - deshalb 1,5 m Umlauf als Bedien-/Fluchtgang vorsehen. Reihen so anordnen, dass Rettungswege gerade und durchgehend bleiben."
+  },
+  {
+   "id": "stehtisch",
+   "kategorie": "moeblierung",
+   "name": "Stehtisch",
+   "geometrieTyp": "parametrisch",
+   "form": "kreis",
+   "masse": {
+    "laenge": 0.8,
+    "breite": 0.8,
+    "hoehe": 1.1
+   },
+   "parametrisierbar": false,
+   "minMax": {
+    "laenge": [
+     0.6,
+     0.9
+    ],
+    "breite": [
+     0.6,
+     0.9
+    ],
+    "hoehe": [
+     1.05,
+     1.15
+    ]
+   },
+   "einAusstiege": [],
+   "flaechenbedarfZusatz": 0.6,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 4,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (marktuebliche Bistro-/Stehtische Ø 60-80 cm, Hoehe 105-115 cm).",
+   "farbe": "#96795a",
+   "hinweis": "Rund um den Tisch stehen Gaeste - 0,6 m Umlauf ist Mindestmass, real bindet ein Stehtisch ca. 2,5-3 m² Flaeche."
+  },
+  {
+   "id": "abfallbehaelter",
+   "kategorie": "moeblierung",
+   "name": "Abfallbehaelter 240 l",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 0.58,
+    "breite": 0.73,
+    "hoehe": 1.07
+   },
+   "parametrisierbar": false,
+   "minMax": {
+    "laenge": [
+     0.55,
+     0.6
+    ],
+    "breite": [
+     0.7,
+     0.75
+    ],
+    "hoehe": [
+     1.05,
+     1.1
+    ]
+   },
+   "einAusstiege": [],
+   "flaechenbedarfZusatz": 0.5,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": null,
+   "quelleMasse": "240-l-Muellgrossbehaelter nach DIN EN 840-1; marktuebliche Aussenmasse ca. 580 x 730 x 1.070 mm (Herstellerangaben, z. B. SULO/ESE). Toleranzen je Fabrikat: zu pruefen.",
+   "farbe": "#7a6140",
+   "hinweis": "Dichte Verteilung entlang der Gastronomiezeilen; Leerungsfahrten und Umlaufweg fuer das Reinigungspersonal mitplanen."
+  },
+  {
+   "id": "sitzbank",
+   "kategorie": "moeblierung",
+   "name": "Sitzbank (frei stehend)",
+   "geometrieTyp": "box",
+   "form": "rechteck",
+   "masse": {
+    "laenge": 1.8,
+    "breite": 0.6,
+    "hoehe": 0.85
+   },
+   "parametrisierbar": true,
+   "minMax": {
+    "laenge": [
+     1.2,
+     3
+    ],
+    "breite": [
+     0.4,
+     0.8
+    ],
+    "hoehe": [
+     0.45,
+     0.95
+    ]
+   },
+   "einAusstiege": [],
+   "flaechenbedarfZusatz": 0.8,
+   "technik": {
+    "stromKW": 0,
+    "wasser": false,
+    "gasflaschen": false
+   },
+   "personenkapazitaet": 3,
+   "quelleMasse": "Annahme, nicht belegt - zu pruefen (Sitzhoehe 0,45 m, Rueckenlehne bis ca. 0,85 m; Bezugswert Bierzeltbank 220 x 25 x 48 cm laut https://www.ruku1952.de/de/blog/bierzeltgarnituren-masse).",
+   "farbe": "#8b6f47",
+   "hinweis": "Ruhezonen abseits der Hauptstroeme; nie in Rettungswegbreiten hineinstellen."
+  }
+ ]
+}

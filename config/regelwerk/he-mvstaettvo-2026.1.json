@@ -1,0 +1,543 @@
+{
+  "id": "he-mvstaettvo",
+  "bundesland": "HE",
+  "version": "2026.1",
+  "stand": "2026-08-07",
+  "bezeichnung": "Startregelsatz Hessen - Versammlungsstaetten im Freien",
+  "haftungshinweis": "Diese automatisierte Pruefung ist ausschliesslich Planungsunterstuetzung fuer den Entwurf von Veranstaltungsflaechen; sie ersetzt weder die Pruefung durch eine Pruefsachverstaendige oder einen Pruefsachverstaendigen fuer Brandschutz noch die Beteiligung und Entscheidung der zustaendigen Bauaufsichts-, Ordnungs- und Brandschutzbehoerden. Massgeblich sind allein die im Einzelfall behoerdlich festgelegten Auflagen und das mit allen Beteiligten abgestimmte Sicherheitskonzept. WICHTIGER RECHTSSTATUS-HINWEIS: In Hessen gilt KEINE eigene Versammlungsstaettenverordnung. Hessen hat die MVStaettVO nicht als Rechtsverordnung uebernommen, sondern am 03.12.2015 die Hessische Versammlungsstaettenrichtlinie (H-VStaettR) als bauaufsichtliche Richtlinie zur HBO erlassen, die seit 2021 Bestandteil der H-VV TB ist. Die hier verwendeten Zahlenwerte werden ueber die H-VStaettR/H-VV TB sowie ueber Auflagen der Genehmigungsbehoerde wirksam - sie gelten nicht kraft unmittelbar geltender hessischer Verordnung. KORREKTUR 07.08.2026: Der Bemessungsparagraf (Paragraf 7) wurde jetzt am amtlichen Volltext der H-VStaettR geprueft (Anhang HE 10 zu lfd. Nr. A 2.2.2.4 der H-VV TB, PDF mit Textebene auf wirtschaft.hessen.de). Ein maschinenlesbarer Volltext IST frei zugaenglich; die frueher hier behauptete Nichtverfuegbarkeit war unzutreffend. Dabei wurde eine sachliche Abweichung gefunden: H-VStaettR Paragraf 7 Abs. 4 bestimmt ausdruecklich 'Zwischenwerte sind zulaessig', waehrend MVStaettVO/BayVStaettV Paragraf 7 Abs. 4 Satz 4 Staffelungen nur in Schritten von 0,60 m zulassen. Die bayerische Fassung ist an genau dieser Stelle NICHT wortgleich und darf fuer Hessen nicht als Ersatzbeleg dienen. ANWENDUNGSBEREICH: H-VStaettR Paragraf 1 Abs. 1 Nr. 2 erfasst Versammlungsstaetten im Freien mit Szenenflaechen sowie Freisportanlagen jeweils MIT Tribuenen, die keine Fliegenden Bauten sind und insgesamt mehr als 1.000 Besucher fassen. Maerkte, Strassenfeste und aehnliche Veranstaltungen ohne Tribuenen fallen daher in der Regel NICHT unter die H-VStaettR; fuer sie sind das HLFS-Merkblatt, HBO Paragraf 5 und die MRFlFw die einschlaegigen Vorgaben, und die Paragraf-7-Werte wirken nur als Bemessungsorientierung ueber die Auflagen der Genehmigungsbehoerde.",
+  "quellen": [
+    {
+      "kuerzel": "MVStaettVO",
+      "titel": "Muster-Versammlungsstaettenverordnung - Musterverordnung ueber den Bau und Betrieb von Versammlungsstaetten (ARGEBAU, Fachkommission Bauaufsicht)",
+      "fassung": "Fassung Juni 2005, zuletzt geaendert durch Beschluss der Fachkommission Bauaufsicht vom Juli 2014. Musterrecht ohne unmittelbare Rechtsverbindlichkeit; in Hessen NICHT als Verordnung uebernommen.",
+      "url": "https://www.is-argebau.de/Dokumente/4231724917250.pdf"
+    },
+    {
+      "kuerzel": "BayVStaettV",
+      "titel": "Verordnung ueber den Bau und Betrieb von Versammlungsstaetten (Bayern) - Landesumsetzung der MVStaettVO. NICHT MEHR als Beleg fuer Hessen verwendet.",
+      "fassung": "Landesrecht Bayern. Paragraf 7 ist wortgleich zur MVStaettVO, aber NICHT zur hessischen H-VStaettR: Bayern/MVStaettVO lassen Staffelungen nur in Schritten von 0,60 m zu, Hessen laesst ausdruecklich Zwischenwerte zu. Diese Quelle darf fuer HE-Regeln nicht mehr als Ersatzbeleg herangezogen werden (Befund 07.08.2026).",
+      "url": "https://gesetze.legal/bayern/vstaettv/7"
+    },
+    {
+      "kuerzel": "H-VStaettR",
+      "titel": "Hessische Versammlungsstaettenrichtlinie - Richtlinie ueber den Bau und Betrieb von Versammlungsstaetten",
+      "fassung": "Erlassen am 03.12.2015 als bauaufsichtliche Richtlinie zur HBO; heute Anhang HE 10 zu lfd. Nr. A 2.2.2.4 der Hessischen Verwaltungsvorschrift Technische Baubestimmungen (H-VV TB), basierend auf der MVStaettV Fassung Juni 2005. Keine Rechtsverordnung. VERIFIZIERTE ABWEICHUNGEN zur MVStaettVO (Volltext geprueft 07.08.2026): (a) Paragraf 7 Abs. 4 - 'Zwischenwerte sind zulaessig' statt 'Staffelungen sind nur in Schritten von 0,60 m zulaessig'; (b) Paragraf 7 Abs. 4 - die Mindestbreite 1,20 m steht in Satz 3, nicht in Satz 2; (c) Paragraf 7 Abs. 1 Satz 1 ohne den Zusatz 'oder von der Tribuene', dafuer Satz 4 'Die Saetze 1 bis 3 gelten fuer Tribuenen ausserhalb von Versammlungsraeumen sinngemaess'; (d) Paragraf 1 Abs. 1 Nr. 2 verlangt fuer Versammlungsstaetten im Freien zusaetzlich Tribuenen.",
+      "url": "https://wirtschaft.hessen.de/sites/wirtschaft.hessen.de/files/2021-07/hessische_versammlungsstaettenrichtlinie_h-vstaettr_0.pdf"
+    },
+    {
+      "kuerzel": "MRFlFw",
+      "titel": "Muster-Richtlinien ueber Flaechen fuer die Feuerwehr (ARGEBAU, Fachkommission Bauaufsicht) - Ausfuehrungsbestimmungen zu Paragraf 5 MBO/HBO",
+      "fassung": "Fassung Februar 2007, zuletzt geaendert durch Beschluss der Fachkommission Bauaufsicht vom Oktober 2009; in Hessen ueber die H-VV TB bauaufsichtlich eingefuehrt",
+      "url": "https://www.is-argebau.de/Dokumente/4231196.pdf"
+    },
+    {
+      "kuerzel": "DIN 14090",
+      "titel": "DIN 14090 - Flaechen fuer die Feuerwehr auf Grundstuecken",
+      "fassung": "Aktuelle Ausgabe 2024-02 (ersetzt 2003-05; laut DIN-Bekanntmachung technisch umfassend ueberarbeitet, Bemessungsfahrzeug DLAK 23/12 nach DIN EN 14043:2014-04). GEPRUEFT 07.08.2026 am Volltext der Ausgabe 2003-05: Abschnitt 4.1 (Zugaenge 1,25 m / Einengungen 1 m / lichte Hoehe 2,2 m), 4.2.1 (Zufahrt lichte Breite mind. 3 m, bei ueber 12 m beidseitiger Begrenzung 3,5 m, lichte Hoehe Durchfahrt 3,5 m), 4.2.2 mit Tabelle 1 (Kurvenaussenradius/Breite, Einbiegeradius mind. 10,5 m, Uebergangsbereiche 11 m), 4.4.1 (Bewegungsflaechen 7 m x 12 m, Uebergangsbereiche 4 m). Die Ausgabe 2024-02 ist kostenpflichtig und wurde NICHT geprueft - Abweichungen moeglich. Massgeblich fuer die Regeln ist ohnehin die in Hessen ueber die H-VV TB bauaufsichtlich eingefuehrte MRFlFw.",
+      "url": "https://www.beuth.de/de/norm/din-14090/"
+    },
+    {
+      "kuerzel": "HBO",
+      "titel": "Hessische Bauordnung (HBO) vom 28.05.2018",
+      "fassung": "Stand der amtlichen Broschuere Oktober 2025 (Baupaket I); Paragraf 5 Zugaenge und Zufahrten auf den Grundstuecken",
+      "url": "https://wirtschaft.hessen.de/sites/wirtschaft.hessen.de/files/2025-12/hbo_broschuere_stand_oktober_2025-baupaket_i-final_nach_korrektur_vom_27.11.2025.pdf"
+    },
+    {
+      "kuerzel": "HLFS-Merkblatt",
+      "titel": "Merkblatt Brandschutzvorkehrungen bei Maerkten, Strassenfesten und aehnlichen Veranstaltungen - Fachausschuss Brandschutz beim Hessischen Ministerium des Innern und fuer Sport / Hessische Landesfeuerwehrschule, Fachgruppe 20 Vorbeugender Brandschutz",
+      "fassung": "Merkblattstand 28.08.2007, Literaturteil Stand 01.02.2023; einschlaegige hessische Fachvorgabe fuer Veranstaltungen im Freien",
+      "url": "https://hlfs.hessen.de/sites/hlfs.hessen.de/files/2023-02/merkblatt_brandschutzvorkehrungen_bei_maerkten_strassenfesten_u.ae_._veranstaltungen.pdf"
+    }
+  ],
+  "regeln": [
+    {
+      "id": "R-001",
+      "titel": "Mindestbreite von Rettungswegen",
+      "quelle": {
+        "kuerzel": "H-VStaettR",
+        "paragraf": "Paragraf 7 Abs. 4 Satz 3",
+        "zitat": "Die lichte Mindestbreite eines jeden Teils von Rettungswegen muss 1,20 m betragen.",
+        "url": "https://wirtschaft.hessen.de/sites/wirtschaft.hessen.de/files/2021-07/hessische_versammlungsstaettenrichtlinie_h-vstaettr_0.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "wegbreite_min",
+      "parameter": { "wegetyp": "rettungsweg" },
+      "schwellwerte": { "minBreiteM": 1.2 },
+      "meldungstext": "Rettungsweg {element} bei {ort} ist nur {ist} m breit. Erforderlich sind mindestens {soll} m lichte Breite.",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "KORRIGIERT 07.08.2026: Fundstelle war als 'MVStaettVO Paragraf 7 Abs. 4 Satz 2' (Beleg BayVStaettV) angegeben. Fuer Hessen ist die H-VStaettR massgeblich; dort steht die Mindestbreite in Paragraf 7 Abs. 4 SATZ 3, nicht Satz 2. Wortlaut am amtlichen Volltext (Anhang HE 10 zur H-VV TB) gelesen. Der Zahlenwert 1,20 m ist in MVStaettVO und H-VStaettR identisch."
+      }
+    },
+    {
+      "id": "R-002",
+      "titel": "Mindestbreite von Besucherwegen im Veranstaltungsgelaende",
+      "quelle": {
+        "kuerzel": "H-VStaettR",
+        "paragraf": "Paragraf 6 Abs. 1 Satz 1 i. V. m. Paragraf 7 Abs. 4 Satz 3",
+        "zitat": "Rettungswege muessen ins Freie zu oeffentlichen Verkehrsflaechen fuehren.",
+        "url": "https://wirtschaft.hessen.de/sites/wirtschaft.hessen.de/files/2021-07/hessische_versammlungsstaettenrichtlinie_h-vstaettr_0.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "wegbreite_min",
+      "parameter": { "wegetyp": "besucherweg" },
+      "schwellwerte": { "minBreiteM": 1.2 },
+      "meldungstext": "Besucherweg {element} bei {ort} ist nur {ist} m breit. Ein als Rettungsweg nutzbarer Weg braucht mindestens {soll} m.",
+      "schweregrad": "warnung",
+      "verifikation": {
+        "status": "zu_pruefen",
+        "geprueftAm": "2026-08-07",
+        "beleg": "Der Zahlenwert 1,20 m ist belegt (H-VStaettR Paragraf 7 Abs. 4 Satz 3). KORRIGIERT 07.08.2026: Das frueher hier gefuehrte Zitat 'Rettungswege muessen ins Freie unmittelbar oder ueber Verkehrsflaechen auf dem Grundstueck zu oeffentlichen Verkehrsflaechen fuehren' ist ein FALSCHZITAT - die Wendung 'ueber Verkehrsflaechen auf dem Grundstueck' kommt weder in der MVStaettVO noch in der H-VStaettR vor (Volltextsuche in beiden Dokumenten: 0 Treffer). Der amtliche Wortlaut von Paragraf 6 Abs. 1 Satz 1 lautet nur 'Rettungswege muessen ins Freie zu oeffentlichen Verkehrsflaechen fuehren.' Nicht belegt bleibt die Uebertragung auf jeden Besucherweg: ob ein konkreter Besucherweg zum Rettungsweg zaehlt, legt die Genehmigungsbehoerde im Lageplan fest (HLFS-Merkblatt, Abschnitt Festlegungen im Lageplan). Deshalb nur Warnung."
+      }
+    },
+    {
+      "id": "R-003",
+      "titel": "Mindestbreite von Versorgungs- und Zugangswegen fuer die Feuerwehr",
+      "quelle": {
+        "kuerzel": "MRFlFw",
+        "paragraf": "Nr. 14 (Zu- oder Durchgaenge)",
+        "zitat": "Zu- oder Durchgaenge fuer die Feuerwehr sind geradlinig und mindestens 1,25 m breit auszubilden.",
+        "url": "https://www.is-argebau.de/Dokumente/4231196.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "wegbreite_min",
+      "parameter": { "wegetyp": "versorgungsweg" },
+      "schwellwerte": { "minBreiteM": 1.25 },
+      "meldungstext": "Versorgungsweg {element} bei {ort} ist {ist} m breit. Als fussgaengiger Feuerwehrzugang sind {soll} m erforderlich (Engstellen wie Tueroeffnungen: 1,00 m).",
+      "schweregrad": "hinweis",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "Volltext der MRFlFw Fassung Februar 2007 (geaendert Oktober 2009) aus dem is-argebau-PDF extrahiert und Nr. 14 woertlich gelesen."
+      }
+    },
+    {
+      "id": "R-004",
+      "titel": "Mindestbreite befahrbarer Feuerwehrzufahrten im Veranstaltungsgelaende",
+      "quelle": {
+        "kuerzel": "HLFS-Merkblatt",
+        "paragraf": "Abschnitt Zu- und Durchfahrten",
+        "zitat": "eine moeglichst gradlinige 3,50 m breite Durchfahrt fuer Feuerwehr- bzw. Rettungsfahrzeuge verbleibt",
+        "url": "https://hlfs.hessen.de/sites/hlfs.hessen.de/files/2023-02/merkblatt_brandschutzvorkehrungen_bei_maerkten_strassenfesten_u.ae_._veranstaltungen.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "wegbreite_min",
+      "parameter": { "wegetyp": "feuerwehrzufahrt" },
+      "schwellwerte": { "minBreiteM": 3.5 },
+      "meldungstext": "Feuerwehrzufahrt {element} bei {ort} ist nur {ist} m breit. Fuer Veranstaltungen im Freien fordert das hessische Merkblatt {soll} m.",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "Text des hessischen Merkblatts aus dem PDF extrahiert und woertlich gelesen. WICHTIG: Der baurechtliche Mindestwert nach MRFlFw Nr. 2 betraegt 3,00 m; das hessische Veranstaltungsmerkblatt setzt fuer Maerkte und Strassenfeste 3,50 m an (siehe R-016). Der hoehere Wert wird hier als Regelanforderung angewendet."
+      }
+    },
+    {
+      "id": "R-005",
+      "titel": "Mindestbreite von Feuerwehr-Bewegungsflaechen",
+      "quelle": {
+        "kuerzel": "MRFlFw",
+        "paragraf": "Nr. 13 (Bewegungsflaechen)",
+        "zitat": "Bewegungsflaechen muessen fuer jedes Fahrzeug mindestens 7 x 12 m gross sein.",
+        "url": "https://www.is-argebau.de/Dokumente/4231196.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "wegbreite_min",
+      "parameter": { "wegetyp": "feuerwehrbewegungsflaeche" },
+      "schwellwerte": { "minBreiteM": 7.0 },
+      "meldungstext": "Bewegungsflaeche {element} bei {ort} ist nur {ist} m breit. Erforderlich sind mindestens {soll} m.",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "MRFlFw Nr. 13 woertlich aus dem is-argebau-PDF gelesen; identisch im hessischen HLFS-Merkblatt (7 x 12 m)."
+      }
+    },
+    {
+      "id": "R-006",
+      "titel": "Bemessung der Rettungswegbreite nach Personenzahl - im Freien und Sportstadien",
+      "quelle": {
+        "kuerzel": "H-VStaettR",
+        "paragraf": "Paragraf 7 Abs. 4 Satz 2 Nr. 1 und Satz 3",
+        "zitat": "Versammlungsstaetten im Freien sowie Sportstadien 1,20 m je 600 Personen ... Zwischenwerte sind zulaessig.",
+        "url": "https://wirtschaft.hessen.de/sites/wirtschaft.hessen.de/files/2021-07/hessische_versammlungsstaettenrichtlinie_h-vstaettr_0.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "wegbreite_staffelung",
+      "parameter": { "wegetyp": "rettungsweg" },
+      "schwellwerte": {
+        "breiteJeEinheitM": 1.2,
+        "personenJeEinheit": 600,
+        "minBreiteM": 1.2,
+        "staffelSchrittM": 0
+      },
+      "meldungstext": "Rettungsweg {element} bei {ort} hat {ist} m lichte Breite. Fuer die darauf angewiesenen Personen sind {soll} m erforderlich (1,20 m je 600 Personen; in Hessen sind Zwischenwerte zulaessig, es wird nicht aufgerundet).",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "ZWEI KORREKTUREN 07.08.2026. (1) SACHFEHLER: staffelSchrittM war 0,6 mit Beleg 'Satz 4 woertlich: Staffelungen sind nur in Schritten von 0,60 m zulaessig.' Dieser Satz steht so in der MVStaettVO und in der BayVStaettV, aber NICHT in der fuer Hessen massgeblichen H-VStaettR. Deren Paragraf 7 Abs. 4 bestimmt nach der Aufzaehlung stattdessen woertlich: 'Zwischenwerte sind zulaessig.' Die 0,60-m-Staffelung haette in HE zulaessige Breiten (z. B. 1,60 m fuer 800 Personen) faelschlich als Fehler gemeldet. Wert daher auf 0 gesetzt = keine Aufrundung. Ursache des Fehlers war die Ersatzverifikation an der bayerischen Fassung, die genau an dieser Stelle abweicht. (2) FELDNAME: 'mindestBreiteM' entsprach nicht der Engine-Konvention und waere nicht gelesen worden; umbenannt in 'minBreiteM'. Belegt am amtlichen Volltext H-VStaettR (Anhang HE 10 zur H-VV TB): Satz 1 Bemessung nach groesstmoeglicher Personenzahl, Satz 2 Nr. 1 '1,20 m je 600 Personen', Satz 3 Mindestbreite 1,20 m."
+      }
+    },
+    {
+      "id": "R-007",
+      "titel": "Bemessung der Rettungswegbreite nach Personenzahl - in Raeumen und Zelten",
+      "quelle": {
+        "kuerzel": "H-VStaettR",
+        "paragraf": "Paragraf 7 Abs. 4 Satz 2 Nr. 2 und Satz 3",
+        "zitat": "anderen Versammlungsstaetten 1,20 m je 200 Personen ... Zwischenwerte sind zulaessig.",
+        "url": "https://wirtschaft.hessen.de/sites/wirtschaft.hessen.de/files/2021-07/hessische_versammlungsstaettenrichtlinie_h-vstaettr_0.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "drinnen" },
+      "pruefTyp": "wegbreite_staffelung",
+      "parameter": { "wegetyp": "rettungsweg" },
+      "schwellwerte": {
+        "breiteJeEinheitM": 1.2,
+        "personenJeEinheit": 200,
+        "minBreiteM": 1.2,
+        "staffelSchrittM": 0
+      },
+      "meldungstext": "Rettungsweg {element} bei {ort} hat {ist} m lichte Breite. In geschlossenen Versammlungsstaetten sind {soll} m erforderlich (1,20 m je 200 Personen; in Hessen sind Zwischenwerte zulaessig).",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "KORRIGIERT 07.08.2026 wie R-006: staffelSchrittM von 0,6 auf 0 gesetzt (H-VStaettR Paragraf 7 Abs. 4: 'Zwischenwerte sind zulaessig' - die 0,60-m-Staffelung der MVStaettVO/BayVStaettV gilt in Hessen nicht) und Feldname 'mindestBreiteM' auf Konvention 'minBreiteM' umbenannt. Paragraf 7 Abs. 4 Satz 2 Nr. 2 am amtlichen H-VStaettR-Volltext gelesen. Anwendbarkeit auf grosse Festzelte ist im Einzelfall mit der Bauaufsicht zu klaeren, da Zelte als Fliegende Bauten der MFlBauR unterliegen koennen (H-VStaettR Paragraf 1 Abs. 3 Nr. 4 nimmt Fliegende Bauten ausdruecklich aus; HLFS-Merkblatt, Abschnitt Fliegende Bauten)."
+      }
+    },
+    {
+      "id": "R-008",
+      "titel": "Keine Engstellen im Verlauf von Rettungswegen",
+      "quelle": {
+        "kuerzel": "H-VStaettR",
+        "paragraf": "Paragraf 7 Abs. 4 Satz 2 und Satz 3",
+        "zitat": "Dabei muss die lichte Breite eines jeden Teils von Rettungswegen fuer die darauf angewiesenen Personen mindestens betragen ... Die lichte Mindestbreite eines jeden Teils von Rettungswegen muss 1,20 m betragen.",
+        "url": "https://wirtschaft.hessen.de/sites/wirtschaft.hessen.de/files/2021-07/hessische_versammlungsstaettenrichtlinie_h-vstaettr_0.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "rettungsweg_engstelle",
+      "parameter": { "wegetyp": "rettungsweg" },
+      "schwellwerte": { "toleranzM": 0.0 },
+      "meldungstext": "Engstelle im Rettungsweg {element} bei {ort}: die Breite faellt auf {ist} m ab, gefordert sind durchgehend {soll} m. Die geforderte Breite darf sich auf keinem Teilstueck verringern.",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "Die Formulierung 'eines jeden Teils' traegt die Nulltoleranz; sie steht in der H-VStaettR in Paragraf 7 Abs. 4 Satz 2 und Satz 3 (KORRIGIERT 07.08.2026: zuvor auf 'MVStaettVO Paragraf 7 Abs. 4 Satz 2' verwiesen - in der fuer Hessen massgeblichen H-VStaettR ist die Satzzaehlung anders). Ergaenzend HLFS-Merkblatt woertlich: 'Die erforderliche Breite darf durch aufgeklappte Vordaecher nicht eingeschraenkt werden.'"
+      }
+    },
+    {
+      "id": "R-009",
+      "titel": "Maximale Rettungsweglaenge bis zum naechsten Ausgang",
+      "quelle": {
+        "kuerzel": "H-VStaettR",
+        "paragraf": "Paragraf 7 Abs. 1 Satz 1 und Satz 4, Abs. 6",
+        "zitat": "Die Entfernung von jedem Besucherplatz bis zum naechsten Ausgang aus dem Versammlungsraum darf nicht laenger als 30 m sein. ... Die Saetze 1 bis 3 gelten fuer Tribuenen ausserhalb von Versammlungsraeumen sinngemaess.",
+        "url": "https://wirtschaft.hessen.de/sites/wirtschaft.hessen.de/files/2021-07/hessische_versammlungsstaettenrichtlinie_h-vstaettr_0.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "rettungsweglaenge_max",
+      "schwellwerte": { "maxLaengeM": 30 },
+      "meldungstext": "Von {element} bei {ort} betraegt die Rettungsweglaenge bis zum naechsten Ausgang {ist} m. Zulaessig sind hoechstens {soll} m (Messung in der Lauflinie).",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "KORRIGIERT 07.08.2026: Der frueher hier genannte Einschub 'aus dem Versammlungsraum oder bei Tribuenen ... aus dem Tribuenenbereich' existiert in KEINER der beiden Fassungen und war frei formuliert. Amtlicher Wortlaut H-VStaettR Paragraf 7 Abs. 1 Satz 1: 'Die Entfernung von jedem Besucherplatz bis zum naechsten Ausgang aus dem Versammlungsraum darf nicht laenger als 30 m sein.' Tribuenen erfasst dort erst Satz 4 ('Die Saetze 1 bis 3 gelten fuer Tribuenen ausserhalb von Versammlungsraeumen sinngemaess'); die MVStaettVO formuliert abweichend 'oder von der Tribuene'. Messung: Paragraf 7 Abs. 6 'Die Entfernungen werden in der Lauflinie gemessen.' ZU BEACHTEN: Die 30 m knuepfen an einen Versammlungsraum bzw. eine Tribuene an - bei einem reinen Strassenfest ohne Tribuenen ist die Uebertragung eine Auslegung und im Sicherheitskonzept abzustimmen."
+      }
+    },
+    {
+      "id": "R-010",
+      "titel": "Maximale Gesamtlaenge des Rettungsweges bis ins Freie / in den sicheren Bereich",
+      "quelle": {
+        "kuerzel": "H-VStaettR",
+        "paragraf": "Paragraf 7 Abs. 3 (Teilstrecke) - kein Normwert fuer die Gesamtlaenge",
+        "zitat": "Die Entfernung von jeder Stelle eines notwendigen Flures oder eines Foyers bis zum Ausgang ins Freie oder zu einem notwendigen Treppenraum darf nicht laenger als 30 m sein.",
+        "url": "https://wirtschaft.hessen.de/sites/wirtschaft.hessen.de/files/2021-07/hessische_versammlungsstaettenrichtlinie_h-vstaettr_0.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "rettungsweglaenge_max",
+      "schwellwerte": { "maxLaengeM": 60 },
+      "meldungstext": "Die Gesamtlaenge des Rettungsweges von {element} bei {ort} bis zum sicheren Bereich betraegt {ist} m. Der Richtwert von {soll} m ist ueberschritten.",
+      "schweregrad": "warnung",
+      "verifikation": {
+        "status": "zu_pruefen",
+        "geprueftAm": "2026-08-07",
+        "beleg": "KORRIGIERT 07.08.2026: Die frueher hier gegebene Begruendung ('Die 60 m sind KEIN eigenstaendiger Normwert, sondern die Summe der beiden je 30 m langen Teilstrecken') ist sachlich falsch. Paragraf 7 Abs. 1 Satz 3 nennt 60 m sehr wohl ausdruecklich: 'Die Entfernung von 60 m bis zum naechsten Ausgang darf nicht ueberschritten werden.' Dieser Wert ist aber die Obergrenze der Verlaengerung nach Satz 2 (bei mehr als 5 m lichter Hoehe je 2,5 m zusaetzlicher Hoehe +5 m) und betrifft damit hohe Versammlungsraeume, NICHT eine addierte Gesamtlaenge und nicht Veranstaltungen im Freien. Fuer Veranstaltungen im Freien enthaelt der Normtext keine Gesamtlaengenbegrenzung; die maximale Entfernung bis zu einem sicheren Bereich wird im Sicherheitskonzept mit der Genehmigungsbehoerde festgelegt. Die hier gesetzten 60 m bleiben ein unbelegter Richtwert (nur Warnung) und sind vor produktivem Einsatz mit der Bauaufsicht abzustimmen."
+      }
+    },
+    {
+      "id": "R-011",
+      "titel": "Schutzstreifen zwischen aneinandergebauten Staenden, Buden und Zelten",
+      "quelle": {
+        "kuerzel": "HLFS-Merkblatt",
+        "paragraf": "Abschnitt Schutzstreifen",
+        "zitat": "in Abstaenden von hoechstens 40 m Schutzstreifen von mind. 5 m Breite staendig freizuhalten",
+        "url": "https://hlfs.hessen.de/sites/hlfs.hessen.de/files/2023-02/merkblatt_brandschutzvorkehrungen_bei_maerkten_strassenfesten_u.ae_._veranstaltungen.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "abstand_objekt_objekt",
+      "parameter": { "kategorienA": ["*"], "kategorienB": ["*"] },
+      "schwellwerte": { "minAbstandM": 5.0 },
+      "meldungstext": "Zwischen {element} und dem Nachbarobjekt bei {ort} betraegt der Abstand nur {ist} m. Spaetestens alle 40 m Bebauungslaenge ist ein Schutzstreifen von {soll} m freizuhalten.",
+      "schweregrad": "warnung",
+      "verifikation": {
+        "status": "zu_pruefen",
+        "geprueftAm": "2026-08-07",
+        "beleg": "Der Zahlenwert 5 m und das 40-m-Raster sind woertlich belegt (HLFS-Merkblatt). Nicht belegt ist die hier gewaehlte Abbildung als paarweiser Mindestabstand zwischen ALLEN Objekten: die Norm fordert Schutzstreifen im 40-m-Raster, nicht 5 m zwischen je zwei Staenden. Die Regel ist damit strenger als der Normtext und meldet zwangslaeufig auch zulaessige geschlossene Budenzeilen. Vor produktivem Einsatz auf eine 40-m-Rasterpruefung umstellen."
+      }
+    },
+    {
+      "id": "R-012",
+      "titel": "Sicherheitsabstand von Feuerstaetten und Kochstellen zu brennbaren Stoffen",
+      "quelle": {
+        "kuerzel": "HLFS-Merkblatt",
+        "paragraf": "Abschnitt Feuerstaetten / Aufstellung elektrischer Waerme- und Heizgeraete",
+        "zitat": "nur in einem Mindestabstand von 0,5 m nach allen Seiten von brennbaren Stoffen",
+        "url": "https://hlfs.hessen.de/sites/hlfs.hessen.de/files/2023-02/merkblatt_brandschutzvorkehrungen_bei_maerkten_strassenfesten_u.ae_._veranstaltungen.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "abstand_objekt_objekt",
+      "parameter": {
+        "kategorienA": ["feuerstaette", "kochstelle", "grill", "friteuse", "heizgeraet"],
+        "kategorienB": ["*"]
+      },
+      "schwellwerte": { "minAbstandM": 0.5 },
+      "meldungstext": "{element} bei {ort} haelt nur {ist} m Abstand zu brennbaren Stoffen und Gegenstaenden. Erforderlich sind mindestens {soll} m nach allen Seiten; groessere Herstellerangaben gehen vor.",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "Woertlich aus dem extrahierten Volltext des HLFS-Merkblatts (Abschnitte Feuerstaetten und Aufstellung elektrischer Waerme- und Heizgeraete, dort 0,50 m). Das Merkblatt stellt ausdruecklich klar, dass groessere Herstellervorgaben einzuhalten sind - das kann die Regel nicht abbilden."
+      }
+    },
+    {
+      "id": "R-013",
+      "titel": "Freihaltung von Hydranten und Versorgungsanlagen",
+      "quelle": {
+        "kuerzel": "HLFS-Merkblatt",
+        "paragraf": "Abschnitt Freihaltung Loeschwasser- und Energieversorgungsanlagen",
+        "zitat": "im Umkreis von 1,00 m frei zu halten und muessen jederzeit zugaenglich sein",
+        "url": "https://hlfs.hessen.de/sites/hlfs.hessen.de/files/2023-02/merkblatt_brandschutzvorkehrungen_bei_maerkten_strassenfesten_u.ae_._veranstaltungen.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "abstand_objekt_objekt",
+      "parameter": {
+        "kategorienA": ["hydrant", "loeschwasserentnahme", "verteilanlage", "schaltanlage"],
+        "kategorienB": ["*"]
+      },
+      "schwellwerte": { "minAbstandM": 1.0 },
+      "meldungstext": "{element} bei {ort} liegt nur {ist} m von einem Aufbau entfernt. Loeschwasserentnahmeeinrichtungen und Verteilanlagen sind einschliesslich Kennzeichnung im Umkreis von {soll} m freizuhalten.",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "Woertlich aus dem extrahierten Volltext des HLFS-Merkblatts gelesen."
+      }
+    },
+    {
+      "id": "R-014",
+      "titel": "Sicherheitsabstand von Staenden und Buden zu bestehenden Gebaeuden",
+      "quelle": {
+        "kuerzel": "HLFS-Merkblatt",
+        "paragraf": "Abschnitt Sicherheitsabstaende",
+        "zitat": "von bestehenden Gebaeuden in einem Abstand von mind. 5 m anzuordnen",
+        "url": "https://hlfs.hessen.de/sites/hlfs.hessen.de/files/2023-02/merkblatt_brandschutzvorkehrungen_bei_maerkten_strassenfesten_u.ae_._veranstaltungen.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "abstand_objekt_gebaeude",
+      "schwellwerte": { "minAbstandM": 5.0 },
+      "meldungstext": "{element} bei {ort} steht nur {ist} m von einem bestehenden Gebaeude entfernt. Erforderlich sind {soll} m; die Abstandsflaeche darf nicht ueberdacht werden.",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "Woertlich aus dem HLFS-Merkblatt. Das Merkblatt nennt ausdrueckliche Ausnahmen, die die Regel nicht kennt: Staende mit geringen Brandlasten oder geringer Brandgefahr, Kleinzelte mit B1-Aussenhaut und Holzbestuhlung, Marktschirme und Stehtische. Bei Unterschreitung sind Ersatzmassnahmen (z. B. F30-A-Verschluss von Fenstern) oder ein Brandsicherheitsdienst moeglich."
+      }
+    },
+    {
+      "id": "R-015",
+      "titel": "Lichte Breite von Feuerwehrzufahrten - hessische Veranstaltungsvorgabe",
+      "quelle": {
+        "kuerzel": "HLFS-Merkblatt",
+        "paragraf": "Abschnitt Zu- und Durchfahrten",
+        "zitat": "eine moeglichst gradlinige 3,50 m breite Durchfahrt fuer Feuerwehr- bzw. Rettungsfahrzeuge verbleibt",
+        "url": "https://hlfs.hessen.de/sites/hlfs.hessen.de/files/2023-02/merkblatt_brandschutzvorkehrungen_bei_maerkten_strassenfesten_u.ae_._veranstaltungen.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "feuerwehrzufahrt_breite",
+      "schwellwerte": { "minBreiteM": 3.5 },
+      "meldungstext": "Feuerwehrzufahrt {element} bei {ort} hat nur {ist} m lichte Breite. Bei Maerkten und Strassenfesten in Hessen sind {soll} m freizuhalten - auch aufgeklappte Vordaecher, Tische und Baenke duerfen die Breite nicht einengen.",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "PRUEFUNG DES LASTENHEFTS: Die Angabe '3,50 m lichte Breite' ist fuer hessische Veranstaltungen im Freien belegt (HLFS-Merkblatt). Sie ist aber KEIN allgemeiner Baurechtswert: die MRFlFw Nr. 2 (und damit DIN 14090) fordert fuer Zu- und Durchfahrten generell nur 3,00 m lichte Breite und verlangt 3,50 m erst, wenn die Zufahrt auf mehr als 12 m Laenge beidseitig durch Bauteile begrenzt ist (siehe R-016). Der Unterschied ist damit erklaert: 3,00 m = baurechtliches Minimum, 3,50 m = hessische Veranstaltungsanforderung."
+      }
+    },
+    {
+      "id": "R-016",
+      "titel": "Baurechtliche Mindestbreite von Zu- und Durchfahrten sowie Zusatzbreite in Kurven",
+      "quelle": {
+        "kuerzel": "MRFlFw",
+        "paragraf": "Nr. 2 und Nr. 3 (Zu- oder Durchfahrten, Kurven)",
+        "zitat": "Die lichte Breite der Zu- oder Durchfahrten muss mindestens 3 m betragen.",
+        "url": "https://www.is-argebau.de/Dokumente/4231196.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "feuerwehrzufahrt_breite",
+      "schwellwerte": { "minBreiteM": 3.0 },
+      "meldungstext": "Zufahrt {element} bei {ort} unterschreitet mit {ist} m die baurechtliche Mindestbreite von {soll} m. In Kurven und bei ueber 12 m beidseitig durch Bauteile begrenzten Fahrgassen sind groessere Breiten erforderlich.",
+      "schweregrad": "hinweis",
+      "verifikation": {
+        "status": "zu_pruefen",
+        "geprueftAm": "2026-08-07",
+        "beleg": "3,00 m und die 12-m-/3,50-m-Regel sind woertlich aus MRFlFw Nr. 2 belegt; ebenso Nr. 3: 'vor oder hinter Kurven auf einer Laenge von mindestens 11 m Uebergangsbereiche vorhanden sein'. NACHGEPRUEFT 07.08.2026: Die Kurventabelle wurde inzwischen am Normtext DIN 14090:2003-05 Abschnitt 4.2.2 Tabelle 1 gelesen und bestaetigt (bis 10,5 m Aussenradius unzulaessig; 10,5-12 m: 5,00 m; ueber 12-15 m: 4,50 m; ueber 15-20 m: 4,00 m; ueber 20-40 m: 3,50 m; ueber 40-70 m: 3,20 m; ueber 70 m: 3,00 m), ebenso der Einbiegeradius von mindestens 10,5 m je Anfahrrichtung. OFFEN bleibt: die aktuelle Ausgabe DIN 14090:2024-02 ist kostenpflichtig und wurde nicht geprueft; sie wurde laut Bekanntmachung technisch umfassend ueberarbeitet, die Werte koennen abweichen. Kurvenradien werden von dieser Regel ohnehin nicht geprueft - deshalb bleibt der Status zu_pruefen."
+      }
+    },
+    {
+      "id": "R-017",
+      "titel": "Lichte Hoehe von Feuerwehrzufahrten und Durchfahrten",
+      "quelle": {
+        "kuerzel": "MRFlFw",
+        "paragraf": "Nr. 2 Satz 1 und 2",
+        "zitat": "die lichte Hoehe mindestens 3,50 m betragen",
+        "url": "https://www.is-argebau.de/Dokumente/4231196.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "feuerwehrzufahrt_hoehe",
+      "schwellwerte": { "minHoeheM": 3.5 },
+      "meldungstext": "Ueber der Feuerwehrzufahrt {element} bei {ort} steht nur {ist} m lichte Hoehe zur Verfuegung. Erforderlich sind {soll} m, senkrecht zur Fahrbahn gemessen - das gilt auch fuer gespannte Kabel, Banner und Beleuchtung.",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "MRFlFw Nr. 2 woertlich aus dem is-argebau-PDF ('Die lichte Hoehe der Zu- oder Durchfahrten ist senkrecht zur Fahrbahn zu messen.'). Deckungsgleich im HLFS-Merkblatt fuer behelfsmaessige Leitungsverlegung: 'ist eine lichte Durchfahrtshoehe von mind. 3,50 m einzuhalten'. Der Lastenheft-Wert 3,50 m ist damit bestaetigt."
+      }
+    },
+    {
+      "id": "R-018",
+      "titel": "Erreichbarkeit jedes Punktes des Gelaendes durch die Feuerwehr",
+      "quelle": {
+        "kuerzel": "HBO",
+        "paragraf": "Paragraf 5 Abs. 1 Satz 4",
+        "zitat": "die ganz oder mit Teilen mehr als 50 m von einer oeffentlichen Verkehrsflaeche entfernt sind",
+        "url": "https://www.haufe.de/id/norm/bauordnung-hessen-5-zugaenge-und-zufahrten-auf-den-grundstuecken-HI1219085_p5.html"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "feuerwehr_erreichbarkeit",
+      "schwellwerte": { "maxDistanzM": 50 },
+      "meldungstext": "{element} bei {ort} liegt {ist} m von der naechsten Feuerwehrzufahrt oder oeffentlichen Verkehrsflaeche entfernt. Ab {soll} m sind zusaetzliche Zufahrten und Bewegungsflaechen erforderlich.",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "50 m doppelt belegt: HBO Paragraf 5 Abs. 1 Satz 4 und HLFS-Merkblatt woertlich 'Nach 50 m sind ausreichende Feuerwehrbewegungsflaechen von mind. 7x12 m zu bilden.' Das Merkblatt-Zitat wurde am Volltext-PDF gelesen und ist die fuer Veranstaltungen im Freien unmittelbar einschlaegige Fundstelle. EINSCHRAENKUNG (ergaenzt 07.08.2026): HBO Paragraf 5 Abs. 1 Satz 4 gilt fuer GEBAEUDE und steht unter einem Vorbehalt - '... sind Zufahrten oder Durchfahrten nach Satz 2 zu den vor und hinter den Gebaeuden gelegenen Grundstuecksteilen und Bewegungsflaechen herzustellen, WENN SIE AUS GRUENDEN DES FEUERWEHREINSATZES ERFORDERLICH SIND.' Die Uebertragung auf jedes Objekt eines Veranstaltungsgelaendes traegt dieser Paragraf nicht; sie stuetzt sich allein auf das HLFS-Merkblatt. Der HBO-Wortlaut wurde ueber Sekundaerwiedergaben (haufe.de/anwalt24) geprueft, nicht am amtlichen Broschueren-PDF - Nachpruefung am Originaltext empfohlen."
+      }
+    },
+    {
+      "id": "R-019",
+      "titel": "Abmessungen von Feuerwehr-Bewegungsflaechen",
+      "quelle": {
+        "kuerzel": "MRFlFw",
+        "paragraf": "Nr. 13 (Bewegungsflaechen)",
+        "zitat": "Bewegungsflaechen muessen fuer jedes Fahrzeug mindestens 7 x 12 m gross sein.",
+        "url": "https://www.is-argebau.de/Dokumente/4231196.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "feuerwehr_bewegungsflaeche",
+      "schwellwerte": { "minLaengeM": 12, "minBreiteM": 7 },
+      "meldungstext": "Bewegungsflaeche {element} bei {ort} misst {ist}. Erforderlich sind mindestens {soll} je Einsatzfahrzeug; vor und hinter der Flaeche sind an weiterfuehrenden Zufahrten mindestens 4 m lange Uebergangsbereiche anzuordnen.",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "MRFlFw Nr. 13 woertlich; bestaetigt durch das HLFS-Merkblatt (7 x 12 m alle 50 m). MRFlFw Nr. 13 stellt zudem klar: 'Zufahrten sind keine Bewegungsflaechen.' Die Tragfaehigkeit nach MRFlFw Nr. 1 (Achslast bis 10 t, zulaessiges Gesamtgewicht bis 16 t) prueft diese Regel NICHT - sie ist eine Eigenschaft des Untergrunds und im Sicherheitskonzept nachzuweisen."
+      }
+    },
+    {
+      "id": "R-020",
+      "titel": "Ein- und Ausstiege muessen an einen Rettungsweg angebunden sein",
+      "quelle": {
+        "kuerzel": "H-VStaettR",
+        "paragraf": "Paragraf 6 Abs. 1 Satz 1 und Satz 2",
+        "zitat": "Rettungswege muessen ins Freie zu oeffentlichen Verkehrsflaechen fuehren. Zu den Rettungswegen von Versammlungsstaetten gehoeren insbesondere die frei zu haltenden Gaenge und Stufengaenge, die Ausgaenge aus Versammlungsraeumen ... sowie die Rettungswege im Freien auf dem Grundstueck.",
+        "url": "https://wirtschaft.hessen.de/sites/wirtschaft.hessen.de/files/2021-07/hessische_versammlungsstaettenrichtlinie_h-vstaettr_0.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "einausstieg_wegangebunden",
+      "schwellwerte": { "maxDistanzM": 2.0 },
+      "meldungstext": "Ein-/Ausstieg {element} bei {ort} hat {ist} m Abstand zum naechsten erfassten Rettungsweg und ist damit nicht angebunden. Zulaessig ist ein Anschlussversatz von hoechstens {soll} m.",
+      "schweregrad": "warnung",
+      "verifikation": {
+        "status": "zu_pruefen",
+        "geprueftAm": "2026-08-07",
+        "beleg": "Die Pflicht zur lueckenlosen Wegefuehrung ist belegt (H-VStaettR Paragraf 6 Abs. 1, am amtlichen Volltext gelesen; KORRIGIERT 07.08.2026: das frueher hier gefuehrte Zitat mit dem Zusatz 'unmittelbar oder ueber Verkehrsflaechen auf dem Grundstueck' war ein Falschzitat - diese Wendung steht weder in der MVStaettVO noch in der H-VStaettR). Der Zahlenwert 2,0 m ist dagegen eine Annahme, nicht belegt - zu pruefen: er dient nur als Modellierungstoleranz fuer Ungenauigkeiten der Planzeichnung. Im Normtext gibt es keinen zulaessigen Versatz; fachlich richtig waere 0 m. Wert vor produktivem Einsatz mit der Genehmigungsbehoerde bzw. der Zeichengenauigkeit der Plattform abgleichen."
+      }
+    },
+    {
+      "id": "R-021",
+      "titel": "Besucherkapazitaet gegen verfuegbare Rettungswegbreite",
+      "quelle": {
+        "kuerzel": "H-VStaettR",
+        "paragraf": "Paragraf 7 Abs. 4 Satz 1 und Satz 2 Nr. 1",
+        "zitat": "Die Breite der Rettungswege ist nach der groesstmoeglichen Personenzahl zu bemessen.",
+        "url": "https://wirtschaft.hessen.de/sites/wirtschaft.hessen.de/files/2021-07/hessische_versammlungsstaettenrichtlinie_h-vstaettr_0.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "kapazitaet_vs_wegbreite",
+      "schwellwerte": { "breiteJeEinheitM": 1.2, "personenJeEinheit": 600 },
+      "meldungstext": "Fuer {ist} Personen bei {ort} steht ueber {element} nur eine Gesamtrettungswegbreite von {soll} zur Verfuegung. Je 600 Personen sind 1,20 m erforderlich - entweder Kapazitaet senken oder Wegbreite erhoehen.",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "KORRIGIERT 07.08.2026: Fundstelle war 'MVStaettVO Paragraf 7 Abs. 4 Satz 3 Nr. 1'; in der fuer Hessen massgeblichen H-VStaettR ist es Satz 2 Nr. 1. Wortlaut am amtlichen Volltext gelesen. Die anzusetzende Personenzahl ergibt sich aus H-VStaettR Paragraf 1 Abs. 2 - dort woertlich Nr. 2 'fuer Sitzplaetze in Reihen: zwei Besucher je m2 Grundflaeche' und 'fuer sonstige Stehplaetze sind mindestens zwei Besucher je m2 Grundflaeche anzusetzen'; nach Satz 3 gilt das fuer Versammlungsstaetten im Freien entsprechend. Achtung: die H-VStaettR-Fassung von Paragraf 1 Abs. 2 weicht in der Gliederung von der MVStaettVO ab. Diese Belegungsdichte muss die Plattform separat ermitteln. Es wird NICHT auf 0,60-m-Schritte aufgerundet (siehe R-006)."
+      }
+    },
+    {
+      "id": "R-022",
+      "titel": "Erreichbarkeit von Sanitaets-, Feuerwehr- und Einsatzleitungsstationen",
+      "quelle": {
+        "kuerzel": "HLFS-Merkblatt",
+        "paragraf": "Abschnitt Zu- und Durchfahrten",
+        "zitat": "Nach 50 m sind ausreichende Feuerwehrbewegungsflaechen von mind. 7 x 12 m zu bilden.",
+        "url": "https://hlfs.hessen.de/sites/hlfs.hessen.de/files/2023-02/merkblatt_brandschutzvorkehrungen_bei_maerkten_strassenfesten_u.ae_._veranstaltungen.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "einsatzstation_erreichbarkeit",
+      "parameter": { "kategorien": ["sanitaet", "feuerwehr", "einsatzleitung"] },
+      "schwellwerte": { "maxDistanzM": 50 },
+      "meldungstext": "Einsatzstation {element} bei {ort} liegt {ist} m von der naechsten befahrbaren Zufahrt oder Bewegungsflaeche entfernt. Richtwert sind hoechstens {soll} m fuer die Anfahrt mit Einsatzfahrzeugen.",
+      "schweregrad": "warnung",
+      "verifikation": {
+        "status": "zu_pruefen",
+        "geprueftAm": "2026-08-07",
+        "beleg": "Die 50 m sind als Raster fuer Bewegungsflaechen belegt (HLFS-Merkblatt) und decken sich mit HBO Paragraf 5 Abs. 1 Satz 4. Die Uebertragung auf die Anbindung von Sanitaets- und Einsatzleitungsstationen ist jedoch eine Annahme, nicht belegt - zu pruefen: fuer Sanitaets- und Rettungsdienststationen gibt es keine hessische Normvorgabe, ihre Lage wird im Sanitaetsdienst- und Sicherheitskonzept mit dem Traeger des Rettungsdienstes und der Gefahrenabwehrbehoerde festgelegt (HLFS-Merkblatt, Anlage 1 Zustaendigkeiten)."
+      }
+    },
+    {
+      "id": "R-023",
+      "titel": "Gesperrte Flaechen und Einsatzflaechen sind staendig freizuhalten",
+      "quelle": {
+        "kuerzel": "H-VStaettR",
+        "paragraf": "Paragraf 31 Abs. 1 Satz 1 und 2",
+        "zitat": "Rettungswege auf dem Grundstueck sowie Zufahrten, Aufstell- und Bewegungsflaechen fuer Einsatzfahrzeuge von Polizei, Feuerwehr und Rettungsdiensten muessen staendig frei gehalten werden. Darauf ist dauerhaft und gut sichtbar hinzuweisen.",
+        "url": "https://wirtschaft.hessen.de/sites/wirtschaft.hessen.de/files/2021-07/hessische_versammlungsstaettenrichtlinie_h-vstaettr_0.pdf"
+      },
+      "geltungsbereich": { "bundesland": "HE", "umgebung": "draussen" },
+      "pruefTyp": "blockflaeche_frei",
+      "parameter": { "typen": ["gesperrt", "nur_einsatzkraefte"] },
+      "schwellwerte": { "toleranzM": 0.0 },
+      "meldungstext": "{element} ragt {ist} m in die gesperrte Flaeche bei {ort} hinein. Diese Flaechen sind ohne Toleranz ({soll} m) freizuhalten und dauerhaft sowie gut sichtbar zu kennzeichnen.",
+      "schweregrad": "fehler",
+      "verifikation": {
+        "status": "verifiziert",
+        "geprueftAm": "2026-08-07",
+        "beleg": "KORRIGIERT 07.08.2026: Das zuvor gefuehrte Zitat war eine ungekennzeichnete Kuerzung mitten im Satz und stuetzte sich auf eine Haufe-Suchtrefferwiedergabe. Jetzt am amtlichen Volltext der H-VStaettR (Anhang HE 10 zur H-VV TB) gelesen und vollstaendig uebernommen; die MVStaettVO ist hier inhaltsgleich. Inhaltsgleich und fuer Hessen unmittelbar einschlaegig: HLFS-Merkblatt, Abschnitt Freihaltung Zufahrten/Kennzeichnung ('im gesamten Veranstaltungsbereich amtlich zu kennzeichnen und staendig frei zu halten')."
+      }
+    }
+  ]
+}

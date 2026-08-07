@@ -1,0 +1,172 @@
+/*
+ * F11 — Behoerden- und Polizeisicht (PolizeiSicht.tsx).
+ *
+ * Nutzt ausschliesslich die Design-Variablen und Basisklassen aus styles.css.
+ * Eigene Klassen tragen das Praefix .pol-, damit sie sich nicht mit den
+ * gemeinsamen Basisklassen (.knopf, .karte, .tabelle ...) beissen.
+ */
+
+/* --- Rahmen: einziger scrollender Bereich dieser Sicht -------------------- */
+
+.pol {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  padding: 16px 18px 28px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* --- Kopf ---------------------------------------------------------------- */
+
+.pol-kopf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 18px;
+}
+.pol-kopf-links { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pol-kopf h1 { font-size: 17px; }
+.pol-kopf-unter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--text-schwach); }
+.pol-kopf-rechts { margin-left: auto; text-align: right; color: var(--text-leise); font-size: 12px; max-width: 44ch; }
+
+.pol-hinweis {
+  padding: 8px 10px;
+  border: 1px solid var(--rand);
+  border-left: 3px solid var(--akzent);
+  border-radius: var(--radius-klein);
+  background: var(--fl-1);
+  color: var(--text-schwach);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* --- Projektraster ------------------------------------------------------- */
+
+.pol-raster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+/* In der Rasteranordnung darf der Karten-Standardabstand nicht greifen. */
+.pol-raster > .karte + .karte { margin-top: 0; }
+
+.pol-karte { display: flex; flex-direction: column; gap: 10px; }
+.pol-karte-kopf { display: flex; align-items: flex-start; gap: 8px; }
+.pol-karte-kopf h2 { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pol-karte-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; color: var(--text-schwach); font-size: 12px; }
+.pol-karte-meta .pol-wert { font-family: var(--schrift-zahl); font-variant-numeric: tabular-nums; color: var(--text); }
+
+/* Kennzahlenblock: vier gleich breite Saeulen. */
+.pol-zahlen {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  border: 1px solid var(--rand);
+  border-radius: var(--radius-klein);
+  background: var(--rand);
+  overflow: hidden;
+}
+.pol-zahl { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px; background: var(--fl-1); }
+.pol-zahl b { font-family: var(--schrift-zahl); font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600; }
+.pol-zahl span { color: var(--text-leise); font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase; }
+
+/* Deutlich hervorgehobene Aenderungsmeldung. */
+.pol-neu {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--akzent);
+  border-radius: var(--radius-klein);
+  background: var(--akzent-weich);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.pol-neu b { font-family: var(--schrift-zahl); font-variant-numeric: tabular-nums; font-size: 15px; color: var(--akzent); }
+
+.pol-knoepfe { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+
+/* --- Ampel der Pruefzusammenfassung -------------------------------------- */
+
+.pol-ampel { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.pol-punkte { display: flex; gap: 5px; }
+.pol-punkt { width: 9px; height: 9px; border-radius: 50%; background: var(--fl-3); opacity: 0.35; }
+.pol-punkt--an.pol-punkt--fehler { background: var(--fehler); opacity: 1; box-shadow: 0 0 8px rgba(232, 80, 58, 0.6); }
+.pol-punkt--an.pol-punkt--warn { background: var(--warn); opacity: 1; box-shadow: 0 0 8px rgba(240, 180, 0, 0.6); }
+.pol-punkt--an.pol-punkt--ok { background: var(--ok); opacity: 1; box-shadow: 0 0 8px rgba(51, 196, 107, 0.6); }
+.pol-ampel-text { color: var(--text-schwach); }
+.pol-ampel-text b { font-family: var(--schrift-zahl); font-variant-numeric: tabular-nums; color: var(--text); }
+
+/* --- Lagebild ------------------------------------------------------------ */
+
+.pol-lage { display: flex; flex-direction: column; gap: 16px; }
+.pol-lage-kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.pol-lage-kopf h1 { flex: 1; min-width: 180px; }
+
+.pol-abschnitt { display: flex; flex-direction: column; gap: 8px; }
+.pol-abschnitt > h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-schwach);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.pol-abschnitt > h2 .pol-anzahl { font-family: var(--schrift-zahl); color: var(--text-leise); }
+
+/* Breite Tabellen scrollen in sich, nie die Seite. */
+.pol-tab { overflow-x: auto; }
+.pol-tab .tabelle { min-width: 520px; }
+.pol-tab--breit .tabelle { min-width: 900px; }
+.pol-tab .tabelle th { background: var(--fl-0); }
+
+.pol-warnwert { color: var(--warn); font-weight: 600; }
+.pol-leise { color: var(--text-leise); }
+
+/* Farbpunkt einer Einsatzstation (Farbe kommt aus STATION_FARBE). */
+.pol-stationspunkt {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: baseline;
+}
+
+/* Balkenuebersicht der Objektkategorien — reines CSS. */
+.pol-balken { display: flex; flex-direction: column; gap: 5px; }
+.pol-balken-zeile { display: grid; grid-template-columns: minmax(96px, 22%) 1fr 44px; align-items: center; gap: 8px; font-size: 12px; }
+.pol-balken-spur { height: 10px; border-radius: 999px; background: var(--fl-0); border: 1px solid var(--rand); overflow: hidden; }
+.pol-balken-fuellung { height: 100%; background: var(--akzent); border-radius: 999px; }
+.pol-balken-zahl { font-family: var(--schrift-zahl); font-variant-numeric: tabular-nums; text-align: right; }
+
+/* Beanstandungsliste */
+.pol-mangel { display: flex; flex-direction: column; gap: 6px; }
+.pol-mangel > li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--rand);
+  border-radius: var(--radius-klein);
+  background: var(--fl-1);
+}
+.pol-mangel-text { font-size: 12.5px; overflow-wrap: anywhere; }
+.pol-mangel-fund { grid-column: 2; color: var(--text-leise); font-size: 11.5px; overflow-wrap: anywhere; }
+
+.pol-kontakte { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
+
+/* Schmale Ansichten: Kennzahlen und Balken umbrechen lassen. */
+@media (max-width: 599px) {
+  .pol { padding: 12px 12px 24px; }
+  .pol-zahlen { grid-template-columns: repeat(2, 1fr); }
+  .pol-balken-zeile { grid-template-columns: minmax(80px, 40%) 1fr 38px; }
+  .pol-kopf-rechts { margin-left: 0; text-align: left; }
+}

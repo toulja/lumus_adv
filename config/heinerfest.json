@@ -1,0 +1,138 @@
+{
+  "id": "heinerfest-darmstadt",
+  "name": "Heinerfest Darmstadt",
+  "stadt": "Darmstadt",
+  "bundesland": "HE",
+  "veranstalter": "Heimatverein Darmstädter Heiner e. V., Schuchardstraße 7, 64283 Darmstadt (Amtsgericht Darmstadt VR 928)",
+  "besucherGesamtTypisch": 700000,
+  "maxGleichzeitigAnnahme": 60000,
+  "quellen": [
+    "https://de.wikipedia.org/wiki/Heinerfest",
+    "https://en.wikipedia.org/wiki/Heinerfest",
+    "https://www.heinerfest.de/",
+    "https://www.heinerfest.de/impressum/",
+    "https://www.darmstadt.de/presseportal/pressemitteilungen/einzelansicht/heinerfest-2025",
+    "https://www.rmv.de/c/de/start/dadina/aktuell/pressemitteilungen/heinerfest-2026",
+    "https://www.openstreetmap.org/way/22938316",
+    "https://www.openstreetmap.org/relation/144516",
+    "https://www.openstreetmap.org/way/23401995",
+    "https://www.openstreetmap.org/way/55037542",
+    "https://www.openstreetmap.org/way/749510426",
+    "https://www.openstreetmap.org/relation/4063932",
+    "https://www.openstreetmap.org/relation/4063929",
+    "https://www.openstreetmap.org/way/150041598",
+    "https://www.openstreetmap.org/way/150032785",
+    "https://www.openstreetmap.org/way/33436097",
+    "https://overpass-api.de/api/interpreter",
+    "https://nominatim.openstreetmap.org/search?q=Marktplatz,+Darmstadt&format=json",
+    "https://eventfaq.de/mvstaettvo2014/ (MVStättVO § 1 Abs. 2: sonstige Stehplätze mindestens zwei Besucher je m² Grundfläche)",
+    "https://epsg.io/25832 (ETRS89 / UTM Zone 32N)"
+  ],
+  "zentrum": {
+    "lon": 8.65625,
+    "lat": 49.87375
+  },
+  "gebietBbox25832": {
+    "minE": 474700,
+    "minN": 5524150,
+    "maxE": 475900,
+    "maxN": 5525150
+  },
+  "gebietBbox4326": {
+    "minLon": 8.64787,
+    "minLat": 49.86922,
+    "maxLon": 8.66463,
+    "maxLat": 49.87827
+  },
+  "bereiche": [
+    {
+      "id": "marktplatz",
+      "name": "Marktplatz",
+      "lon": 8.65529,
+      "lat": 49.87246,
+      "flaecheM2": 5950,
+      "beleg": "OpenStreetMap way/22938316 (place=square, Marktplatz), Polygonfläche in EPSG:25832 berechnet"
+    },
+    {
+      "id": "friedensplatz",
+      "name": "Friedensplatz",
+      "lon": 8.65372,
+      "lat": 49.87382,
+      "flaecheM2": 9980,
+      "beleg": "OpenStreetMap relation/144516 (highway=pedestrian, multipolygon, Friedensplatz), Außenringe minus Innenringe in EPSG:25832"
+    },
+    {
+      "id": "karolinenplatz",
+      "name": "Karolinenplatz",
+      "lon": 8.65499,
+      "lat": 49.875,
+      "flaecheM2": 9400,
+      "beleg": "OpenStreetMap way/23401995 (highway=pedestrian, Karolinenplatz), Polygonfläche in EPSG:25832"
+    },
+    {
+      "id": "schlossgraben",
+      "name": "Schlossgraben (Grabenanlage am Residenzschloss)",
+      "lon": 8.65439,
+      "lat": 49.87413,
+      "flaecheM2": 9710,
+      "beleg": "OpenStreetMap way/55037542 (leisure=park, Schlossgraben), Polygonfläche in EPSG:25832; Mittelpunkt als Innenpunkt gesetzt (C-förmiges Polygon, Flächenschwerpunkt läge im Schloss)"
+    },
+    {
+      "id": "stadtkirchplatz",
+      "name": "Stadtkirchplatz",
+      "lon": 8.65592,
+      "lat": 49.87113,
+      "flaecheM2": 1070,
+      "beleg": "OpenStreetMap way/749510426 (highway=pedestrian, Stadtkirchplatz), Polygonfläche in EPSG:25832"
+    },
+    {
+      "id": "ludwigsplatz",
+      "name": "Ludwigsplatz",
+      "lon": 8.65408,
+      "lat": 49.87068,
+      "flaecheM2": 3080,
+      "beleg": "OpenStreetMap relation/4063932 (place=square, Ludwigsplatz), Außenring minus Innenring in EPSG:25832"
+    },
+    {
+      "id": "luisenplatz",
+      "name": "Luisenplatz",
+      "lon": 8.65096,
+      "lat": 49.87253,
+      "flaecheM2": 13440,
+      "beleg": "OpenStreetMap relation/4063929 (highway=pedestrian, multipolygon, Luisenplatz), Außenring minus 13 Innenringe in EPSG:25832; Mittelpunkt als Innenpunkt gesetzt (der Flächenschwerpunkt fiel in einen 142 m2 großen Innenring und lag damit nicht auf begehbarer Fläche) - Punkt mit dem größten Abstand zu allen Ringkanten, Freiraum 20,4 m"
+    },
+    {
+      "id": "mercksplatz",
+      "name": "Mercksplatz",
+      "lon": 8.66164,
+      "lat": 49.87244,
+      "flaecheM2": 4510,
+      "beleg": "OpenStreetMap way/150041598 (place=square, Mercksplatz), Polygonfläche in EPSG:25832"
+    },
+    {
+      "id": "herrngarten",
+      "name": "Herrngarten (Südteil am Schloss)",
+      "lon": 8.6533,
+      "lat": 49.8762,
+      "flaecheM2": 20000,
+      "beleg": "OpenStreetMap way/150032785 (leisure=park, Herrngarten): Gesamtpark 124.700 m2. Hier eingetragen ist eine Schätzung fuer den beim Heinerfest genutzten Südteil (rund ein Sechstel) - Annahme, nicht belegt - zu prüfen"
+    },
+    {
+      "id": "residenzschloss",
+      "name": "Residenzschloss / Schlosshof (Glockenhof)",
+      "lon": 8.6551,
+      "lat": 49.87356,
+      "flaecheM2": 8510,
+      "beleg": "OpenStreetMap ways 33436097 (Darmstädter Schloss), 33436100 (Glockenbau), 34169753 (Brückenhaus), 34169754 (Wallhaus): konvexe Hülle des Ensembles (12210 m2) minus Gebäudegrundflächen (3700 m2) = freie Hoffläche; Methode ist eine Näherung - zu prüfen"
+    },
+    {
+      "id": "landgraf-georg-strasse",
+      "name": "Landgraf-Georg-Straße (gesperrter Abschnitt)",
+      "lon": 8.65945,
+      "lat": 49.87309,
+      "flaecheM2": 9700,
+      "beleg": "OpenStreetMap ways name=Landgraf-Georg-Straße zwischen Schlossgraben und Merckstraße: Achslänge 441 m (EPSG:25832) mal angenommener nutzbarer Breite 22 m - Breite ist Annahme, nicht belegt - zu prüfen. Sperrung belegt durch https://www.darmstadt.de/presseportal/pressemitteilungen/einzelansicht/heinerfest-2025"
+    }
+  ],
+  "doku": "# Heinerfest Darmstadt – Gebiets- und Bereichskonfiguration\n\n## Das Fest\nGrößtes Volks- und Innenstadtfest Südhessens, fünf Tage Donnerstag bis Montag um den ersten Sonntag im Juli, in der gesamten Innenstadt rund um das Residenzschloss. 2025: 3.–7. Juli (75.), 2026: 2.–6. Juli (76. Heinerfest). **Veranstalter:** Heimatverein Darmstädter Heiner e. V., Schuchardstraße 7, 64283 Darmstadt (AG Darmstadt VR 928; 1. Vors. Felix Hotz, Geschäftsführerin Violetta Wohland) – Beleg: Impressum heinerfest.de. Rund 250 Schausteller, über 100 kostenlose Veranstaltungen, Riesenrad auf dem Marktplatz, Höhenfeuerwerk am Montagabend.\n\n## Zahlen\n| Größe | Wert | Quelle / Sicherheit |\n|---|---|---|\n| Besucher gesamt | ca. 700.000 | Wikipedia de („etwa 700.000\") + en („over 700,000\"); Presse-/Veranstalterschätzung, nicht gezählt |\n| Schausteller | ca. 250 | Wikipedia |\n| Dauer | 5 Tage (Do–Mo) | Wikipedia, heinerfest.de |\n| Spitzentag | ca. 200.000 (Sa) | **Annahme, nicht belegt – zu prüfen** (keine veröffentlichte Tagesstatistik; ~30 % des Gesamtaufkommens) |\n| Max. gleichzeitig | ca. 60.000 | **Annahme, nicht belegt – zu prüfen** (Herleitung unten) |\n\n**Herleitung max. gleichzeitig:** Bruttofläche aller Bereiche 95.350 m², abzüglich rund 40 % für Fahrgeschäfte, Stände, Bühnen und Rettungswege → ca. 57.000 m² Besucherfläche. MVStättVO § 1 Abs. 2 setzt für „sonstige Stehplätze\" zwei Besucher je m² an – das ist ein Bemessungsmaximum; für ein Volksfest im Freien mit Laufverkehr ist etwa 1 Person/m² realistisch → rund 57.000, gerundet 60.000. Die 40 % und die 1 P/m² sind Branchenannahmen, keine Messwerte.\n\n## Bespielte Bereiche\n| Bereich | lon | lat | Fläche m² |\n|---|---|---|---|\n| Marktplatz | 8.65529 | 49.87246 | 5.950 |\n| Friedensplatz | 8.65372 | 49.87382 | 9.980 |\n| Karolinenplatz | 8.65499 | 49.87500 | 9.400 |\n| Schlossgraben (Grabenanlage am Residenzschloss) | 8.65439 | 49.87413 | 9.710 |\n| Stadtkirchplatz | 8.65592 | 49.87113 | 1.070 |\n| Ludwigsplatz | 8.65408 | 49.87068 | 3.080 |\n| Luisenplatz | 8.65096 | 49.87253 | 13.440 |\n| Mercksplatz | 8.66164 | 49.87244 | 4.510 |\n| Herrngarten (Südteil am Schloss) | 8.65330 | 49.87620 | 20.000 |\n| Residenzschloss / Schlosshof (Glockenhof) | 8.65510 | 49.87356 | 8.510 |\n| Landgraf-Georg-Straße (gesperrter Abschnitt) | 8.65945 | 49.87309 | 9.700 |\n\nAuswahl belegt durch Wikipedia (Schloss, Karolinenplatz, Mercksplatz, Marktplatz mit Riesenrad) und die Sperr-Pressemitteilung der Wissenschaftsstadt Darmstadt zum Heinerfest 2025 (Landgraf-Georg-Straße, Holzstraße, Schlossgraben, Merckstraße, Mercksplatz) samt Bühnenstandorten (HeinerTreff Schlossgraben Eastside, Merck-AlleWeltTreff Friedensplatz, Bühne im Glockenhof, Piazza an der Stadtkirche).\n\n## Geometrie-Methode\nAlle Mittelpunkte und Flächen stammen aus OpenStreetMap (Overpass-API, Abruf 07.08.2026) – nichts geraten. Je Bereich wurde das benannte OSM-Polygon nach EPSG:25832 (ETRS89 / UTM 32N) transformiert und dort per Trapezformel Fläche und Flächenschwerpunkt berechnet; bei Multipolygonen (Friedensplatz, Ludwigsplatz, Luisenplatz) minus Innenringe. Beim C-förmigen Schlossgraben-Polygon läge der Schwerpunkt im Schloss, beim Luisenplatz fiele er in einen 142 m² großen Innenring – dort steht stattdessen jeweils der Punkt mit dem größten Abstand zu allen Ringkanten. Für jeden Bereich ist geprüft, dass der eingetragene Punkt tatsächlich innerhalb des OSM-Polygons und außerhalb aller Innenringe liegt (Ausnahme Residenzschloss: der Punkt liegt bewusst im Hof, nicht im Gebäudepolygon). Transformation: eigene Transverse-Mercator-Rechnung (GRS80, k0 = 0,9996, λ0 = 9°, FE 500.000); Hin-/Rückrechnung < 1e-8° Abweichung, gegengeprüft an amtlichen ALKIS-UTM32-Koordinaten der Darmstädter Innenstadt aus dem LUMUS-Bestand (E 475.089–475.142 / N 5.524.027–5.524.086, gleiche Größenordnung wie hier berechnet).\n\n## Gebiet\nEPSG:25832 E 474.700–475.900 / N 5.524.150–5.525.150 = **1.200 m × 1.000 m = 1,20 km²** (Lastenheft-Grenze 2 km² eingehalten). WGS84 lon 8,64787–8,66463 / lat 49,86922–49,87827. Das Rechteck ist in UTM32 definiert und auf 50 m gerundet; die WGS84-Box ist die umschließende Hülle der vier Eckpunkte und enthält das UTM-Rechteck vollständig. Alle Bereiche liegen darin. `zentrum` ist der geometrische Mittelpunkt des Gebiets; der Kern des Festes liegt rund 130 m westlich davon am Residenzschloss.\n\n## Unsicher\n1. **Herrngarten:** OSM-Polygon = ganzer Park (124.708 m²); bespielt wird nur der Südteil am Schloss. Die 20.000 m² und der Mittelpunkt sind geschätzt – zu prüfen.\n2. **Residenzschloss/Schlosshof:** OSM hat kein Hof-Polygon. 8.510 m² = konvexe Hülle der vier Schlossgebäude (12.210 m²) minus Grundflächen (3.700 m²) – Näherung.\n3. **Landgraf-Georg-Straße:** 441 m Achslänge aus OSM, Breite 22 m angenommen.\n4. **700.000 Besucher:** Presse-/Veranstalterangabe, keine amtliche Zählung.\n5. **Spitzentag und max. Gleichzeitigkeit** sind reine Annahmen und müssen vor jeder sicherheitsrelevanten Nutzung durch das Sicherheitskonzept ersetzt werden.\n6. Die Platzflächen sind geometrische Polygonflächen, nicht die während des Festes tatsächlich für Besucher freie Fläche.\n"
+}

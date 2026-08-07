@@ -1,0 +1,28 @@
+# Abhaengigkeiten und Build
+node_modules/
+dist/
+
+# Laufzeitdaten — vollstaendig regenerierbar, gehoeren nicht in die Versionsverwaltung:
+#   Gelaende   -> npm run gelaende:heinerfest
+#   Konten     -> npm run seed
+#   Abnahme    -> npm run abnahme
+data/gelaende/
+data/cache/
+data/projekte/
+data/abnahme/
+data/organisationen.json
+data/nutzer.json
+data/mitgliedschaften.json
+data/benachrichtigungen.json
+data/objekttypen-eigen.json
+data/server.log
+
+# Geheimnisse
+.env
+.env.*
+
+# Betriebssystem / Editor
+Thumbs.db
+Desktop.ini
+*.tmp
+.DS_Store

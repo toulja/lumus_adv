@@ -1,0 +1,1222 @@
+/* ===========================================================================
+   EventPlan3D — Designsystem (eine Datei, kein Preprozessor)
+
+   Charakter: dunkles Werkzeug fuer Planung und Einsatzvorbereitung. Ruhig,
+   dicht, sachlich — Lagezentrum, nicht Consumer-App. Die Karte bzw. die
+   3D-Szene ist der Held; die Oberflaeche rahmt sie und draengt sich nicht auf.
+
+   Gliederung:
+     1  Grundlagen (Reset, Variablen, Grundtypografie, Bildlaufleisten)
+     2  Grundlayout (Rahmen, Arbeitsflaeche, Buehne, Umbrueche)
+     3  Kopfzeile
+     4  Gemeinsame Bausteine (Knopf, Feld, Karte, Abzeichen, Tabelle, Reiter,
+        Werteliste, Trenner, Leerzustand, Ladebalken, Hinweis)
+     5  Startbildschirm, Anmeldung und Fehlerleiste
+     6  Dashboard und Dialoge (Projektliste, Import, Modal)
+     7  Panels
+     8  Werkzeugleiste
+     9  Ueberlagerungen auf der Buehne (Szene, Karte, HUD, Ampel, Kamera,
+        Fremdcursor, Massband)
+    10  Fremde Widgets (Cesium, MapLibre) dunkel einpassen
+    11  Druck und Bewegungsreduktion
+
+   Es gibt keine Webschriften (@font-face) — ausschliesslich Systemschriften.
+   =========================================================================== */
+
+/* --- 1  Grundlagen ------------------------------------------------------- */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  /* Flaechen — von der tiefsten Ebene nach oben */
+  --fl-0: #0e1216;      /* Hintergrund tiefste Ebene */
+  --fl-1: #151b21;      /* Panelflaeche */
+  --fl-2: #1c242c;      /* angehobene Flaeche / Karten */
+  --fl-3: #26313b;      /* Hover / gedrueckt */
+  --rand: #2a3440;      /* Trennlinien */
+  /* Text */
+  --text: #e6edf3;
+  --text-schwach: #9fb0c0;
+  --text-leise: #6b7d8d;
+  /* Akzent und Signale */
+  --akzent: #4a9eda;
+  --akzent-weich: rgba(74, 158, 218, 0.16);
+  --ok: #33c46b;
+  --warn: #f0b400;
+  --fehler: #e8503a;
+  /* Form */
+  --radius: 8px;
+  --radius-klein: 5px;
+  /* Schrift */
+  --schrift: system-ui, "Segoe UI", Roboto, sans-serif;
+  --schrift-zahl: "Segoe UI", ui-monospace, "Cascadia Mono", monospace;
+  /* Masse des Grundlayouts */
+  --kopf-hoehe: 48px;
+  --panel-breite: 380px;
+  --werkzeug-breite: 56px;
+  /* Schatten schwebender Elemente (Schublade, Fehlerleiste) */
+  --schatten: 0 12px 34px rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+html, body, #app { height: 100%; width: 100%; }
+body {
+  margin: 0;
+  overflow: hidden;              /* die Seite scrollt nie — nur Panelkoerper */
+  background: var(--fl-0);
+  color: var(--text);
+  font-family: var(--schrift);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4, p, figure, dl, dd { margin: 0; }
+h1 { font-size: 16px; font-weight: 600; }
+h2 { font-size: 14px; font-weight: 600; }
+h3 { font-size: 12px; font-weight: 600; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+a { color: var(--akzent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Sichtbarer Fokus fuer die Tastaturbedienung — nie abschalten. */
+:focus-visible { outline: 2px solid var(--akzent); outline-offset: 1px; }
+::selection { background: var(--akzent-weich); color: var(--text); }
+
+/* Duenne, dunkle Bildlaufleisten in der ganzen Anwendung */
+* { scrollbar-width: thin; scrollbar-color: var(--fl-3) transparent; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--fl-3);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: #37454f; background-clip: content-box; }
+
+/* Masse, Zahlen, Koordinaten: gleiche Ziffernbreite, rechtsbuendig. */
+.zahl {
+  font-family: var(--schrift-zahl);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Zwei Textabstufungen als Hilfsklassen — dieselben Werte wie die Variablen,
+   damit Beiwerk (Organisation, Zeitstempel, Kennungen) leiser wird. */
+.text-schwach { color: var(--text-schwach); }
+.text-leise { color: var(--text-leise); }
+
+/* --- 2  Grundlayout ------------------------------------------------------ */
+
+/* Vollbildgeruest: Kopfzeile oben, darunter der Inhalt. */
+.rahmen {
+  display: grid;
+  grid-template-rows: var(--kopf-hoehe) 1fr;
+  height: 100%;
+  overflow: hidden;
+}
+.inhalt { position: relative; min-height: 0; overflow: hidden; }
+.inhalt > .leer { height: 100%; }
+
+/* Werkzeugleiste | Buehne | Seitenpanel */
+.arbeitsflaeche {
+  display: grid;
+  grid-template-columns: var(--werkzeug-breite) 1fr var(--panel-breite);
+  height: 100%;
+  min-height: 0;
+}
+
+/* Traegerin der 3D-Szene und/oder der 2D-Karte. */
+.buehne { position: relative; min-width: 0; overflow: hidden; background: var(--fl-0); }
+
+/* Geteilte Ansicht: zwei Haelften nebeneinander; die 1px-Gitterluecke zeigt
+   den Randfarbton darunter und wirkt so als Trennlinie. */
+.buehne--geteilt,
+.buehne[data-ansicht="geteilt"] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--rand);
+}
+/* .buehne-teil ist der Name, den Arbeitsflaeche.tsx vergibt; .buehne-haelfte
+   bleibt als gleichwertiger Zweitname bestehen. */
+.buehne-teil,
+.buehne-haelfte { position: relative; min-width: 0; height: 100%; overflow: hidden; background: var(--fl-0); }
+
+/* Der Ladebalken ist ein direktes Kind der Buehne. In der geteilten Ansicht
+   wuerde er sonst als dritte Gitterzelle die beiden Haelften zerdruecken —
+   deshalb schwebt er ueber der Szene statt im Fluss zu liegen. */
+.buehne > .laedt-balken {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 7;
+  width: auto;
+  border-radius: 0;
+}
+
+/* Unter 1280 px: Seitenpanel wird zur ueberlagernden Schublade. */
+@media (max-width: 1279px) {
+  .arbeitsflaeche { grid-template-columns: var(--werkzeug-breite) 1fr; }
+  /* Seitenpanel.tsx vergibt .pnl-panel — beide Namen muessen greifen, sonst
+     rutscht das Panel als drittes Gitterkind in eine eigene Zeile. */
+  .arbeitsflaeche > .panel,
+  .arbeitsflaeche > .pnl-panel {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    z-index: 30;
+    width: var(--panel-breite);
+    max-width: 92vw;
+    box-shadow: var(--schatten);
+  }
+}
+
+/* Unter 900 px: Werkzeugleiste waagerecht unten. */
+@media (max-width: 899px) {
+  .arbeitsflaeche {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr var(--werkzeug-breite);
+  }
+  .arbeitsflaeche > .buehne { order: 1; }
+  .arbeitsflaeche > .werkzeugleiste {
+    order: 2;
+    flex-direction: row;
+    justify-content: flex-start;
+    width: 100%;
+    height: var(--werkzeug-breite);
+    padding: 0 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 0;
+    border-top: 1px solid var(--rand);
+  }
+  .arbeitsflaeche > .panel,
+  .arbeitsflaeche > .pnl-panel { bottom: var(--werkzeug-breite); }
+}
+
+/* --- 3  Kopfzeile -------------------------------------------------------- */
+
+.kopfzeile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--kopf-hoehe);
+  padding: 0 12px;
+  background: var(--fl-1);
+  border-bottom: 1px solid var(--rand);
+}
+
+/* Linke Gruppe: Wortmarke als Knopf zurueck zur Uebersicht, daneben die
+   Ansichtsreiter der Behoerdenkonten. */
+.kopf-links { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.marke-knopf {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+.marke-knopf:focus-visible { outline: 2px solid var(--akzent); outline-offset: 3px; border-radius: var(--radius-klein); }
+.kopf-reiter { display: flex; gap: 2px; }
+
+/* Wortmarke: klein links in der Kopfzeile, gross auf dem Startbildschirm. */
+.marke {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text);
+  white-space: nowrap;
+}
+.marke::before {
+  content: "";
+  width: 8px; height: 8px;
+  border-radius: 2px;
+  background: var(--akzent);
+  box-shadow: 0 0 10px rgba(74, 158, 218, 0.6);
+}
+
+/* Projektkopf mittig — nimmt den freien Platz, kuerzt bei Bedarf. */
+.kopf-mitte { flex: 1; min-width: 0; display: flex; justify-content: center; }
+.kopf-projekt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.kopf-projektname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Anwesende: farbige Initialenkreise. Die Farbe kommt je Person aus dem
+   Zustandsspeicher und wird inline gesetzt (einziger dynamischer Stil). */
+.praesenz { display: flex; align-items: center; }
+.praesenz-kreis {
+  display: grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  margin-left: -5px;
+  border: 1px solid var(--fl-1);
+  border-radius: 50%;
+  color: #06121c;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: default;
+}
+.praesenz-kreis:first-child { margin-left: 0; }
+
+/* Rechte Gruppe: Verbindungsanzeige, Glocke, Nutzer, Knoepfe. */
+.kopf-rechts { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+
+/* Verbindungsanzeige: Punkt plus Wort. --live = Verbindung steht,
+   --weg = getrennt. Die Punktfarbe setzt Kopfzeile.tsx zusaetzlich inline. */
+.verbindung {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.verbindung-punkt {
+  flex: none;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--fehler);
+}
+.verbindung--live { color: var(--ok); }
+.verbindung--live .verbindung-punkt { background: var(--ok); box-shadow: 0 0 8px rgba(51, 196, 107, 0.5); }
+.verbindung--weg { color: var(--fehler); }
+.verbindung--weg .verbindung-punkt { background: var(--fehler); box-shadow: 0 0 8px rgba(232, 80, 58, 0.5); }
+
+/* Angemeldete Person: Name ueber Organisation, rechtsbuendig. */
+.nutzer-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.nutzer-name { font-weight: 600; }
+
+.glocke-huelle { position: relative; }
+.glocke {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px; height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-klein);
+  background: transparent;
+  color: var(--text-schwach);
+  font-size: 15px;
+  cursor: pointer;
+}
+.glocke:hover { background: var(--fl-2); color: var(--text); }
+.glocke-zaehler {
+  position: absolute;
+  top: 1px; right: 1px;
+  min-width: 14px; height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--akzent);
+  color: #06121c;
+  font-family: var(--schrift-zahl);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+}
+
+/* Aufklappende Liste unter der Glocke — schwebt, scrollt in sich selbst. */
+.glocke-liste {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 320px;
+  max-width: 88vw;
+  max-height: 60vh;
+  padding: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-shadow: var(--schatten);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.glocke-eintrag {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 9px;
+  border: 1px solid var(--rand);
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-klein);
+  background: var(--fl-1);
+  font-size: 12px;
+  font-weight: 400;
+}
+.glocke-eintrag h3 { font-size: 12.5px; }
+.glocke-eintrag p { overflow-wrap: anywhere; }
+/* Ungelesen: linker Akzentstreifen, sonst identisch. */
+.glocke-eintrag--neu { border-left-color: var(--akzent); background: var(--fl-2); }
+
+/* --- 4  Gemeinsame Bausteine --------------------------------------------- */
+
+/* Knoepfe: 30 px hoch, ruhige Flaeche, deutlicher Fokusrahmen. */
+.knopf {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--rand);
+  border-radius: var(--radius-klein);
+  background: var(--fl-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.knopf:hover:not(:disabled) { background: var(--fl-3); }
+.knopf:active:not(:disabled) { background: var(--fl-3); transform: translateY(1px); }
+.knopf:focus-visible { outline: 2px solid var(--akzent); outline-offset: 1px; }
+.knopf:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.knopf--haupt { background: var(--akzent); border-color: var(--akzent); color: #06121c; font-weight: 600; }
+.knopf--haupt:hover:not(:disabled),
+.knopf--haupt:active:not(:disabled) { background: #5cabe2; border-color: #5cabe2; }
+
+.knopf--gefahr { background: transparent; border-color: var(--fehler); color: var(--fehler); }
+.knopf--gefahr:hover:not(:disabled),
+.knopf--gefahr:active:not(:disabled) { background: rgba(232, 80, 58, 0.14); }
+
+.knopf--leise { background: transparent; border-color: transparent; color: var(--text-schwach); }
+.knopf--leise:hover:not(:disabled),
+.knopf--leise:active:not(:disabled) { background: var(--fl-2); color: var(--text); }
+
+/* Eingabefelder, Auswahlfelder und Textbereiche einheitlich. */
+.feld {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--rand);
+  border-radius: var(--radius-klein);
+  background: var(--fl-0);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.feld::placeholder { color: var(--text-leise); }
+.feld:hover:not(:disabled) { border-color: #34414e; }
+.feld:focus { outline: none; border-color: var(--akzent); box-shadow: 0 0 0 2px var(--akzent-weich); }
+.feld:disabled { opacity: 0.45; cursor: not-allowed; }
+textarea.feld { height: auto; min-height: 68px; padding: 6px 8px; line-height: 1.5; resize: vertical; }
+input.feld[type="number"] { font-family: var(--schrift-zahl); font-variant-numeric: tabular-nums; }
+
+/* Auswahlfeld mit eigenem, zurueckhaltendem Pfeil (Inline-SVG, keine Datei). */
+select.feld {
+  appearance: none;
+  padding-right: 26px;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%239fb0c0' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+}
+
+/* Beschriftung ueber dem Feld, 4 px Abstand. */
+.feld-zeile { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.feld-zeile > label,
+.feld-zeile > .feld-name {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-schwach);
+}
+.feld-zeile > .feld-hinweis { font-size: 11px; color: var(--text-leise); }
+
+/* Karte = angehobene Flaeche fuer gruppierte Angaben. */
+.karte { padding: 12px; border: 1px solid var(--rand); border-radius: var(--radius); background: var(--fl-2); }
+.karte + .karte { margin-top: 8px; }
+
+/* Abzeichen = kleine Statuspille, Farbfuellung 14 %, volle Textfarbe. */
+.abzeichen {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--fl-3);
+  color: var(--text-schwach);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.abzeichen--ok { background: rgba(51, 196, 107, 0.14); color: var(--ok); }
+.abzeichen--warn { background: rgba(240, 180, 0, 0.14); color: var(--warn); }
+.abzeichen--fehler { background: rgba(232, 80, 58, 0.14); color: var(--fehler); }
+
+/* Tabelle: Kopfzeile klebt am oberen Rand des scrollenden Panelkoerpers. */
+.tabelle { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tabelle th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 8px;
+  background: var(--fl-1);
+  border-bottom: 1px solid var(--rand);
+  color: var(--text-schwach);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+.tabelle td { padding: 6px 8px; border-bottom: 1px solid var(--rand); vertical-align: top; overflow-wrap: anywhere; }
+.tabelle tbody tr:hover { background: var(--fl-2); }
+.tabelle .zahl,
+.tabelle td[data-zahl],
+.tabelle th[data-zahl] {
+  font-family: var(--schrift-zahl);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Reiter: .reiterleiste = Leiste, .reiter = einzelner Reiter. Aktiv per
+   Klasse --aktiv oder per aria-selected (fuer role="tab"-Umsetzungen). */
+.reiterleiste { display: flex; gap: 2px; border-bottom: 1px solid var(--rand); overflow-x: auto; }
+.reiter {
+  padding: 7px 11px;
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-schwach);
+  font-family: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.reiter:hover { color: var(--text); }
+.reiter--aktiv,
+.reiter[aria-selected="true"] { color: var(--text); border-bottom-color: var(--akzent); }
+
+/* Werteliste: dt/dd-Paare als zweispaltiges Gitter, Werte in Zahlenschrift. */
+.werteliste {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 12px;
+  row-gap: 4px;
+  align-items: baseline;
+  font-size: 12.5px;
+}
+.werteliste dt { color: var(--text-schwach); }
+.werteliste dd {
+  font-family: var(--schrift-zahl);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.trenner { height: 1px; margin: 8px 0; border: 0; background: var(--rand); }
+
+/* Erklaerender Kleintext unter einem Feld oder in einem Dialog. Sachlich,
+   nie alarmierend — Warnungen laufen ueber .abzeichen--warn. */
+.hinweis { color: var(--text-leise); font-size: 11.5px; line-height: 1.5; }
+
+/* Leerer Zustand: zentriert, ruhig, kein Ausrufezeichen. */
+.leer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 28px 16px;
+  color: var(--text-leise);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Unendlich laufender Fortschrittsbalken, 2 px hoch. */
+.laedt-balken {
+  position: relative;
+  width: 100%;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--fl-3);
+}
+.laedt-balken::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 32%; height: 100%;
+  background: var(--akzent);
+  animation: laedt-lauf 1.25s ease-in-out infinite;
+}
+@keyframes laedt-lauf {
+  from { transform: translateX(-105%); }
+  to { transform: translateX(420%); }
+}
+
+/* --- 5  Startbildschirm, Anmeldung und Fehlerleiste ----------------------- */
+
+.startbildschirm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  height: 100%;
+  padding: 24px;
+  background: radial-gradient(120% 90% at 50% 0%, #131b22 0%, var(--fl-0) 70%);
+  text-align: center;
+}
+.startbildschirm .marke { font-size: 26px; font-weight: 300; letter-spacing: 0.22em; }
+.startbildschirm .marke::before { width: 12px; height: 12px; border-radius: 3px; }
+.startbildschirm .laedt-balken { width: 190px; }
+.startbildschirm p { max-width: 380px; color: var(--text-leise); }
+
+/* Anmeldung: links die ruhige Markenseite, rechts das Formular. Als einzige
+   Seite der Anwendung darf sie scrollen — die Zugangstabelle ist laenger als
+   ein kleiner Bildschirm. */
+.anmeldung {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100%;
+  overflow: hidden;
+}
+.anmeldung-seite { min-width: 0; padding: 32px; overflow-y: auto; overscroll-behavior: contain; }
+
+.anmeldung-marke {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  background: radial-gradient(120% 90% at 30% 0%, #131b22 0%, var(--fl-0) 70%);
+  border-right: 1px solid var(--rand);
+}
+.anmeldung-marke .marke { font-size: 24px; font-weight: 300; letter-spacing: 0.2em; }
+.anmeldung-marke .marke::before { width: 11px; height: 11px; border-radius: 3px; }
+.marke-untertitel { max-width: 42ch; color: var(--text-schwach); font-size: 15px; }
+.marke-punkte { display: flex; flex-direction: column; gap: 6px; max-width: 44ch; color: var(--text-schwach); }
+.marke-punkte > li { display: flex; align-items: baseline; gap: 8px; }
+.marke-punkte > li::before { content: "—"; flex: none; color: var(--akzent); }
+/* Der Haftungshinweis steht bewusst schon vor der Anmeldung. */
+.marke-hinweis {
+  max-width: 46ch;
+  padding-left: 10px;
+  border-left: 2px solid var(--rand);
+  color: var(--text-leise);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.anmeldung-formular {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  background: var(--fl-0);
+}
+.anmeldung-karte,
+.zugaenge {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.anmeldung-karte form { display: flex; flex-direction: column; gap: 10px; }
+
+/* Aufklappbare Registrierung unter dem Anmeldeformular. */
+.aufklapp { display: flex; flex-direction: column; gap: 10px; }
+.aufklapp-kopf { align-self: flex-start; }
+.aufklapp form { display: flex; flex-direction: column; gap: 10px; }
+
+/* Zugangstabelle: jede Zeile ist anklickbar und meldet direkt an. */
+.zugaenge .tabelle tbody tr { cursor: pointer; }
+/* Der Knopf fuellt die Zelle, damit die ganze Zeile als Ziel wirkt. */
+.zugang-knopf {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  height: auto;
+  padding: 3px 4px;
+  text-align: left;
+}
+.zugang-knopf strong { font-weight: 600; }
+.zugang-knopf .text-leise { font-size: 11px; }
+
+/* Schmale Fenster: Markenseite ueber das Formular legen, nicht daneben. */
+@media (max-width: 899px) {
+  .anmeldung { grid-template-columns: 1fr; grid-template-rows: auto 1fr; overflow-y: auto; }
+  .anmeldung-seite { padding: 20px 16px; overflow: visible; }
+  .anmeldung-marke { border-right: 0; border-bottom: 1px solid var(--rand); }
+}
+
+/* Meldung unten mittig schwebend, mit Schliessknopf. */
+.fehlerleiste {
+  position: absolute;
+  left: 50%; bottom: 18px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(560px, 92vw);
+  padding: 8px 8px 8px 14px;
+  transform: translateX(-50%);
+  border: 1px solid var(--fehler);
+  border-radius: var(--radius);
+  background: var(--fl-2);
+  font-size: 12.5px;
+  box-shadow: var(--schatten);
+}
+.fehlerleiste > span { overflow-wrap: anywhere; }
+.fehlerleiste button {
+  flex: none;
+  width: 24px; height: 24px;
+  border: 0;
+  border-radius: var(--radius-klein);
+  background: transparent;
+  color: var(--text-schwach);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.fehlerleiste button:hover { background: var(--fl-3); color: var(--text); }
+
+/* --- 6  Dashboard und Dialoge -------------------------------------------- */
+
+/* Uebersichtsseite. Sie ist neben dem Panelkoerper der zweite Bereich, der
+   scrollen darf — die Projektliste kann beliebig lang werden. */
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding: 18px 20px 28px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.dashboard-kopf { display: flex; align-items: center; gap: 12px; }
+.dashboard-kopf > :last-child { margin-left: auto; }
+
+.projekt-liste {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+/* Im Raster darf der Karten-Standardabstand nicht zusaetzlich greifen. */
+.projekt-liste > .karte + .karte { margin-top: 0; }
+
+.projekt-karte { display: flex; flex-direction: column; gap: 10px; cursor: pointer; }
+.projekt-karte:hover { border-color: #34414e; }
+.projekt-kopf { display: flex; align-items: flex-start; gap: 8px; }
+.projekt-kopf h3 { flex: 1; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+
+.gelaende-liste { table-layout: auto; }
+
+/* Trefferliste der Adresssuche: schwebt nicht, sie steht im Fluss unter dem
+   Suchfeld und scrollt in sich. */
+.treffer-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  padding: 3px;
+  overflow-y: auto;
+  border: 1px solid var(--rand);
+  border-radius: var(--radius-klein);
+  background: var(--fl-0);
+}
+.treffer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  height: auto;
+  padding: 5px 7px;
+  text-align: left;
+}
+.treffer .zahl { font-size: 11px; text-align: left; }
+
+/* Fortschritt des Gelaendeimports — Breite setzt Dashboard.tsx inline. */
+.fortschritt {
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--fl-0);
+  border: 1px solid var(--rand);
+}
+.fortschritt-balken {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--akzent);
+  transition: width 0.3s ease;
+}
+
+/* Meldungen des Importlaufs, aeltere oben. */
+.protokoll {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 160px;
+  padding: 6px 8px;
+  overflow-y: auto;
+  border-radius: var(--radius-klein);
+  background: var(--fl-0);
+  color: var(--text-leise);
+  font-family: var(--schrift-zahl);
+  font-size: 11px;
+}
+.protokoll > li { overflow-wrap: anywhere; }
+
+/* Dialoge: abgedunkelter Hintergrund, Karte mittig, Kopf und Fuss bleiben
+   stehen, nur der Koerper scrollt. */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(6, 9, 12, 0.66);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.modal-karte {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 480px;
+  max-height: 88vh;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--rand);
+  border-radius: var(--radius);
+  background: var(--fl-1);
+  box-shadow: var(--schatten);
+}
+.modal-karte--weit { max-width: 660px; }
+/* Das Formular im Dialog traegt Koerper und Fuss — es muss die Hoehe teilen. */
+.modal-karte > form { display: flex; flex-direction: column; min-height: 0; }
+
+.modal-kopf {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rand);
+}
+.modal-kopf h2 { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+.modal-koerper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.modal-fuss {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--rand);
+  background: var(--fl-1);
+}
+
+/* --- 7  Panels ----------------------------------------------------------- */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--fl-1);
+  border-left: 1px solid var(--rand);
+}
+.panel-kopf {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--rand);
+  color: var(--text-schwach);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.panel-kopf > :last-child { margin-left: auto; }
+
+/* Einziger scrollender Bereich der Anwendung — mit eigener duenner Leiste. */
+.panel-koerper {
+  flex: 1;
+  min-height: 0;
+  padding: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--fl-3) transparent;
+}
+.panel-koerper::-webkit-scrollbar { width: 8px; }
+.panel-koerper::-webkit-scrollbar-thumb {
+  background: var(--fl-3);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+
+.panel-abschnitt { display: flex; flex-direction: column; gap: 8px; }
+.panel-abschnitt > h2,
+.panel-abschnitt > h3,
+.panel-abschnitt > .panel-abschnitt-titel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-schwach);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.panel-abschnitt + .panel-abschnitt { padding-top: 12px; border-top: 1px solid var(--rand); }
+
+/* --- 8  Werkzeugleiste --------------------------------------------------- */
+
+.werkzeugleiste {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  background: var(--fl-1);
+  border-right: 1px solid var(--rand);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.werkzeug {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px; height: 40px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-klein);
+  background: transparent;
+  color: var(--text-schwach);
+  font-family: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.werkzeug:hover { background: var(--fl-2); color: var(--text); }
+.werkzeug:focus-visible { outline: 2px solid var(--akzent); outline-offset: 1px; }
+.werkzeug:disabled { opacity: 0.45; cursor: not-allowed; }
+/* Anzeige des gewaehlten Bauteils — kein Knopf, sondern ein Zustandsschild. */
+.werkzeug--platzieren { cursor: default; }
+
+/* Gruppe zusammengehoeriger Werkzeuge (Ansichtswahl). */
+.werkzeug-gruppe { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+
+/* Waagerechter Strich zwischen den Werkzeuggruppen. */
+.werkzeug-trenner { flex: none; width: 26px; height: 1px; margin: 4px 0; background: var(--rand); }
+.werkzeug--aktiv,
+.werkzeug[aria-pressed="true"] { background: var(--akzent-weich); color: var(--akzent); }
+/* Linker 2px-Streifen am aktiven Werkzeug. */
+.werkzeug--aktiv::before,
+.werkzeug[aria-pressed="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 7px; bottom: 7px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--akzent);
+}
+/* Waagerechte Leiste unten: Streifen wandert an die Unterkante. */
+@media (max-width: 899px) {
+  .werkzeug--aktiv::before,
+  .werkzeug[aria-pressed="true"]::before {
+    left: 7px; right: 7px; top: auto; bottom: 0;
+    width: auto; height: 2px;
+    border-radius: 2px 2px 0 0;
+  }
+  .werkzeug-gruppe { flex-direction: row; }
+  .werkzeug-trenner { width: 1px; height: 26px; margin: 0 4px; }
+}
+
+/* --- 9  Ueberlagerungen auf der Buehne ----------------------------------- */
+
+/* Traeger der 3D-Szene: fuellt seine Haelfte, alle HUDs liegen darin. */
+.szene3d { position: relative; width: 100%; height: 100%; overflow: hidden; }
+/* In diesen Behaelter haengt Cesium seinen Viewer — er darf nie mitwachsen. */
+.szene3d-canvas { position: absolute; inset: 0; overflow: hidden; }
+
+/* Traeger der 2D-Karte. Karte2D.tsx blendet ihn per hidden-Attribut aus;
+   die display-Regel darf das nicht ueberstimmen. */
+.karte2d { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.karte2d[hidden] { display: none; }
+.karte2d__flaeche { position: absolute; inset: 0; }
+
+/* Leerzustaende liegen mittig ueber der jeweiligen Flaeche. */
+.szene3d-leer,
+.karte2d__platzhalter {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: var(--fl-0);
+}
+
+/* Kopfdaten der Szene, oben links, halbtransparent mit Rueckenunschaerfe. */
+.buehne-hud {
+  position: absolute;
+  top: 10px; left: 10px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 280px;
+  padding: 8px 10px;
+  border: 1px solid var(--rand);
+  border-radius: var(--radius);
+  background: rgba(21, 27, 33, 0.72);
+  backdrop-filter: blur(8px) saturate(1.15);
+  -webkit-backdrop-filter: blur(8px) saturate(1.15);
+  color: var(--text-schwach);
+  font-size: 11.5px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+.buehne-hud strong { color: var(--text); font-size: 12px; font-weight: 600; }
+.buehne-hud .zahl { color: var(--text); }
+
+/* Die drei HUD-Spielarten koennen gleichzeitig sichtbar sein und bekommen
+   deshalb feste, sich nicht ueberdeckende Plaetze. Unten links bleibt frei —
+   dort stehen die Quellenangaben, die sichtbar bleiben muessen. */
+.buehne-hud--hinweis { border-color: var(--akzent); color: var(--text); }
+/* Laufende Messung: mittig unten, dicht am Geschehen. */
+.buehne-hud--messung {
+  top: auto; left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  color: var(--text);
+  font-family: var(--schrift-zahl);
+  font-variant-numeric: tabular-nums;
+}
+/* Betriebsart „nur lesen": mittig oben als ruhiges Band. */
+.buehne-hud--lesend {
+  top: 10px; left: 50%;
+  transform: translateX(-50%);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Zulaessigkeits-Ampel oben rechts: drei Punkte + Text. Die Punktklassen
+   --fehler/--warn/--ok leuchten, --aus bleibt gedaempft. */
+.ampel {
+  position: absolute;
+  top: 10px; right: 10px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--rand);
+  border-radius: var(--radius);
+  background: rgba(21, 27, 33, 0.72);
+  backdrop-filter: blur(8px) saturate(1.15);
+  -webkit-backdrop-filter: blur(8px) saturate(1.15);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+.ampel-punkte { display: flex; gap: 5px; }
+.ampel-punkt { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--fl-3); }
+.ampel-punkt--aus { opacity: 0.35; box-shadow: none; }
+.ampel-punkt--fehler { background: var(--fehler); box-shadow: 0 0 8px rgba(232, 80, 58, 0.6); }
+.ampel-punkt--warn { background: var(--warn); box-shadow: 0 0 8px rgba(240, 180, 0, 0.6); }
+.ampel-punkt--ok { background: var(--ok); box-shadow: 0 0 8px rgba(51, 196, 107, 0.6); }
+.ampel-text,
+.ampel > span { color: var(--text); font-size: 12px; white-space: nowrap; }
+
+/* Szene3D.tsx setzt die Stufe an der Ampel selbst (.ampel--fehler/--warn/--ok)
+   und fuehrt darin genau EINEN Punkt — er nimmt die Farbe der Stufe an. */
+.ampel--fehler .ampel-punkt { background: var(--fehler); box-shadow: 0 0 8px rgba(232, 80, 58, 0.6); }
+.ampel--warn .ampel-punkt { background: var(--warn); box-shadow: 0 0 8px rgba(240, 180, 0, 0.6); }
+.ampel--ok .ampel-punkt { background: var(--ok); box-shadow: 0 0 8px rgba(51, 196, 107, 0.6); }
+
+/* Nachsatz „n nicht pruefbar" — leiser als das Ergebnis selbst. */
+.ampel-zusatz {
+  padding-left: 8px;
+  border-left: 1px solid var(--rand);
+  color: var(--text-leise);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* Kamerawerkzeuge unten rechts: Norden, Draufsicht, Fussgaengerperspektive.
+   Unten links bleibt frei fuer die Quellenangaben. */
+.kamerawerkzeuge {
+  position: absolute;
+  right: 10px; bottom: 10px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--rand);
+  border-radius: var(--radius);
+  background: rgba(21, 27, 33, 0.72);
+  backdrop-filter: blur(8px) saturate(1.15);
+  -webkit-backdrop-filter: blur(8px) saturate(1.15);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+.kamerawerkzeuge .knopf { min-width: 46px; padding: 0 6px; font-size: 11.5px; }
+
+/* Live-Cursor anderer Nutzer. Die Nutzerfarbe wird als `color` gesetzt
+   (einziger erlaubter dynamischer Stil) — Pfeil und Namensschild leiten
+   sich per currentColor davon ab. */
+.fremdcursor {
+  position: absolute;
+  z-index: 6;
+  display: flex;
+  align-items: flex-start;
+  gap: 3px;
+  pointer-events: none;
+  transform: translate(-2px, -2px);
+  will-change: transform;
+}
+.fremdcursor svg,
+.fremdcursor .fremdcursor-pfeil {
+  flex: none;
+  fill: currentColor;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+}
+.fremdcursor-name {
+  margin-top: 10px;
+  padding: 1px 6px;
+  border-radius: var(--radius-klein);
+  background: currentColor;
+  color: #06121c;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Beschriftung von Messungen: weisser Text mit dunklem Umriss, damit er auf
+   hellem Luftbild wie auf dunkler Szene lesbar bleibt. */
+.massband {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  color: #ffffff;
+  font-family: var(--schrift-zahl);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-shadow:
+    0 0 3px rgba(0, 0, 0, 0.95),
+    1px 1px 0 rgba(0, 0, 0, 0.9), -1px 1px 0 rgba(0, 0, 0, 0.9),
+    1px -1px 0 rgba(0, 0, 0, 0.9), -1px -1px 0 rgba(0, 0, 0, 0.9);
+}
+
+/* --- 10  Fremde Widgets dunkel einpassen --------------------------------- */
+/* Quellenangaben bleiben sichtbar — sie sind lizenzrechtlich Pflicht. */
+
+/* Cesium und MapLibre erben ihre Groesse nicht von selbst — der Zeichenbereich
+   muss die Buehne restlos ausfuellen. `display: block` ist Pflicht: ein Canvas
+   ist von Haus aus inline und traegt sonst unter der Grundlinie ein paar Pixel
+   Luft mit, die die Buehne wachsen lassen und Bildlaufleisten ausloesen. */
+.buehne canvas,
+.buehne-teil canvas,
+.buehne-haelfte canvas { width: 100%; height: 100%; display: block; }
+
+.buehne .cesium-viewer,
+.buehne .cesium-widget,
+.buehne .maplibregl-map,
+.buehne .maplibregl-canvas-container,
+.buehne-teil .cesium-viewer,
+.buehne-teil .cesium-widget,
+.buehne-teil .maplibregl-map,
+.buehne-haelfte .cesium-viewer,
+.buehne-haelfte .cesium-widget,
+.buehne-haelfte .maplibregl-map { width: 100%; height: 100%; }
+
+.cesium-widget-credits,
+.cesium-viewer-bottom { font-size: 10px !important; color: var(--text-leise) !important; }
+
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib a {
+  background: rgba(14, 18, 22, 0.7) !important;
+  color: var(--text-leise) !important;
+  font-size: 10px;
+}
+
+/* --- 11  Druck und Bewegungsreduktion ------------------------------------ */
+
+@media print {
+  .werkzeugleiste, .panel, .pnl-panel, .fehlerleiste, .buehne-hud,
+  .glocke, .glocke-liste, .kamerawerkzeuge, .modal { display: none !important; }
+  html, body, .rahmen, .inhalt, .arbeitsflaeche, .dashboard { overflow: visible; height: auto; }
+  .arbeitsflaeche { grid-template-columns: 1fr; grid-template-rows: auto; }
+  body { background: #ffffff; color: #000000; }
+  .kopfzeile { background: #ffffff; border-bottom: 1px solid #000000; color: #000000; }
+  .tabelle th { background: #ffffff; color: #000000; }
+  .tabelle td, .tabelle th { border-bottom: 1px solid #999999; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  .knopf:active:not(:disabled) { transform: none; }
+  .laedt-balken::after { width: 100%; animation: none; opacity: 0.6; }
+}

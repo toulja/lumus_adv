@@ -1,0 +1,103 @@
+{
+  "bundesland": "HE",
+  "name": "Hessen",
+  "epsg": 25832,
+  "stand": "2026-08-07",
+  "hinweis": "Alle Endpunkte am 07.08.2026 per curl verifiziert. Weitere Bundeslaender bekommen eine gleich aufgebaute Datei config/geodata.<land>.json — die Pipeline bleibt unveraendert.",
+
+  "geokodierung": {
+    "art": "nominatim",
+    "url": "https://nominatim.openstreetmap.org/search",
+    "drosselMs": 1100,
+    "userAgent": "EventPlan3D/1.0 (Heinerfest Darmstadt; Kontakt: info@blackrock3.de)",
+    "hinweis": "Entwicklungs-Geocoder. Nominatim-Policy: max. ca. 1 Anfrage/s, User-Agent Pflicht. Vor Produktivbetrieb auf den amtlichen HVBG-Suchdienst umstellen.",
+    "lizenz": "ODbL, (c) OpenStreetMap-Mitwirkende"
+  },
+
+  "orthophoto": {
+    "art": "wms",
+    "url": "https://www.gds-srv.hessen.de/cgi-bin/lika-services/ogc-free-images.ows",
+    "layer": "he_dop20_rgb",
+    "version": "1.3.0",
+    "format": "image/jpeg",
+    "crs": "EPSG:25832",
+    "maxPixel": 2048,
+    "bodenaufloesungM": 0.2,
+    "leerbildBytes": 8000,
+    "maxParallel": 4,
+    "lizenz": "Datenlizenz Deutschland — Zero, Version 2.0 (Open Data HVBG)",
+    "quellenvermerk": "(c) Hessische Verwaltung fuer Bodenmanagement und Geoinformation (HVBG), DOP20",
+    "hinweis": "ECHTE Bilder liefert der Dienst ausschliesslich in EPSG:25832. In EPSG:4326/3857 kommen Leerbilder zurueck. Verifiziert 07.08.2026: GetMap 1000x1000 px, BBOX 475300,5522300,475800,5522800 -> HTTP 200, image/jpeg, 279 kB."
+  },
+
+  "karte": {
+    "art": "wms",
+    "url": "https://www.gds-srv.hessen.de/cgi-bin/lika-services/ogc-free-maps.ows",
+    "version": "1.3.0",
+    "crs": "EPSG:25832",
+    "format": "image/png",
+    "kaskade": [
+      { "bisSpannM": 900, "layer": "he_alk", "bezeichnung": "Liegenschaftskarte" },
+      { "bisSpannM": 5000, "layer": "he_dtk25", "bezeichnung": "DTK25" },
+      { "bisSpannM": 15000, "layer": "he_dtk50", "bezeichnung": "DTK50" },
+      { "bisSpannM": 30000, "layer": "he_dtk100", "bezeichnung": "DTK100" },
+      { "bisSpannM": 100000, "layer": "he_uek200", "bezeichnung": "UEK200" },
+      { "bisSpannM": 1000000, "layer": "he_uek", "bezeichnung": "UEK" }
+    ],
+    "lizenz": "Datenlizenz Deutschland — Zero, Version 2.0",
+    "quellenvermerk": "(c) HVBG, Liegenschaftskarte / Topographische Karten",
+    "hinweis": "Sammel-Layer he_dtk und he_uek NICHT verwenden (he_dtk blendet in grossen Massstaeben Orthophotos ein, he_uek hat Massstabsluecken)."
+  },
+
+  "flurstuecke": {
+    "art": "wfs",
+    "url": "https://www.gds.hessen.de/wfs2/aaa-suite/cgi-bin/alkis/vereinf/wfs",
+    "version": "2.0.0",
+    "typenameFlurstueck": "ave:Flurstueck",
+    "typenameGebaeude": "ave:GebaeudeBauwerk",
+    "srsName": "urn:ogc:def:crs:EPSG::25832",
+    "bboxAchsen": "EN",
+    "maxFeatures": 800,
+    "lizenz": "Datenlizenz Deutschland — Zero, Version 2.0 (ALKIS ohne Eigentuemerangaben)",
+    "quellenvermerk": "(c) HVBG, ALKIS (vereinfachtes Modell)",
+    "hinweis": "Nur GML, kein JSON. Achsenreihenfolge in der BBOX: bei EPSG::25832 Rechtswert zuerst (verifiziert 07.08.2026), bei EPSG::4326 Breite zuerst."
+  },
+
+  "gebaeude3d": {
+    "art": "citygml-download",
+    "urlMuster": "https://gds.hessen.de/downloadcenter/{datum}/3D-Daten/3D-Geb%C3%A4udemodelle/3D-Geb%C3%A4udemodelle%20LoD2/{kreis}/{datei}",
+    "datumFormat": "JJJJMMTT",
+    "crs": "urn:adv:crs:ETRS89_UTM32*DE_DHHN2016_NH",
+    "kreise": [
+      { "name": "Kreisfreie Stadt Darmstadt", "datei": "Darmstadt-LoD2.zip", "groesseMb": 159 },
+      { "name": "Kreisfreie Stadt Frankfurt am Main", "datei": "Frankfurt-LoD2.zip" },
+      { "name": "Kreisfreie Stadt Wiesbaden", "datei": "Wiesbaden-LoD2.zip" }
+    ],
+    "attribute": {
+      "bodenhoehe": "AbsoluteHoehe",
+      "traufhoehe": "MittlereTraufHoehe",
+      "firsthoehe": "Firsthoehe",
+      "gebaeudehoehe": "GebaeudeHoehe",
+      "dachform": "Dachtyp_tridicon",
+      "alkisOid": "ALKISOID"
+    },
+    "lizenz": "Datenlizenz Deutschland — Zero, Version 2.0",
+    "quellenvermerk": "(c) HVBG, 3D-Gebaeudemodell LoD2",
+    "hinweis": "HEAD ist auf gds.hessen.de verboten (HTTP 405) — mit GET und Range-Header pruefen. Entpackt ca. 1,56 GB CityGML 1.0 je Kreisdatei. Lokale Datei kann ueber HEINERFEST_LOD2_DATEI vorgegeben werden (spart den Download)."
+  },
+
+  "gelaendehoehen": {
+    "art": "abgeleitet",
+    "quelleBevorzugt": "dgm1-import",
+    "quelleFallback": "lod2-bodenhoehen",
+    "hinweis": "NEGATIVBEFUND 07.08.2026: Fuer DGM1 Hessen gibt es KEINE skriptbaren Direktlinks. Geprueft und 404: 3D-Daten/Digitales Gelaendemodell (DGM1)/, /Digitale Gelaendemodelle (DGM1)/, /Gelaendemodelle/DGM1/, /DGM1/, /Digitales Gelaendemodell DGM1/. Ein WCS existiert nicht (service=WCS -> HTTP 400; ogc-free-dgm.ows -> 404). opendata.hessen.de nennt fuer den Datensatz 'ATKIS-DGM 1' als einzige Schnittstelle den WMS, der nur ein Schummerungsbild liefert, keine Hoehenwerte. Deshalb: Gelaendehoehen werden aus den amtlichen LoD2-Bodenhoehen (Attribut AbsoluteHoehe je Gebaeude) interpoliert. Ein manuell heruntergeladenes DGM1 (XYZ-Raster) kann jederzeit ueber die Import-Schnittstelle eingespielt werden und hat dann Vorrang.",
+    "importFormate": ["xyz", "asc"],
+    "lizenz": "Datenlizenz Deutschland — Zero, Version 2.0",
+    "quellenvermerk": "(c) HVBG, Gelaendehoehen abgeleitet aus 3D-Gebaeudemodell LoD2 (Bodenhoehen)"
+  },
+
+  "rechtsgrundlagen": {
+    "regelwerk": "he-mvstaettvo",
+    "datei": "config/regelwerk/he-mvstaettvo-2026.1.json"
+  }
+}
