@@ -438,7 +438,13 @@ export const FLAECHEN_STIL: Record<FlaechenArt, FlaechenStil> = {
    * Weil er die haeufigste Klasse ist, war er der Grund, die Nebenkontur von
    * L* 70 (Vorschlag 5.4) auf L* 52 zu verschaerfen.
    */
-  gehweg: { fuellung: '#dee0e3', kontur: KONTUR_NEBEN, konturBreiteM: 0.22, rang: 36, hoehenversatzM: 0.072 },
+  // REVISION 08.08.2026 (Auftraggeber: „Buergersteige in einem anderen
+  // Grauton als Strassen"): der alte Ton lag nur 7,8 L* unter der Fahrbahn
+  // und las sich als „dasselbe Grau". Jetzt ein DEUTLICH dunkleres, kuehles
+  // Plattengrau (~11,5 L* Abstand zur Fahrbahn) — mehr als das Doppelte des
+  // basemap.de-Grau-Schritts, der Buergersteig ist damit auf einen Blick eine
+  // andere Flaeche, ohne die Nebenkontur-Regel (>= 30 L*) zu reissen.
+  gehweg: { fuellung: '#d4d6d9', kontur: KONTUR_NEBEN, konturBreiteM: 0.22, rang: 36, hoehenversatzM: 0.072 },
 
   /**
    * Fahrbahn (640 OSM-Flaechen — die gepufferte Achse, NICHT der ALKIS-Korridor).
@@ -463,18 +469,22 @@ export const FLAECHEN_STIL: Record<FlaechenArt, FlaechenStil> = {
   fahrbahn: { fuellung: '#f5f6f8', kontur: KONTUR_HAUPT, konturBreiteM: 0.30, rang: 42, hoehenversatzM: 0.084 },
 
   /**
-   * Radweg (41 OSM-Flaechen). L* 87,03 / a* -0,93 / b* -6,43.
-   * Der KUEHLSTE Ton im Verkehr. KARTENDESIGN 5.2 fordert genau das: „Decker wie
-   * Gehweg, aber mit kuehlem Stich (b* ~ -6)". Vorbild ist Dark Matter, das
-   * Neben-/Anliegerstrassen mit b* -10,9 gegen die neutrale Autobahn (b* 0)
-   * absetzt, und Google Night mode, das `road` kuehl (#38414e) gegen
-   * `road.highway` warm (#746855) stellt — Klassenunterscheidung ueber
-   * Farbtemperatur, nicht ueber Buntheit (KARTENDESIGN 2.2, 2.7).
-   * Gegen den Gehweg: nur 2,07 L* Abstand, aber 4,73 b*-Einheiten.
+   * Radweg (41 OSM-Flaechen). Entsaettigtes ZIEGELROT.
+   *
+   * REVISION 08.08.2026 (Auftraggeber-Vorgabe „Fahrradwege am besten leicht
+   * rot"): Der fruehere kuehle Blaustich (#d2dbe6) war eine reine
+   * Palettenlogik — in Deutschland sind Radwege und Radstreifen aber REAL
+   * rot eingefaerbt (Rotmarkierung an Konfliktstellen, roter Belag). Die
+   * Wirklichkeit liefert hier also selbst die Farbkonvention, und die Karte
+   * wird durch die Uebernahme wahrer, nicht bunter: gewaehlt ist ein stark
+   * entsaettigtes Ziegelrot im Basisband (a* deutlich positiv), das die
+   * Signalfarben der Planobjekte (C* > 40) nicht beruehrt.
+   * Gegen Gehweg und Fahrbahn traegt der a*- und b*-Abstand die Trennung
+   * (Farbtemperatur statt Buntheit, KARTENDESIGN 3.2).
    * Liegt ueber der Fahrbahn (Rang 44), weil ein Radstreifen real AUF der
    * Fahrbahn markiert ist und fuer die Rettungswegplanung sichtbar bleiben muss.
    */
-  radweg: { fuellung: '#d2dbe6', kontur: KONTUR_NEBEN, konturBreiteM: 0.20, rang: 44, hoehenversatzM: 0.088 },
+  radweg: { fuellung: '#e2c9c2', kontur: KONTUR_NEBEN, konturBreiteM: 0.20, rang: 44, hoehenversatzM: 0.088 },
 
   /**
    * Treppe (154 OSM-Flaechen). L* 83,02 / a* -0,31 / b* -1,23.
@@ -508,7 +518,12 @@ export const FLAECHEN_STIL: Record<FlaechenArt, FlaechenStil> = {
  * Rang 26: ueber allen Landschaftsflaechen, unter allen Verkehrs-Deckern.
  */
 export const PLATTE_STIL: FlaechenStil = {
-  fuellung: '#d6d8db',
+  // REVISION 08.08.2026: von kuehlem #d6d8db auf WARMES Steingrau gedreht.
+  // Die Gehweg-Revision (#d4d6d9, kuehl) lag sonst nur DL* 0,7 / Dab 0,15
+  // neben der Platte — Buergersteig und Strassenraum-Buehne waren nicht mehr
+  // unterscheidbar. Warm gegen kuehl traegt die Trennung (Dab ~5), und die
+  // warme Buehne passt zur warmen Nachbarschaft (bebauung, sonstige).
+  fuellung: '#ddd9d2',
   kontur: KONTUR_BLOCK,
   konturBreiteM: 0.30,
   rang: 26,

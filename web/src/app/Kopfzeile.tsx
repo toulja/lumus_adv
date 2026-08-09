@@ -106,9 +106,19 @@ export function Kopfzeile({
             </span>
             <span className="text-schwach zahl">max. {projekt.maxBesucher.toLocaleString('de-DE')} Besucher</span>
             <ul className="praesenz" aria-label="Anwesende">
-              {praesenz.map((p) => (
+              {/*
+                SCHLUESSEL MIT LAUFENDER NUMMER, nicht nur die Nutzer-Id.
+                Derselbe Mensch kann mit zwei Fenstern verbunden sein — dann
+                steht seine Id zweimal in der Anwesenheitsliste, und React
+                warnt bei JEDEM Neuzeichnen. Die Warnung ist nicht harmlos:
+                Sie hat die Entwicklerkonsole so geflutet, dass eigene
+                Protokollzeilen beim Auslesen der letzten Eintraege nicht mehr
+                sichtbar waren (Fehlsuche 09.08.2026 — daraus wurde faelsch-
+                licherweise ein „Abbruch im Szenenaufbau" geschlossen).
+              */}
+              {praesenz.map((p, i) => (
                 <li
-                  key={p.nutzerId}
+                  key={`${p.nutzerId}#${i}`}
                   className="praesenz-kreis"
                   style={{ backgroundColor: p.farbe }}
                   title={`${p.nutzerName} · ${p.orgName}`}

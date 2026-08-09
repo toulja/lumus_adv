@@ -239,6 +239,76 @@ export interface GelaendeFlaeche {
    * als eine Asphaltflaeche.
    */
   belag?: string;
+  /**
+   * Wegachse(n) im Gebiet (nur OSM-Fahrbahnkorridore): die Linie, aus der der
+   * Korridor gepuffert wurde. Grundlage fuer Fahrbahnmarkierungen
+   * (Leitlinie, Spurtrennstriche) — ohne Achse keine Markierung.
+   */
+  achsen?: Ring[];
+  /** Korridorbreite in Metern (Messung > lanes-Ableitung > Klassenannahme). */
+  breiteM?: number;
+  /** Spurenzahl aus OSM `lanes` — nur wenn getaggt, geraten wird nichts. */
+  spuren?: number;
+  /** true = Einbahnstrasse (`oneway`). */
+  einbahn?: boolean;
+  /** OSM-Strassenklasse (`highway`-Wert) — traegt u. a. die Leitlinien-Konvention. */
+  strassenklasse?: string;
+  /**
+   * Nur ruhende Gewaesser: die Hoehe des Wasserspiegels in m ue. NHN, bestimmt
+   * aus dem Ufer beim Import (wasserEinebnen). Damit wird die Wasserflaeche als
+   * EBENE gezeichnet statt aus den Uferhoehen interpoliert — sonst sackt sie
+   * zwischen zwei Ufern durch und das Gelaende sticht als heller Zacken hervor
+   * (Befund am Grossen Woog, 09.08.2026).
+   */
+  wasserspiegelM?: number;
+  /**
+   * KONSTRUKTIONSHOEHE: Oberkante ueber der Bezugsflaeche des Strassenraums
+   * (Fahrbahn = 0,00 m), in Metern. Beim Import aus der Bauklasse aufgeloest
+   * (config/bauklassen/*.json) — NICHT im Programmtext festgelegt.
+   *
+   * Sie ersetzt den Millimeter-Stapel: bis zum 09.08.2026 lagen alle
+   * Bodenflaechen praktisch auf derselben Hoehe und wurden nur in 2-mm-Stufen
+   * je Rang auseinandergehalten, damit sie nicht flimmern. Ein Gehweg
+   * unterschied sich von der Fahrbahn dadurch in der FARBE, nicht in der Hoehe.
+   */
+  konstruktionM?: number;
+}
+
+/** Was an einer Hoehenstufe zwischen zwei Flaechen wirklich steht. */
+export type KantenBauart = 'fuge' | 'bordstein' | 'boeschung' | 'stuetzmauer' | 'bauwerk';
+
+/**
+ * BRUCHKANTE — eine Linie, an der die Oberflaeche knickt oder springt.
+ *
+ * WARUM SIE EIN EIGENER TYP IST: Ein Hoehenraster fuehrt an einer Stelle genau
+ * EINEN Wert. Eine Bordsteinkante hat dort aber zwei — oben 12 cm hoeher als
+ * unten, auf null Abstand. Auch ein 10-cm-Raster bildete sie nur als steile
+ * Rampe ab. Deshalb arbeitet die Vermessung mit Dreiecksnetzen samt
+ * Zwangskanten, und deshalb gibt es diesen Typ.
+ *
+ * WOHER SIE KOMMT: Sie wird NICHT eingegeben, sondern aus den
+ * Konstruktionshoehen zweier aneinandergrenzender Flaechen ABGELEITET. Genau
+ * darum bekommt jede Strassenkante des Gebiets ihre Kante und nicht nur die
+ * 556 m, die OpenStreetMap zufaellig als `barrier=kerb` fuehrt (nachgemessen
+ * 09.08.2026).
+ *
+ * VEREINBARUNG: Die HOEHER liegende Flaeche liegt immer LINKS der
+ * Laufrichtung. Damit braucht es kein zusaetzliches Merkmal fuer die Seite.
+ */
+export interface Bruchkante {
+  id: string;
+  art: 'knick' | 'sprung';
+  bauart: KantenBauart;
+  /** Achse in EPSG:25832. */
+  linie: Punkt[];
+  /** Absolute Oberkante je Stuetzpunkt (m ue. NHN). */
+  hoehenOben: number[];
+  /** Absolute Unterkante je Stuetzpunkt (m ue. NHN). */
+  hoehenUnten: number[];
+  /** Woher die Kante stammt — Nachweispflicht wie bei jeder anderen Angabe. */
+  herkunft: 'bauklasse' | 'alkis' | 'osm' | 'gemessen';
+  /** Welche Flaechenarten hier aneinanderstossen („Gehweg an Fahrbahn"). */
+  bezeichnung?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -248,6 +318,7 @@ export interface GelaendeFlaeche {
 /** Punktfoermige Elemente des Stadtraums. */
 export type PunktArt =
   | 'baum'
+  | 'strauch'
   | 'laterne'
   | 'bank'
   | 'brunnen'
@@ -255,10 +326,15 @@ export type PunktArt =
   | 'poller'
   | 'haltestelle'
   | 'papierkorb'
-  | 'fahrradstaender';
+  | 'fahrradstaender'
+  | 'ampel'
+  | 'verkehrszeichen';
 
 export const PUNKT_ART_LABEL: Record<PunktArt, string> = {
   baum: 'Baum',
+  strauch: 'Strauch',
+  ampel: 'Lichtsignalanlage',
+  verkehrszeichen: 'Verkehrszeichen',
   laterne: 'Strassenlaterne',
   bank: 'Sitzbank',
   brunnen: 'Brunnen',
@@ -281,6 +357,12 @@ export interface GelaendePunktObjekt {
   name?: string;
   /** Ausrichtung in Grad, wo sie bekannt ist (Baenke, Haltestellen). */
   drehungGrad?: number;
+  /**
+   * Amtliche Zeichennummer nach StVO, wie OSM sie fuehrt (`traffic_sign`),
+   * z. B. „DE:206" fuer Halt. Vorfahrt gewaehren. Nur bei Verkehrszeichen;
+   * fehlt sie, ist die Art aus dem Wegeknoten abgeleitet (stop/give_way).
+   */
+  zeichen?: string;
   /** true = Mass stammt aus OSM, false = Klassenannahme. Nachweispflicht. */
   gemessen?: boolean;
 }
@@ -323,6 +405,38 @@ export interface GelaendeLinienObjekt {
   eigenerBahnkoerper?: boolean;
 }
 
+/**
+ * Verweis auf das binaere Hoehenraster eines Gelaendes (shared/geo/raster.ts).
+ *
+ * Das Raster ist ab 09.08.2026 die EINZIGE Hoehenwahrheit. Die Hoehengitter der
+ * Kacheln (`GelaendePatch.hoehen`) bleiben nur noch als grober Rueckfallweg
+ * fuer Altbestaende und die 2D-Karte bestehen — sie hatten 4,7 m Maschenweite
+ * und konnten damit keine Kante fuehren (docs/BAUWERKSMODELL.md, 1).
+ */
+export interface Hoehenmodell {
+  /** Dateiname unter /api/gelaende/:id/ — derzeit immer „hoehen.bin". */
+  datei: string;
+  zellM: number;
+  spalten: number;
+  zeilen: number;
+  /** Westrand der ersten Spalte, Suedrand der ersten Zeile (EPSG:25832). */
+  minE: number;
+  minN: number;
+  herkunft: 'dgm1' | 'lod2_interpoliert' | 'import';
+  /** Klartext fuer den Nachweis („DGM1-Archiv: Darmstadt - DGM1.zip"). */
+  quelle: string;
+  /** Verwendete DGM-Kacheln — gehoert in den Quellennachweis. */
+  kacheln?: string[];
+  /** Aus der Nachbarschaft ergaenzte Zellen. Eine Naeherung, kein Messwert. */
+  ergaenzteZellen?: number;
+  /**
+   * Zulaessige Abweichung des gezeichneten Dreiecksnetzes vom Raster in Metern.
+   * Steht hier und nicht im Programmtext, damit gezeichnete und gerechnete
+   * Oberflaeche nachweislich dieselbe sind.
+   */
+  netzToleranzM: number;
+}
+
 /** Ein Gelaende-Kachelstueck mit eigener Orthophoto-Textur. */
 export interface GelaendePatch {
   id: string;
@@ -349,14 +463,32 @@ export interface Gelaende {
   hoeheMax: number;
   /** Wie die Hoehen entstanden sind — Nachweispflicht. */
   hoehenHerkunft: 'dgm1' | 'lod2_interpoliert' | 'flach';
+  /**
+   * Das echte Hoehenraster. Fehlt es, stammt das Gelaende aus einem Import vor
+   * dem 09.08.2026 und traegt nur die groben Kachelgitter.
+   */
+  hoehenmodell?: Hoehenmodell;
   patches: GelaendePatch[];
   gebaeude: GelaendeGebaeude[];
   /** Bodenzeichnung nach tatsaechlicher Nutzung (ALKIS + OSM). */
   flaechen: GelaendeFlaeche[];
+  /**
+   * Kanten zwischen unterschiedlich hoch gebauten Flaechen (Bordsteine,
+   * Boeschungen, Stuetzmauern). Sie sind ein ERGEBNIS der Konstruktionshoehen
+   * und werden beim Import abgeleitet — nicht erfasst.
+   */
+  bruchkanten?: Bruchkante[];
   /** Baeume, Laternen, Baenke, Haltestellen … */
   punkte?: GelaendePunktObjekt[];
-  /** Gleise, Mauern, Zaeune, Hecken, Bordsteine. */
+  /** Gleise, Mauern, Zaeune, Hecken, Bordsteine, Fahrbahnmarkierungen. */
   linien?: GelaendeLinienObjekt[];
+  /**
+   * Beschriftungspunkte der Karte (z. B. „P" auf Parkplaetzen). Sie werden
+   * VOR der Flaechen-Vereinigung gewonnen — die Union verschmilzt
+   * Einzelflaechen, deren Bezeichnungen fuer die Sammelgeometrie nicht mehr
+   * gelten wuerden.
+   */
+  beschriftungen?: { pos: Punkt; text: string }[];
   /** Flurstuecke aus ALKIS (Anzeige + Flaechenbezug). */
   flurstuecke: { id: string; kennzeichen: string; polygon: Ring; flaeche: number }[];
   quellennachweis: Quellennachweis[];

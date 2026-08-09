@@ -51,6 +51,13 @@ export interface Ebenen {
   luftbild: boolean;
   flurstuecke: boolean;
   gelaende: boolean;
+  /**
+   * Schlagschatten der Modellsonne. Abschaltbar, weil Schatten je nach Aufgabe
+   * helfen oder stoeren: sie machen die Hoehenstaffelung der Stadt ablesbar,
+   * verdecken aber Flaechen, deren Farbe man gerade beurteilen will — und auf
+   * schwacher Grafik kosten sie spuerbar Leistung.
+   */
+  schatten: boolean;
 }
 
 export interface Messung {
@@ -178,6 +185,7 @@ export const nutzeZustand = create<Zustand>((set, get) => ({
     luftbild: false,
     flurstuecke: false,
     gelaende: true,
+    schatten: true,
   },
   raster: 0.5,
   anKantenFangen: true,

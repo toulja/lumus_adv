@@ -13,14 +13,30 @@ import 'cesium/Build/Cesium/Widgets/widgets.css';
 import type { ElementRef, ObjektTyp, Punkt } from '@shared/domain/types';
 import { STATIONS_KATEGORIEN } from '@shared/domain/types';
 import { grundriss, masseVon } from '@shared/domain/objekte';
-import { abstand, abstandPunktStrecke, flaeche, naechsterPunktAufStrecke, polylinieLaenge, schwerpunkt } from '@shared/geo/geometry';
+import { abstand, abstandPunktStrecke, flaeche, naechsterPunktAufStrecke, polylinieLaenge, punktInRing, schwerpunkt } from '@shared/geo/geometry';
 import { nachWgs } from '@shared/geo/proj';
 import { nutzeZustand } from '../lib/zustand.ts';
 import { api } from '../lib/api.ts';
-import { Hoehenlage, baueGelaende, weltNachUtm } from './gelaende.ts';
-import { baueStadt, baueBodenzeichnung, baueGebaeudeKanten, baueGeschossbaender, HIMMEL } from './stadt.ts';
+import { Hoehenlage, baueGelaende, baueGelaendeAusNetz, gelaendeAufbauen, ladeHoehenraster, weltNachUtm } from './gelaende.ts';
+import type { Hoehenraster } from '@shared/geo/raster';
+import {
+  baueStadt,
+  baueBodenzeichnung,
+  baueFahrbahnmarkierungen,
+  baueBeschriftungen,
+  baueGebaeudeKanten,
+  baueGeschossbaender,
+  HIMMEL,
+} from './stadt.ts';
+import { LICHT } from './palette.ts';
 import { baueBaeume, baueHecken } from './vegetation.ts';
-import { baueGleise, baueHaltestellen, baueBarrieren, baueStrassenmoebel } from './verkehr.ts';
+import { baueKanten, kantenBilanz } from './kanten.ts';
+import { baueTreppen } from './treppen.ts';
+import { baueHaltestellen, baueBarrieren, baueStrassenmoebel, baueVerkehrszeichen } from './verkehr.ts';
+// Gleise kommen seit 09.08.2026 aus einem eigenen Modul: sie werden nicht mehr
+// als Baender je OSM-Weg gezeichnet, sondern als Querschnitt entlang eines
+// vernetzten Strangs (docs/BAUWERKSMODELL.md, Stufe 4 und 5).
+import { baueGleise } from './gleise.ts';
 import {
   FARBEN,
   baueBeanstandungen,
@@ -43,6 +59,10 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
   const viewerRef = useRef<Cesium.Viewer | null>(null);
   const abbauTimer = useRef<number | null>(null);
   const hoehenRef = useRef<Hoehenlage>(new Hoehenlage(null));
+  /** Fuer welches Gelaende die Startkamera schon gesetzt wurde. */
+  const kameraGelaendeRef = useRef<string | null>(null);
+  /** Abmelder des eigenen Rad-Zooms (siehe radZoomAnmelden). */
+  const zoomAbmelden = useRef<(() => void) | null>(null);
   const gruppen = useRef<Record<string, Cesium.Primitive[]>>({});
   const labelsRef = useRef<Cesium.LabelCollection | null>(null);
   const haltLabelsRef = useRef<Cesium.LabelCollection | null>(null);
@@ -51,6 +71,12 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
   const dragRef = useRef<{ art: 'verschieben' | 'drehen'; objektId: string; start: Punkt; startRot: number; versatz: Punkt } | null>(null);
   const [hinweis, setHinweis] = useState<string>('');
   const [zeichnet, setZeichnet] = useState<Zeichenstand | null>(null);
+  /**
+   * Das amtliche Hoehenraster des offenen Gelaendes (1 m), sobald geladen.
+   * Bewusst NICHT `raster` genannt: so heisst weiter unten das Fangraster des
+   * Editors (0,1 / 0,5 / 1 m) — zwei sehr verschiedene Dinge.
+   */
+  const [hoehenDaten, setHoehenDaten] = useState<{ gelaendeId: string; raster: Hoehenraster | null } | null>(null);
 
   const gelaende = nutzeZustand((s) => s.gelaende);
   const inhalt = nutzeZustand((s) => s.inhalt);
@@ -128,8 +154,26 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
       sm.softShadows = true;
       sm.size = 4096; // scharfe Kanten auch bei 1 km2 Ausdehnung
       sm.darkness = 0.55; // nicht schwarz — ein Planungsmodell, kein Nachtbild
-      sm.maximumDistance = 4000;
+      // 1500 statt 4000: die Tiefenaufloesung der Schattenkarte verteilt sich
+      // auf diese Distanz — 4 km erzeugten auf grossen Flachdaechern ein
+      // Gitterraster aus Selbstverschattung (Shadow-Acne).
+      sm.maximumDistance = 1500;
       sm.normalOffset = true;
+      // SHADOW-ACNE-KALIBRIERUNG (Befund 08.08.2026, im Live-Viewer
+      // abgestimmt): Cesiums Standard-Bias (depthBias 0.00002,
+      // normalOffsetScale 0.1) reicht fuer unsere grossen, exakt ebenen
+      // LoD2-Daecher nicht — sie zeigten ein feines Schraffur-Gitter
+      // ("Gebaeude sehen schmutzig aus"). Die Bias-Felder sind PRIVATE
+      // Cesium-API (_primitiveBias), darum im try/catch: faellt die API weg,
+      // bleibt nur die harmlose Acne, kein Absturz.
+      const bias = (sm as unknown as { _primitiveBias?: Record<string, number | boolean> })._primitiveBias;
+      if (bias) {
+        bias.depthBias = 0.0004;
+        bias.normalOffsetScale = 3.0;
+        bias.polygonOffsetFactor = 1.5;
+        bias.polygonOffsetUnits = 8.0;
+        (sm as unknown as { dirty?: boolean }).dirty = true;
+      }
     } catch {
       /* aeltere Hardware: ohne Schatten flacher, aber lauffaehig */
     }
@@ -151,14 +195,30 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
     });
     szene.screenSpaceCameraController.enableCollisionDetection = false;
     // Rechtsziehen soll die Szene umkreisen statt zu zoomen
-    szene.screenSpaceCameraController.zoomEventTypes = [
-      Cesium.CameraEventType.WHEEL,
-      Cesium.CameraEventType.PINCH,
-    ];
+    szene.screenSpaceCameraController.zoomEventTypes = [Cesium.CameraEventType.PINCH];
     szene.screenSpaceCameraController.tiltEventTypes = [
       Cesium.CameraEventType.RIGHT_DRAG,
       Cesium.CameraEventType.PINCH,
     ];
+    /*
+     * EIGENER RAD-ZOOM — der eingebaute taugt fuer diese Szene nicht.
+     *
+     * Cesium bemisst den Zoomschritt am Abstand zur Bezugsflaeche. Die ist
+     * normalerweise der Globus; der ist hier abgeschaltet (szene.globe.show =
+     * false), weil wir unser eigenes Gelaendenetz zeichnen. Cesium faellt dann
+     * auf das ERDELLIPSOID zurueck — und das liegt in Darmstadt rund 143 m
+     * UNTER dem Boden. Der Zoom laeuft damit gegen eine unterirdische Flaeche
+     * und stirbt vorher ab: nachgemessen 08.08.2026 kam die Kamera mit
+     * 40 Radrastungen nur von 257 m auf 27 m ueber Grund, mit immer kleineren
+     * Schritten (145 m -> 54 -> 20 -> 7 -> 3 m). Naeher heran ging gar nicht.
+     *
+     * Darum: WHEEL aus der eingebauten Zoomsteuerung nehmen und selbst
+     * rechnen — gegen den Punkt, der wirklich unter dem Mauszeiger liegt.
+     * Das ist zugleich das Verhalten, das man von einer Karte erwartet
+     * (Zoom auf den Zeiger statt auf die Bildmitte).
+     */
+    zoomAbmelden.current?.();
+    zoomAbmelden.current = radZoomAnmelden(viewer, () => hoehenRef.current);
 
     labelsRef.current = szene.primitives.add(new Cesium.LabelCollection());
     haltLabelsRef.current = szene.primitives.add(new Cesium.LabelCollection());
@@ -170,6 +230,8 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
       // Darum wird das Abraeumen verzoegert und beim Wiederaufbau abbestellt.
       abbauTimer.current = window.setTimeout(() => {
         abbauTimer.current = null;
+        zoomAbmelden.current?.();
+        zoomAbmelden.current = null;
         if (!viewer.isDestroyed()) viewer.destroy();
         if (viewerRef.current === viewer) viewerRef.current = null;
       }, 0);
@@ -181,24 +243,98 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
     if (sichtbar) setTimeout(() => viewerRef.current?.resize(), 60);
   }, [sichtbar]);
 
+  // Schlagschatten schaltbar: eigener Effekt, damit das Umschalten NICHT den
+  // ganzen Gelaende-Aufbau (und damit mehrere Sekunden Rechenzeit) ausloest.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    viewer.shadows = ebenen.schatten;
+    viewer.scene.requestRender?.();
+  }, [ebenen.schatten]);
+
+  // Hoehenraster laden, sobald ein anderes Gelaende offen ist. Es ist die
+  // Grundlage von allem, was danach gebaut wird — darum wartet der
+  // Gelaende-Aufbau unten ausdruecklich darauf, statt erst grob zu bauen und
+  // gleich darauf noch einmal fein (das kostete mehrere Sekunden doppelt).
+  useEffect(() => {
+    let abgebrochen = false;
+    if (!gelaende) {
+      setHoehenDaten(null);
+      return;
+    }
+    if (!gelaende.hoehenmodell) {
+      // Altbestand ohne Raster: sofort mit dem Kachelgitter weiterarbeiten.
+      setHoehenDaten({ gelaendeId: gelaende.id, raster: null });
+      return;
+    }
+    setHinweis('Hoehenmodell wird geladen …');
+    void ladeHoehenraster(gelaende.id)
+      .then((r) => {
+        if (abgebrochen) return;
+        setHoehenDaten({ gelaendeId: gelaende.id, raster: r });
+        setHinweis('');
+      })
+      .catch((e: Error) => {
+        if (abgebrochen) return;
+        // Ohne Raster ist die Szene nicht falsch, nur grob — das gehoert
+        // gesagt, statt still auf den alten Weg zurueckzufallen.
+        setHinweis(`Hoehenmodell nicht ladbar (${e.message}) — grobes Ersatzgelaende.`);
+        setHoehenDaten({ gelaendeId: gelaende.id, raster: null });
+      });
+    return () => {
+      abgebrochen = true;
+    };
+  }, [gelaende?.id, gelaende?.hoehenmodell?.datei]);
+
   // ------------------------------------------------------------- Gelaende
   useEffect(() => {
     const viewer = viewerRef.current;
-    if (!viewer || !gelaende) return;
-    hoehenRef.current = new Hoehenlage(gelaende);
+    if (!viewer) return;
+    if (!gelaende) {
+      // Gelaende weg (Projekt geschlossen): ALLE Bestandsgruppen raeumen.
+      // Frueher kehrte der Effekt hier einfach um — die alte Stadt blieb als
+      // Geisterkulisse stehen, wenn das naechste Projekt ein anderes Gebiet
+      // hat.
+      for (const name of Object.keys(gruppen.current)) ersetze(viewer, gruppen.current, name, []);
+      haltLabelsRef.current?.removeAll();
+      labelsRef.current?.removeAll();
+      hoehenRef.current = new Hoehenlage(null);
+      kameraGelaendeRef.current = null;
+      return;
+    }
+    // Auf das Hoehenraster warten (Effekt darueber). Ohne diese Sperre wuerde
+    // die ganze Stadt einmal auf dem groben Ersatzgelaende gebaut und Sekunden
+    // spaeter noch einmal auf dem echten.
+    if (hoehenDaten?.gelaendeId !== gelaende.id) return;
+    const aufbau = hoehenDaten.raster ? gelaendeAufbauen(gelaende, hoehenDaten.raster) : null;
+    hoehenRef.current = new Hoehenlage(gelaende, aufbau?.flaeche);
     const h = hoehenRef.current;
+    if (aufbau) {
+      const k = hoehenDaten.raster!.kopf;
+      console.info(
+        `[Gelaende] ${aufbau.dreiecke.toLocaleString('de-DE')} Dreiecke aus ${k.spalten}x${k.zeilen} Zellen a ${k.zellM} m, groesste Restabweichung ${(aufbau.restFehlerM * 100).toFixed(1)} cm.`,
+      );
+    }
+    if (gelaende.bruchkanten?.length) {
+      console.info(
+        `[Kanten] ${kantenBilanz(gelaende.bruchkanten).map((b) => `${b.anzahl} x ${b.bauart} (${b.laengeM.toLocaleString('de-DE')} m)`).join(', ')}`,
+      );
+    }
 
-    // Modellsonne: fest aus Suedosten, 48 Grad ueber dem Horizont — im
-    // oertlichen Ost-Nord-Oben-System des Gebiets aufgestellt und erst dann in
-    // Erdkoordinaten gedreht.
+    // Modellsonne nach palette.LICHT: Suedost (135 Grad), 45 Grad ueber dem
+    // Horizont — im oertlichen Ost-Nord-Oben-System des Gebiets aufgestellt
+    // und erst dann in Erdkoordinaten gedreht. 135 Grad steht zu beiden
+    // Darmstaedter Hauptachsen (Ost-West Rheinstrasse, Nord-Sued Ludwigstrasse)
+    // im 45-Grad-Winkel — achsparalleles Licht nimmt einer der beiden
+    // Strassenrichtungen die Tiefe.
     {
       const mitteU: Punkt = [(gelaende.bbox.minE + gelaende.bbox.maxE) / 2, (gelaende.bbox.minN + gelaende.bbox.maxN) / 2];
       const [mlon, mlat] = nachWgs(mitteU);
       const rahmen = Cesium.Transforms.eastNorthUpToFixedFrame(
         Cesium.Cartesian3.fromDegrees(mlon, mlat, gelaende.hoeheMittel),
       );
-      const azimut = Cesium.Math.toRadians(150); // Sued-Suedost, schraeg zur Hauptstrassenrichtung
-      const hoehe = Cesium.Math.toRadians(45); // Architekturmodell-Konvention
+      const azimut = Cesium.Math.toRadians(LICHT.azimutGrad);
+      const hoehe = Cesium.Math.toRadians(LICHT.hoeheGrad);
       const lokal = new Cesium.Cartesian3(
         -Math.sin(azimut) * Math.cos(hoehe),
         -Math.cos(azimut) * Math.cos(hoehe),
@@ -217,11 +353,14 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
         const ao = viewer.scene.postProcessStages?.ambientOcclusion;
         if (ao && Cesium.PostProcessStageLibrary.isAmbientOcclusionSupported(viewer.scene)) {
           ao.enabled = true;
-          ao.uniforms.intensity = 2.2;
+          // Abgestimmt 08.08.2026: intensity 2.2 / blur 0.9 erzeugte auf
+          // grossen ebenen Flaechen sichtbares AO-Korn ("schmutzige"
+          // Fassaden). Weniger Intensitaet, kuerzerer Radius, mehr Weichzeichnung.
+          ao.uniforms.intensity = 1.3;
           ao.uniforms.bias = 0.1;
-          ao.uniforms.lengthCap = 0.5;
+          ao.uniforms.lengthCap = 0.35;
           ao.uniforms.stepSize = 1.0;
-          ao.uniforms.blurStepSize = 0.9;
+          ao.uniforms.blurStepSize = 1.45;
         }
       } catch {
         /* ohne Umgebungsverdeckung sieht es flacher aus, laeuft aber */
@@ -230,25 +369,55 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
 
     // Grundplatte: mit Luftbild texturiert, ohne Luftbild als ruhige Flaeche,
     // auf der die Nutzungsflaechen ihre Kontraste entfalten koennen.
-    ersetze(viewer, gruppen.current, 'gelaende', ebenen.gelaende ? baueGelaende(gelaende, ebenen.luftbild) : []);
-
-    // Bodenzeichnung nach tatsaechlicher Nutzung — das massgetreue Abbild.
     ersetze(
       viewer,
       gruppen.current,
-      'nutzung',
-      ebenen.nutzung && !ebenen.luftbild && gelaende.flaechen?.length
-        ? baueBodenzeichnung(gelaende.flaechen, h)
+      'gelaende',
+      ebenen.gelaende
+        ? aufbau
+          ? baueGelaendeAusNetz(gelaende, aufbau, ebenen.luftbild)
+          : baueGelaende(gelaende, ebenen.luftbild)
         : [],
     );
+
+    // Bodenzeichnung nach tatsaechlicher Nutzung — das massgetreue Abbild.
+    // Dazu Fahrbahnmarkierungen (Leitlinien, Spurstriche) und die
+    // Parkplatz-Beschriftung — beide lesen dieselben Flaechendaten.
+    if (ebenen.nutzung && !ebenen.luftbild && gelaende.flaechen?.length) {
+      const nutzungPrims: (Cesium.Primitive | Cesium.LabelCollection)[] = [
+        ...baueBodenzeichnung(gelaende.flaechen, h),
+        // Kantenkoerper (Bordstein, Boeschung, Stuetzmauer) gehoeren zur
+        // Bodenzeichnung: sie sind das, was aus zwei Farbfeldern eine Strasse
+        // mit Rand macht. Sie stammen aus dem Modell, nicht aus dem Renderer
+        // (Gelaende.bruchkanten, abgeleitet beim Import).
+        ...baueKanten(gelaende.bruchkanten, h),
+        ...baueFahrbahnmarkierungen(gelaende.linien ?? [], h),
+      ];
+      // Treppen als Koerper: Ihre Stufenzahl folgt der GEMESSENEN
+      // Hoehendifferenz aus dem Gelaendemodell, das Stufenmass ist eine
+      // Annahme der Bauklassen. Ohne sie laeuft jede Fluchtwegrechnung ueber
+      // 137 ebene Flaechen hinweg, als waeren es Gehwege.
+      const treppen = baueTreppen(gelaende.flaechen, h);
+      nutzungPrims.push(...treppen.prims);
+      if (treppen.bericht.flaechen) {
+        const t = treppen.bericht;
+        console.info(
+          `[Treppen] ${t.flaechen} Flaechen -> ${t.laeufe} Laeufe mit ${t.stufen} Stufen (hoechster Lauf ${t.hoechsterLaufM} m); ${t.flach} als Podest/Rampe erkannt (unter 30 cm Steigung).`,
+        );
+      }
+      const parkLabels = baueBeschriftungen(gelaende.beschriftungen ?? [], h);
+      if (parkLabels) nutzungPrims.push(parkLabels);
+      ersetze(viewer, gruppen.current, 'nutzung', nutzungPrims as Cesium.Primitive[]);
+    } else {
+      ersetze(viewer, gruppen.current, 'nutzung', []);
+    }
 
     // Gebaeude aus den ECHTEN LoD2-Dach- und Wandflaechen
     if (ebenen.gebaeude) {
       const stadt = baueStadt(gelaende);
       const kanten = baueGebaeudeKanten(gelaende);
       const baender = baueGeschossbaender(gelaende);
-      const gebPrims = [...stadt.prims];
-      if (kanten) gebPrims.push(kanten);
+      const gebPrims = [...stadt.prims, ...kanten];
       if (baender) gebPrims.push(baender);
       ersetze(viewer, gruppen.current, 'gebaeude', gebPrims);
       console.log(`[Stadt] ${stadt.mitDach} Gebaeude mit echter Dachform, ${stadt.ersatz} als Ersatzkoerper`);
@@ -263,12 +432,23 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
     const linien = gelaende.linien ?? [];
     const hecken = linien.filter((l) => l.art === 'hecke');
     const gleise = linien.filter((l) => l.art === 'gleis');
-    const barrieren = linien.filter((l) => l.art !== 'hecke' && l.art !== 'gleis');
+    const barrieren = linien.filter((l) => l.art !== 'hecke' && l.art !== 'gleis' && l.art !== 'markierung');
 
-    ersetze(viewer, gruppen.current, 'gleise', ebenen.nutzung ? baueGleise(gleise, h) : []);
+    if (ebenen.nutzung) {
+      const gleisBau = baueGleise(gleise, h);
+      ersetze(viewer, gruppen.current, 'gleise', gleisBau.prims);
+      const b = gleisBau.bericht;
+      console.info(
+        `[Gleise] ${b.stuecke} Stuecke -> ${b.straenge} durchgehende Straenge (${b.geheilteSchnitte} kuenstliche Schnitte geheilt, ${b.verzweigungen} Weichen/Kreuzungen), ` +
+          `${b.laengeM.toLocaleString('de-DE')} m: ${b.rillenschieneM.toLocaleString('de-DE')} m Rillenschiene, ${b.schotterM.toLocaleString('de-DE')} m Schotteroberbau mit ${b.schwellen.toLocaleString('de-DE')} Schwellen. ${b.dreiecke.toLocaleString('de-DE')} Dreiecke.`,
+      );
+    } else {
+      ersetze(viewer, gruppen.current, 'gleise', []);
+    }
     ersetze(viewer, gruppen.current, 'barrieren', ebenen.nutzung ? baueBarrieren(barrieren, h) : []);
     ersetze(viewer, gruppen.current, 'vegetation', ebenen.gebaeude ? [...baueBaeume(punkte, h), ...baueHecken(hecken, h)] : []);
     ersetze(viewer, gruppen.current, 'moebel', ebenen.nutzung ? baueStrassenmoebel(punkte, h) : []);
+    ersetze(viewer, gruppen.current, 'verkehrszeichen', ebenen.nutzung ? baueVerkehrszeichen(punkte, h) : []);
 
     const halte = ebenen.nutzung ? baueHaltestellen(punkte, h) : { prims: [], labels: [] };
     ersetze(viewer, gruppen.current, 'haltestellen', halte.prims);
@@ -292,15 +472,23 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
       }
     }
 
-    // Kamera auf das Gebiet
-    const mitte = [(gelaende.bbox.minE + gelaende.bbox.maxE) / 2, (gelaende.bbox.minN + gelaende.bbox.maxN) / 2] as Punkt;
-    const spann = Math.max(gelaende.bbox.maxE - gelaende.bbox.minE, gelaende.bbox.maxN - gelaende.bbox.minN);
-    const [lon, lat] = nachWgs(mitte);
-    viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(lon, lat - spann / 220000, gelaende.hoeheMittel + spann * 0.75),
-      orientation: { heading: 0, pitch: Cesium.Math.toRadians(-42), roll: 0 },
-    });
-  }, [gelaende, ebenen.gelaende, ebenen.luftbild, ebenen.gebaeude, ebenen.nutzung]);
+    // Kamera auf das Gebiet — aber NUR beim ersten Laden dieses Gelaendes.
+    // Der Effekt laeuft auch bei jedem Ebenen-Umschalter (Luftbild, Gebaeude,
+    // Nutzung); frueher setzte jeder Umschalter die Kamera auf die Uebersicht
+    // zurueck und warf einen mitten aus der Detailarbeit.
+    if (kameraGelaendeRef.current !== gelaende.id) {
+      kameraGelaendeRef.current = gelaende.id;
+      const mitte = [(gelaende.bbox.minE + gelaende.bbox.maxE) / 2, (gelaende.bbox.minN + gelaende.bbox.maxN) / 2] as Punkt;
+      const spann = Math.max(gelaende.bbox.maxE - gelaende.bbox.minE, gelaende.bbox.maxN - gelaende.bbox.minN);
+      const [lon, lat] = nachWgs(mitte);
+      viewer.camera.setView({
+        destination: Cesium.Cartesian3.fromDegrees(lon, lat - spann / 220000, gelaende.hoeheMittel + spann * 0.75),
+        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-42), roll: 0 },
+      });
+    }
+    // `hoehenDaten` gehoert in die Abhaengigkeiten: der Aufbau wartet oben
+    // darauf und muss laufen, sobald das Raster da ist.
+  }, [gelaende, hoehenDaten, ebenen.gelaende, ebenen.luftbild, ebenen.gebaeude, ebenen.nutzung]);
 
   // ------------------------------------------------------------- Inhalte
   useEffect(() => {
@@ -320,7 +508,13 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
 
     if (labelsRef.current && ebenen.bemassung) beschrifteObjekte(labelsRef.current, inhalt.objekte, typen, h, gewaehlt);
     else labelsRef.current?.removeAll();
-  }, [inhalt, typen, auswahl, ebenen, editorStatus, bericht]);
+    // `gelaende` gehoert in die Abhaengigkeiten, obwohl es hier nicht direkt
+    // gelesen wird: die Hoehenlage kommt ueber hoehenRef aus dem
+    // Gelaende-Effekt. Trifft `inhalt` VOR `gelaende` ein (beide asynchron),
+    // wuerden die Objekte sonst auf der leeren Hoehenlage (0 m) gebaut und nie
+    // wieder aufgebaut — sie laegen unter dem Boden.
+    // `hoehenDaten` ebenfalls: damit wechselt die Hoehenlage von grob auf genau.
+  }, [gelaende, hoehenDaten, inhalt, typen, auswahl, ebenen, editorStatus, bericht]);
 
   // --------------------------------------------------------- Interaktion
   useEffect(() => {
@@ -693,7 +887,9 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
       'messungen',
       inst.length ? [new Cesium.Primitive({ geometryInstances: inst, appearance: new Cesium.PolylineColorAppearance({ translucent: true }), asynchronous: false })] : [],
     );
-  }, [messungen]);
+    // `gelaende` mitfuehren — dieselbe Begruendung wie beim Inhalte-Effekt:
+    // die Messlinien haengen ueber hoehenRef an der Hoehenlage.
+  }, [gelaende, messungen]);
 
   // --------------------------------------------------------- Hinweistexte
   useEffect(() => {
@@ -759,8 +955,11 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
  * keinen — ein 3 cm hoher Gehweg wuerde sonst flimmernde Schattenraender
  * erzeugen.
  */
-const WIRFT_SCHATTEN = new Set(['gebaeude', 'vegetation', 'objekte', 'barrieren', 'haltestellen', 'stationen']);
-const EMPFAENGT_SCHATTEN = new Set(['gelaende', 'nutzung', 'gleise']);
+const WIRFT_SCHATTEN = new Set(['gebaeude', 'vegetation', 'objekte', 'barrieren', 'haltestellen', 'stationen', 'verkehrszeichen']);
+// 'gleise' bewusst NICHT dabei: die Gleise sind als unbeleuchtete Koerper
+// konzipiert (verkehr.ts) — der Schattenempfang patcht den Shader trotzdem
+// und brachte Schattenflecken auf das eigentlich ungeschattete Band.
+const EMPFAENGT_SCHATTEN = new Set(['gelaende', 'nutzung']);
 
 function ersetze(viewer: Cesium.Viewer, speicher: Record<string, Cesium.Primitive[]>, name: string, neue: Cesium.Primitive[]) {
   for (const p of speicher[name] ?? []) {
@@ -783,6 +982,97 @@ function ersetze(viewer: Cesium.Viewer, speicher: Record<string, Cesium.Primitiv
   }
 }
 
+/**
+ * Rad-Zoom auf den Punkt unter dem Mauszeiger.
+ *
+ * Warum eigenhaendig statt Cesiums Zoom: siehe die ausfuehrliche Begruendung
+ * beim Aufruf (abgeschalteter Globus -> Bezugsflaeche ist das Erdellipsoid
+ * 143 m unter dem Boden -> der Zoom stirbt ab, bevor man unten ankommt).
+ *
+ * Rechenweg: Zielpunkt = echte Geometrie unter dem Zeiger (`pickPosition`),
+ * ersatzweise der Schnitt des Sehstrahls mit der mittleren Gelaendehoehe.
+ * Die Kamera legt je Rastung einen festen ANTEIL der Reststrecke zurueck —
+ * damit ist der Schritt in jeder Hoehe gleich stark spuerbar, nah wie fern.
+ * Rein und wieder raus fuehrt exakt zurueck (0,8 x 1,25 = 1).
+ */
+function radZoomAnmelden(viewer: Cesium.Viewer, hoehen: () => Hoehenlage): () => void {
+  const szene = viewer.scene;
+  const leinwand = viewer.canvas;
+  /** Anteil der Reststrecke je Rastung. */
+  const HINEIN = 0.2;
+  const HERAUS = 0.25;
+  /** Naeher als das darf die Kamera an den Zielpunkt nicht heran. */
+  const MIN_ABSTAND_M = 3;
+  /** Weiter als das nicht hinaus — sonst verliert man die Stadt aus dem Blick. */
+  const MAX_HOEHE_M = 20000;
+
+  function zielPunkt(x: number, y: number): Cesium.Cartesian3 | null {
+    const bild = new Cesium.Cartesian2(x, y);
+    if (szene.pickPositionSupported) {
+      const treffer = szene.pickPosition(bild);
+      if (treffer && Number.isFinite(treffer.x)) return treffer;
+    }
+    // Nichts getroffen (Himmel am Bildrand): Strahl gegen die waagerechte
+    // Ebene auf mittlerer Gelaendehoehe schneiden.
+    const strahl = viewer.camera.getPickRay(bild);
+    if (!strahl) return null;
+    const mitte = Cesium.Cartographic.fromCartesian(viewer.camera.position);
+    const aufBoden = Cesium.Cartesian3.fromRadians(mitte.longitude, mitte.latitude, hoehen().mittel);
+    const normale = Cesium.Cartesian3.normalize(aufBoden, new Cesium.Cartesian3());
+    const ebene = Cesium.Plane.fromPointNormal(aufBoden, normale);
+    return Cesium.IntersectionTests.rayPlane(strahl, ebene) ?? null;
+  }
+
+  function beiRad(ereignis: WheelEvent) {
+    ereignis.preventDefault();
+    const kasten = leinwand.getBoundingClientRect();
+    const ziel = zielPunkt(ereignis.clientX - kasten.left, ereignis.clientY - kasten.top);
+    if (!ziel) return;
+
+    const kamera = viewer.camera;
+    const abstand = Cesium.Cartesian3.distance(kamera.position, ziel);
+    if (!Number.isFinite(abstand) || abstand < 1e-3) return;
+
+    const hinein = ereignis.deltaY < 0;
+    let strecke = abstand * (hinein ? HINEIN : -HERAUS);
+    // Nie durch den Zielpunkt hindurchfahren.
+    if (hinein) strecke = Math.min(strecke, abstand - MIN_ABSTAND_M);
+    if (strecke === 0) return;
+
+    const vorher = Cesium.Cartesian3.clone(kamera.position, new Cesium.Cartesian3());
+    const richtung = Cesium.Cartesian3.subtract(ziel, kamera.position, new Cesium.Cartesian3());
+    Cesium.Cartesian3.normalize(richtung, richtung);
+    kamera.move(richtung, strecke);
+
+    const danach = Cesium.Cartographic.fromCartesian(kamera.position);
+
+    // UNTERGRENZE: nie unter das Gelaende. Ohne sie faehrt der Zoom in die
+    // Geometrie hinein — beim Zielen auf eine Baumkrone landete die Kamera
+    // IM Laub und unter Grund (nachgestellt 08.08.2026). Die Augenhoehe
+    // 1,70 m bleibt ueber den Kameraknopf erreichbar, per Rad ist bei 2 m
+    // ueber Boden Schluss.
+    const auf = weltNachUtm(kamera.position);
+    const bodenHier = auf ? hoehen().bei(auf[0], auf[1]) : hoehen().mittel;
+    if (danach.height < bodenHier + 2) {
+      kamera.position = Cesium.Cartesian3.fromRadians(danach.longitude, danach.latitude, bodenHier + 2);
+      // Bringt die Korrektur nichts (Kamera stand schon am Boden), lieber
+      // gar nicht bewegen als seitlich wegdriften.
+      if (Cesium.Cartesian3.distance(kamera.position, vorher) < 0.05) {
+        kamera.position = vorher;
+      }
+      return;
+    }
+
+    // Beim Herauszoomen eine Obergrenze halten.
+    if (danach.height > MAX_HOEHE_M) {
+      kamera.position = Cesium.Cartesian3.fromRadians(danach.longitude, danach.latitude, MAX_HOEHE_M);
+    }
+  }
+
+  leinwand.addEventListener('wheel', beiRad, { passive: false });
+  return () => leinwand.removeEventListener('wheel', beiRad);
+}
+
 /** Dreh-Griff am ausgewaehlten Objekt. */
 function baueGriffe(
   inhalt: NonNullable<ReturnType<typeof nutzeZustand.getState>['inhalt']>,
@@ -798,7 +1088,11 @@ function baueGriffe(
     const m = masseVon(typ, o);
     const r = Math.max(m.laenge, m.breite) / 2 + 2.5;
     const rad = (o.rotation * Math.PI) / 180;
-    const griff: Punkt = [o.position[0] + Math.sin(rad + Math.PI / 2) * r, o.position[1] + Math.cos(rad + Math.PI / 2) * r];
+    // Griff-Peilung == Objekt-Rotation. Der Drag-Handler setzt die Rotation
+    // auf die ABSOLUTE Mauspeilung zum Objekt — stand der Griff (wie frueher)
+    // um +90 Grad versetzt, sprang das Objekt beim ersten Anfassen sofort um
+    // 90 Grad (Befund der systematischen Pruefung 08.08.2026).
+    const griff: Punkt = [o.position[0] + Math.sin(rad) * r, o.position[1] + Math.cos(rad) * r];
     const basis = hoehen.bei(griff[0], griff[1]);
     const [lon, lat] = nachWgs(griff);
     inst.push(
@@ -854,12 +1148,16 @@ function zeigeGeist(
   zs: ReturnType<typeof nutzeZustand.getState>,
 ) {
   if (ref.current) viewer.scene.primitives.remove(ref.current);
-  // Gueltig heisst hier: nicht in einer gesperrten Blockflaeche
+  // Gueltig heisst hier: nicht in einer gesperrten Blockflaeche.
+  // ENTHALTENSEIN zaehlt, nicht nur Kantennaehe — der alte Test pruefte nur
+  // den Abstand zur Kante, mitten in einer grossen Sperrflaeche war der Geist
+  // faelschlich gruen.
   let gueltig = true;
   const ring = grundriss(typ, { id: 'g', projektId: '', typId: typ.id, position, rotation: 0, status: 'geplant', auflagen: [], erstelltVon: '', erstelltAm: '' });
   const mitte = schwerpunkt(ring);
   for (const b of zs.inhalt?.blockflaechen ?? []) {
     if (b.typ === 'nicht_bebaubar' || b.typ === 'gesperrt') {
+      if (punktInRing(mitte, b.polygon)) gueltig = false;
       for (let i = 0, j = b.polygon.length - 1; i < b.polygon.length; j = i++) {
         if (abstandPunktStrecke(mitte, b.polygon[j], b.polygon[i]) < 0.5) gueltig = false;
       }

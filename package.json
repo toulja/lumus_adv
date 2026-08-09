@@ -25,6 +25,7 @@
     "express": "^4.21.2",
     "fast-xml-parser": "^4.5.3",
     "fflate": "^0.8.2",
+    "jpeg-js": "^0.4.4",
     "pdfkit": "^0.15.2",
     "polygon-clipping": "^0.15.7",
     "proj4": "^2.15.0",

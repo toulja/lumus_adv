@@ -81,6 +81,35 @@ router.get('/:id/textur/:datei', anmeldungNoetig, (req, res) => {
   fs.createReadStream(p).pipe(res);
 });
 
+/**
+ * Binaeres Hoehenraster eines Gelaendes (shared/geo/raster.ts).
+ *
+ * Der Browser holt es als ArrayBuffer und legt eine Float32Array darueber —
+ * ohne Umwandlung, ohne Textparser. Es ist unveraenderlich, sobald es
+ * geschrieben ist (ein neuer Import legt ein neues Gelaende an), darum darf es
+ * lange zwischengespeichert werden.
+ */
+router.get('/:id/hoehen.bin', anmeldungNoetig, (req, res) => {
+  if (!GELAENDE_ID.test(req.params.id)) {
+    res.status(400).json({ fehler: 'Ungueltiger Gelaende-Bezeichner.' });
+    return;
+  }
+  let p: string;
+  try {
+    p = gelaendeStore.rasterPfad(req.params.id);
+  } catch {
+    res.status(400).json({ fehler: 'Ungueltiger Rasterpfad.' });
+    return;
+  }
+  if (!fs.existsSync(p)) {
+    res.status(404).json({ fehler: 'Fuer dieses Gelaende gibt es kein Hoehenraster (Import vor dem 09.08.2026).' });
+    return;
+  }
+  res.setHeader('Cache-Control', 'private, max-age=604800, immutable');
+  res.type('application/octet-stream');
+  fs.createReadStream(p).pipe(res);
+});
+
 /** Kartenkachel fuer die 2D-Ansicht (Liegenschaftskarte / Topo-Kaskade). */
 router.get('/karte/kachel', async (req, res, next) => {
   try {
@@ -181,6 +210,44 @@ router.post('/import/pruefen', anmeldungNoetig, (req, res) => {
     zulaessig: flaeche <= gelaendeImport.MAX_GEBIET_M2,
     grenzeKm2: gelaendeImport.MAX_GEBIET_M2 / 1_000_000,
   });
+});
+
+/**
+ * Dachfarben aus dem DOP20-Orthophoto messen (Medianfarbe je Grundriss).
+ * Ein eigener Schritt nach dem Import: er braucht nur die schon geladenen
+ * Gelaendetexturen und ersetzt die bisher deterministisch GEWAEHLTEN
+ * Dachtoene durch GEMESSENE.
+ */
+router.post('/:id/dachfarben', anmeldungNoetig, async (req: AuthRequest, res) => {
+  if (!darfGelaendeAnlegen(req)) {
+    res.status(403).json({ fehler: 'Nur Veranstalter und Plattform-Admins duerfen Dachfarben messen.' });
+    return;
+  }
+  const g = gelaendeStore.laden(req.params.id);
+  if (!g) {
+    res.status(404).json({ fehler: 'Gelaende nicht gefunden.' });
+    return;
+  }
+  try {
+    const { dachfarbenMessen } = await import('../geodata/dachfarben.ts');
+    const bilanz = dachfarbenMessen(g);
+    if (bilanz.gemessen > 0) {
+      g.quellennachweis = (g.quellennachweis ?? []).filter((q) => q.datensatz !== 'Dachfarben aus DOP20');
+      g.quellennachweis.push({
+        datensatz: 'Dachfarben aus DOP20',
+        dienst: 'Medianfarbe der Orthophoto-Pixel je Gebaeudegrundriss (lokal gemessen)',
+        url: 'https://www.gds-srv.hessen.de/cgi-bin/lika-services/ogc-free-images.ows',
+        abgerufenAm: new Date().toISOString(),
+        lizenz: 'Datenlizenz Deutschland — Zero, Version 2.0 (Open Data HVBG)',
+        quellenvermerk: '(c) HVBG, DOP20',
+        hinweis: `${bilanz.gemessen} Daecher gemessen, ${bilanz.uebersprungen} ohne ausreichende Bildabdeckung.`,
+      });
+      gelaendeStore.speichern(g);
+    }
+    res.json(bilanz);
+  } catch (e) {
+    res.status(500).json({ fehler: (e as Error).message });
+  }
 });
 
 /** Manueller DGM1-Import (Fallback laut Lastenheft F1, weil Hessen keine Direktlinks bietet). */

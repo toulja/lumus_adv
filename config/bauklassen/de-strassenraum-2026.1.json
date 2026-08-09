@@ -1,0 +1,127 @@
+{
+  "id": "de-strassenraum",
+  "version": "2026.1",
+  "stand": "2026-08-09",
+  "bezeichnung": "Konstruktionshoehen des Strassenraums",
+  "geltungsbereich": "Deutschland, innerorts",
+
+  "hinweis": "Diese Datei sagt, WIE HOCH etwas gebaut ist — nicht, wie es aussieht. Sie ist der Grund, warum ein Gehweg im Modell ueber der Fahrbahn liegt und dazwischen ein Bordstein entsteht, statt beide als gleich hohe Farbflaechen aneinanderstossen zu lassen. Bezugsflaeche ist die FAHRBAHN mit 0,00 m; alle anderen Werte sind Hoehen ueber ihr. Ueber dem gewachsenen Gelaende (DGM1) liegt der ganze Aufbau an der Bezugsflaeche auf.",
+
+  "haftungshinweis": "Die Werte sind Regelmasse des Strassenbaus und dienen der Planungsunterstuetzung. Sie ersetzen keine Vermessung des Bestandes. Wo ein Wert nicht durch eine Fundstelle belegt ist, traegt er verifikation.status = 'zu_pruefen' und wird in der Oberflaeche als Annahme gekennzeichnet.",
+
+  "quellen": [
+    { "kuerzel": "RASt 06", "titel": "Richtlinien fuer die Anlage von Stadtstrassen", "fassung": "Ausgabe 2006, FGSV 242", "hinweis": "Regelwerk fuer Querschnitte, Bordhoehen und Nebenanlagen innerorts. NICHT frei verfuegbar (FGSV-Verlag) — Werte hier sind bis zur Einsichtnahme Annahmen." },
+    { "kuerzel": "BOStrab", "titel": "Verordnung ueber den Bau und Betrieb der Strassenbahnen", "fassung": "zuletzt geaendert 2016", "url": "https://www.gesetze-im-internet.de/bostrab_1987/" },
+    { "kuerzel": "DIN 18040-3", "titel": "Barrierefreies Bauen — Oeffentlicher Verkehrs- und Freiraum", "fassung": "2014-12", "hinweis": "Bordhoehen an Querungsstellen, Stufenmasse, Rampenneigungen." },
+    { "kuerzel": "EBO", "titel": "Eisenbahn-Bau- und Betriebsordnung", "url": "https://www.gesetze-im-internet.de/ebo/" }
+  ],
+
+  "bezugsflaeche": "fahrbahn",
+
+  "klassen": [
+    {
+      "id": "fahrbahn",
+      "bezeichnung": "Fahrbahn",
+      "fuerFlaechenArt": ["fahrbahn"],
+      "oberkanteM": 0.0,
+      "begruendung": "Bezugsflaeche. Alle uebrigen Hoehen sind Hoehen ueber der Fahrbahnoberkante.",
+      "verifikation": { "status": "verifiziert", "geprueftAm": "2026-08-09", "beleg": "Festlegung dieses Modells, keine Rechtsnorm." }
+    },
+    {
+      "id": "gehweg",
+      "bezeichnung": "Gehweg",
+      "fuerFlaechenArt": ["gehweg"],
+      "oberkanteM": 0.12,
+      "begruendung": "Regelbordhoehe innerorts. Der Wert traegt die gesamte Kantenbildung: erst er macht aus zwei Farbflaechen eine Strasse mit Rand.",
+      "quelle": { "kuerzel": "RASt 06", "abschnitt": "Bordausbildung" },
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-09", "beleg": "Annahme, nicht belegt — RASt 06 liegt nicht vor. Uebliche Regelbordhoehe 0,10-0,15 m; hier 0,12 m als Mittelwert angesetzt." }
+    },
+    {
+      "id": "radweg",
+      "bezeichnung": "Radweg",
+      "fuerFlaechenArt": ["radweg"],
+      "oberkanteM": 0.06,
+      "begruendung": "Zwischen Fahrbahn und Gehweg gefuehrter Radweg liegt haeufig auf halber Bordhoehe (Sicherheitstrennstreifen mit Schraegbord).",
+      "quelle": { "kuerzel": "RASt 06", "abschnitt": "Radverkehrsanlagen" },
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-09", "beleg": "Annahme. OSM fuehrt die Fuehrungsform nicht durchgaengig; ohne sie ist der Wert nicht bestimmbar." }
+    },
+    {
+      "id": "platz",
+      "bezeichnung": "Platz / Fussgaengerzone",
+      "fuerFlaechenArt": ["platz", "fussgaengerzone"],
+      "oberkanteM": 0.12,
+      "begruendung": "Plaetze in Fussgaengerbereichen sind ueberwiegend niveaugleich mit dem Gehwegniveau ausgebaut.",
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-09", "beleg": "Annahme. Viele Plaetze sind tatsaechlich niveaugleich mit der Fahrbahn ausgebaut (shared space) — das ist ohne oertliche Kenntnis nicht zu unterscheiden." }
+    },
+    {
+      "id": "weg",
+      "bezeichnung": "Weg / Pfad",
+      "fuerFlaechenArt": ["weg"],
+      "oberkanteM": 0.06,
+      "begruendung": "Wassergebundene Wege in Gruenanlagen liegen leicht ueber dem angrenzenden Gelaende (Aufbau ueber Frostschutzschicht).",
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-09", "beleg": "Annahme." }
+    },
+    {
+      "id": "gruen",
+      "bezeichnung": "Gruenflaeche",
+      "fuerFlaechenArt": ["gruen", "wald", "landwirtschaft"],
+      "oberkanteM": 0.0,
+      "begruendung": "Gruenflaechen sind das gewachsene Gelaende — sie bekommen keinen Aufbau. Wo eine Rasenflaeche an einen Gehweg stoesst, entsteht die Kante durch dessen Bordhoehe, nicht durch die Wiese.",
+      "verifikation": { "status": "verifiziert", "geprueftAm": "2026-08-09", "beleg": "Folgt aus der Definition des Gelaendemodells (DGM = gewachsener Boden)." }
+    },
+    {
+      "id": "bahnsteig_tram",
+      "bezeichnung": "Bahnsteig Strassenbahn (Kap)",
+      "fuerFlaechenArt": [],
+      "oberkanteM": 0.24,
+      "begruendung": "Haltestellenkap fuer niederflurige Strassenbahnen. Der Wert ist zugleich die Einstiegshoehe und damit fuer die Barrierefreiheitspruefung erheblich.",
+      "quelle": { "kuerzel": "BOStrab", "abschnitt": "§ 31 Bahnsteige" },
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-09", "beleg": "Annahme. BOStrab nennt keine feste Hoehe, sondern verlangt Abstimmung auf die Fahrzeuge; in Darmstadt sind 0,24 m ueblich — oertlich zu pruefen." }
+    },
+    {
+      "id": "treppe",
+      "bezeichnung": "Treppenlauf",
+      "fuerFlaechenArt": ["treppe"],
+      "oberkanteM": null,
+      "stufe": { "hoeheM": 0.17, "auftrittM": 0.29 },
+      "begruendung": "Eine Treppe hat keine EINE Hoehe — sie verbindet zwei. Sie wird darum als Lauf aus Stufen zwischen den Hoehen ihrer beiden Enden gebaut. Ohne dieses Feld sind die 137 Treppenflaechen des Pilotgebiets ebene Farbflaechen, ueber die eine Fluchtwegrechnung ungehindert hinweglaeuft.",
+      "quelle": { "kuerzel": "DIN 18040-3", "abschnitt": "Treppen im oeffentlichen Raum" },
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-09", "beleg": "Annahme (Schrittmassregel 2h + a = 63 cm ergibt bei 17 cm Steigung 29 cm Auftritt). Die tatsaechlichen Stufenmasse sind oertlich zu vermessen." }
+    },
+    {
+      "id": "wasser",
+      "bezeichnung": "Wasserflaeche",
+      "fuerFlaechenArt": ["wasser"],
+      "oberkanteM": null,
+      "wasser": { "spiegelUeberGelaendeM": -0.15, "sohleUnterSpiegelM": 0.8 },
+      "begruendung": "Wasser hat einen Spiegel UND eine Sohle. Als flache Platte auf Gelaendehoehe gezeichnet, liegt ein Bach auf dem Ufer statt darin.",
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-09", "beleg": "Annahme. Wasserstaende sind veraenderlich und werden von keiner der genutzten Quellen gefuehrt." }
+    },
+    {
+      "id": "bahn",
+      "bezeichnung": "Bahnflaeche",
+      "fuerFlaechenArt": ["bahn"],
+      "oberkanteM": 0.0,
+      "begruendung": "Die Bahnflaeche selbst ist Gelaende; ihre Hoehenlage entsteht durch den Oberbau (Schotterbett bzw. Rillenschiene), nicht durch die Flaeche.",
+      "verifikation": { "status": "verifiziert", "geprueftAm": "2026-08-09", "beleg": "Folgt aus der Trennung von Flaeche und Bauwerk in diesem Modell." }
+    },
+    {
+      "id": "bebauung",
+      "bezeichnung": "Bebaute Flaeche",
+      "fuerFlaechenArt": ["bebauung", "sonstige"],
+      "oberkanteM": 0.0,
+      "begruendung": "Hinterhoefe und Baufelder werden nicht vermessen — sie bleiben auf Gelaendehoehe.",
+      "verifikation": { "status": "verifiziert", "geprueftAm": "2026-08-09", "beleg": "Bewusster Verzicht auf eine Annahme." }
+    }
+  ],
+
+  "kantenregel": {
+    "hinweis": "Aus dem Hoehenunterschied zweier ANEINANDERGRENZENDER Flaechen ergibt sich, WAS an ihrer gemeinsamen Kante steht. Die Kante ist damit ein Ergebnis der Konstruktionshoehen und keine eigene Eingabe — deshalb bekommt jede Strassenkante im Gebiet ihren Bordstein und nicht nur die 16, die OpenStreetMap zufaellig fuehrt.",
+    "stufen": [
+      { "bisM": 0.03, "bauart": "fuge", "bezeichnung": "Fuge / Rinne", "begruendung": "Unter 3 cm ist kein Koerper zu sehen, nur ein Materialwechsel." },
+      { "bisM": 0.3, "bauart": "bordstein", "bezeichnung": "Bordstein", "anlaufM": 0.02, "begruendung": "Regelfall im Strassenraum." },
+      { "bisM": 3.0, "bauart": "boeschung_oder_mauer", "bezeichnung": "Boeschung oder Stuetzmauer", "boeschungMaxNeigung": 0.6, "begruendung": "Passt die Regelneigung (1:1,5) zwischen die beiden Flaechen, wird geboescht, sonst gemauert." },
+      { "bisM": null, "bauart": "bauwerk", "bezeichnung": "Bauwerk", "begruendung": "Ueber 3 m ist es ein Bauwerk mit eigener Konstruktion. Es wird NICHT erfunden — hier endet, was sich aus Hoehen ableiten laesst." }
+    ]
+  }
+}

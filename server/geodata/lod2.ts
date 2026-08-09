@@ -18,11 +18,14 @@
  */
 
 import fs from 'node:fs';
+import path from 'node:path';
 import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { XMLParser } from 'fast-xml-parser';
-import { unzipSync } from 'fflate';
+import { Unzip, UnzipInflate } from 'fflate';
 import type { BBox, GelaendeGebaeude, Ring } from '../../shared/domain/types.ts';
 import { bboxUeberschneidet, bboxVonPunkten, flaeche, ringNormalisieren } from '../../shared/geo/geometry.ts';
+import { cache } from '../lib/store.ts';
 import { geoKonfig, heuteKompakt } from './konfig.ts';
 
 const parser = new XMLParser({
@@ -38,6 +41,13 @@ const parser = new XMLParser({
 interface Flaeche3D_intern {
   art: 'wand' | 'dach' | 'boden';
   ring: [number, number, number][];
+  /**
+   * Zu welchem BAUTEIL die Flaeche gehoert. 0 = das Building selbst, ab 1 je
+   * `bldg:BuildingPart`. CityGML fuehrt zusammengesetzte Gebaeude (Karrees,
+   * Anbauten, Hoefe) als EIN Building mit mehreren BuildingParts — jedes davon
+   * hat seinen eigenen Grundriss und oft eigene Hoehen.
+   */
+  teil: number;
 }
 
 function ringAusPolygon(poly: unknown): [number, number, number][] | null {
@@ -51,7 +61,24 @@ function ringAusPolygon(poly: unknown): [number, number, number][] | null {
   return ring.length >= 4 ? ring : null;
 }
 
-function flaechenSammeln(knoten: Record<string, any>, out: Flaeche3D_intern[]) {
+/**
+ * Sammelt die Begrenzungsflaechen — GETRENNT NACH BAUTEIL.
+ *
+ * `zaehler.wert` vergibt fortlaufende Teil-Nummern; jeder BuildingPart bekommt
+ * seine eigene. Vorher landeten alle Teile in EINEM Topf, und der Aufrufer
+ * behielt nur den groessten Grundriss: im Pilotgebiet gingen so 23,8 % der
+ * amtlichen Grundflaeche verloren (555 der 2.563 Gebaeude mehrteilig, dem
+ * Luisencenter fehlte ein 52-m-Fluegel). Das war nicht nur Optik — der
+ * Grundriss ist die Bezugsflaeche der Regelpruefung (Engstellen, Kollisionen,
+ * Mindestabstaende) und aller Exporte.
+ */
+interface Bauteile {
+  flaechen: Flaeche3D_intern[];
+  /** Attribute je Teil-Nummer (Hoehen, Dachform koennen je Teil abweichen). */
+  attribute: Map<number, Record<string, string>>;
+}
+
+function flaechenSammeln(knoten: Record<string, any>, ziel: Bauteile, teil: number, zaehler: { wert: number }) {
   for (const b of knoten.boundedBy ?? []) {
     for (const [schluessel, art] of [
       ['WallSurface', 'wand'],
@@ -63,12 +90,20 @@ function flaechenSammeln(knoten: Record<string, any>, out: Flaeche3D_intern[]) {
       const ms = s.lod2MultiSurface?.MultiSurface;
       for (const sm of ms?.surfaceMember ?? []) {
         const ring = ringAusPolygon(sm.Polygon);
-        if (ring) out.push({ art, ring });
+        if (ring) ziel.flaechen.push({ art, ring, teil });
       }
     }
   }
-  for (const teil of knoten.consistsOfBuildingPart ?? []) {
-    for (const p of teil.BuildingPart ?? []) flaechenSammeln(p, out);
+  for (const gruppe of knoten.consistsOfBuildingPart ?? []) {
+    for (const p of gruppe.BuildingPart ?? []) {
+      zaehler.wert += 1;
+      const eigenerTeil = zaehler.wert;
+      // Hoehen und Dachform koennen je BuildingPart abweichen (ein
+      // Hof-Karree hat pro Fluegel eine eigene Traufe). Fehlt etwas, erbt
+      // der Teil spaeter vom Building.
+      ziel.attribute.set(eigenerTeil, attribute(p));
+      flaechenSammeln(p, ziel, eigenerTeil, zaehler);
+    }
   }
 }
 
@@ -144,70 +179,117 @@ function grobImGebiet(block: string, bbox: BBox): boolean {
   return false;
 }
 
-function gebaeudeAusBlock(block: string, bbox: BBox): GelaendeGebaeude | null {
+/**
+ * Wertet EINEN `<bldg:Building>`-Block aus und liefert je BAUTEIL einen
+ * Baukoerper.
+ *
+ * WARUM JE BAUTEIL (Befund 08.08.2026, an der amtlichen Quelle nachgemessen):
+ * 555 der 2.563 Pilot-Gebaeude bestehen aus mehreren BuildingParts (bis zu 24).
+ * Vorher wurde je Building EIN Koerper gebildet und davon nur der GROESSTE
+ * Grundriss behalten — 107.830 m2 (23,8 %) amtliche Grundflaeche fielen weg.
+ * Beim Luisencenter fehlte ein 52 m langer Fluegel. Sichtbar war das kaum,
+ * weil die Dach- und Wandflaechen ALLER Teile weiter gezeichnet wurden: das
+ * Bild zeigte den Fluegel, der Grundriss kannte ihn nicht. Genau daran haengen
+ * aber die Regelpruefung (Engstellen, Kollisionen, Mindestabstaende), die
+ * Exporte (Vadere-Hindernisse, GeoJSON, glTF), der Lageplan, die 2D-Karte und
+ * der Sockel, der die Fuge zum Gelaende schliesst.
+ */
+function gebaeudeAusBlock(block: string, bbox: BBox): GelaendeGebaeude[] {
   let doc: Record<string, any>;
   try {
     doc = parser.parse(block) as Record<string, any>;
   } catch {
-    return null;
+    return [];
   }
   const b = doc.Building;
-  if (!b) return null;
-  const flaechen: Flaeche3D_intern[] = [];
-  flaechenSammeln(b, flaechen);
-  if (!flaechen.length) return null;
+  if (!b) return [];
+  const bauteile: Bauteile = { flaechen: [], attribute: new Map() };
+  flaechenSammeln(b, bauteile, 0, { wert: 0 });
+  if (!bauteile.flaechen.length) return [];
 
-  const grundriss = grundrissAus(flaechen);
-  if (!grundriss) return null;
-  const bb = bboxVonPunkten(grundriss);
-  if (!bboxUeberschneidet(bb, bbox)) return null;
-
-  const attrs = attribute(b);
+  const attrsBau = attribute(b);
   // LAGEZURERD (Lage zur Erdoberflaeche) ist ein amtliches ALKIS-Merkmal:
   // Werte kleiner 0 bezeichnen unterirdische Bauwerke (Tiefgaragen, Tunnel).
   // Die duerfen weder als Hindernis noch als Hoehenstuetzpunkt zaehlen.
-  const lage = Number(attrs.LAGEZURERD);
-  if (Number.isFinite(lage) && lage < 0) return null;
+  const lageBau = Number(attrsBau.LAGEZURERD);
+  if (Number.isFinite(lageBau) && lageBau < 0) return [];
 
-  let zMin = Infinity;
-  let dachMin = Infinity;
-  let dachMax = -Infinity;
-  for (const f of flaechen) {
-    for (const [, , z] of f.ring) {
-      if (z < zMin) zMin = z;
-      if (f.art === 'dach') {
-        if (z < dachMin) dachMin = z;
-        if (z > dachMax) dachMax = z;
-      }
-    }
-  }
+  // Leerstring/fehlend -> undefined. WICHTIG: 0 ist eine LEGITIME Hoehe
+  // (NHN-nahe Kuestenlagen) — nur ein leerer oder unlesbarer Attributwert gilt
+  // als fehlend, nicht der Zahlenwert 0. Die fruehere Prueferei `n !== 0`
+  // haette an der Nord-/Ostseekueste gemessene Hoehen verworfen.
   const zahl = (v: string | undefined) => {
+    if (v === undefined || String(v).trim() === '') return undefined;
     const n = Number(v);
-    return Number.isFinite(n) && n !== 0 ? n : undefined;
+    return Number.isFinite(n) ? n : undefined;
   };
-  const boden = zahl(attrs.AbsoluteHoehe) ?? (Number.isFinite(zMin) ? zMin : 0);
-  const traufe = zahl(attrs.MittlereTraufHoehe) ?? (Number.isFinite(dachMin) ? dachMin : undefined);
-  const first = zahl(attrs.Firsthoehe) ?? (Number.isFinite(dachMax) ? dachMax : undefined);
-
-  // Die ECHTEN Flaechen mitnehmen — ohne sie waere jedes Gebaeude ein Quader
-  // mit flachem Deckel. Mit ihnen bekommt es seine wirkliche Dachform.
   const runde = (f: Flaeche3D_intern): [number, number, number][] =>
     f.ring.map((p) => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100, Math.round(p[2] * 100) / 100]);
-  const dachflaechen = flaechen.filter((f) => f.art === 'dach').map(runde);
-  const wandflaechen = flaechen.filter((f) => f.art === 'wand').map(runde);
 
-  return {
-    id: String(b['@_id'] ?? attrs.ALKISOID ?? `lod2_${Math.round(bb.minE)}_${Math.round(bb.minN)}`),
-    grundriss: grundriss.map((p) => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]),
-    bodenHoehe: Math.round(boden * 100) / 100,
-    traufHoehe: traufe !== undefined ? Math.round(traufe * 100) / 100 : undefined,
-    firstHoehe: first !== undefined ? Math.round(first * 100) / 100 : undefined,
-    dachform: attrs.Dachtyp_tridicon || undefined,
-    funktion: typeof b.function === 'string' ? b.function : undefined,
-    quelle: 'lod2',
-    dachflaechen: dachflaechen.length ? dachflaechen : undefined,
-    wandflaechen: wandflaechen.length ? wandflaechen : undefined,
-  };
+  const nachTeil = new Map<number, Flaeche3D_intern[]>();
+  for (const f of bauteile.flaechen) {
+    const liste = nachTeil.get(f.teil);
+    if (liste) liste.push(f);
+    else nachTeil.set(f.teil, [f]);
+  }
+
+  const basisId = String(b['@_id'] ?? attrsBau.ALKISOID ?? '');
+  const mehrteilig = nachTeil.size > 1;
+  const out: GelaendeGebaeude[] = [];
+
+  for (const [teil, flaechen] of [...nachTeil.entries()].sort((a, b2) => a[0] - b2[0])) {
+    const grundriss = grundrissAus(flaechen);
+    if (!grundriss) continue;
+    const bb = bboxVonPunkten(grundriss);
+    if (!bboxUeberschneidet(bb, bbox)) continue;
+
+    // Teil-Attribute schlagen die des Buildings; fehlende erbt der Teil.
+    const attrs = { ...attrsBau, ...(bauteile.attribute.get(teil) ?? {}) };
+    const lage = Number(attrs.LAGEZURERD);
+    if (Number.isFinite(lage) && lage < 0) continue;
+
+    let zMin = Infinity;
+    let dachMin = Infinity;
+    let dachMax = -Infinity;
+    for (const f of flaechen) {
+      for (const [, , z] of f.ring) {
+        if (z < zMin) zMin = z;
+        if (f.art === 'dach') {
+          if (z < dachMin) dachMin = z;
+          if (z > dachMax) dachMax = z;
+        }
+      }
+    }
+    const boden = zahl(attrs.AbsoluteHoehe) ?? (Number.isFinite(zMin) ? zMin : 0);
+    const traufe = zahl(attrs.MittlereTraufHoehe) ?? (Number.isFinite(dachMin) ? dachMin : undefined);
+    const first = zahl(attrs.Firsthoehe) ?? (Number.isFinite(dachMax) ? dachMax : undefined);
+
+    // Die ECHTEN Flaechen mitnehmen — ohne sie waere jedes Gebaeude ein Quader
+    // mit flachem Deckel. Mit ihnen bekommt es seine wirkliche Dachform.
+    const dachflaechen = flaechen.filter((f) => f.art === 'dach').map(runde);
+    const wandflaechen = flaechen.filter((f) => f.art === 'wand').map(runde);
+
+    // Einteilige Gebaeude behalten ihre bisherige Id — nur mehrteilige
+    // bekommen den Teil-Zusatz, damit bestehende Bezuege (Hoehen-Overrides in
+    // Projekten) nicht ins Leere laufen.
+    const id = mehrteilig
+      ? `${basisId || `lod2_${Math.round(bb.minE)}_${Math.round(bb.minN)}`}#${teil}`
+      : basisId || `lod2_${Math.round(bb.minE)}_${Math.round(bb.minN)}`;
+
+    out.push({
+      id,
+      grundriss: grundriss.map((p) => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]),
+      bodenHoehe: Math.round(boden * 100) / 100,
+      traufHoehe: traufe !== undefined ? Math.round(traufe * 100) / 100 : undefined,
+      firstHoehe: first !== undefined ? Math.round(first * 100) / 100 : undefined,
+      dachform: attrs.Dachtyp_tridicon || undefined,
+      funktion: typeof b.function === 'string' ? b.function : undefined,
+      quelle: 'lod2',
+      dachflaechen: dachflaechen.length ? dachflaechen : undefined,
+      wandflaechen: wandflaechen.length ? wandflaechen : undefined,
+    });
+  }
+  return out;
 }
 
 /** Liest CityGML aus einem beliebigen Text-Strom und filtert auf das Gebiet. */
@@ -242,8 +324,9 @@ export async function ausStrom(
       const block = puffer.slice(s, e + ENDE.length);
       puffer = puffer.slice(e + ENDE.length);
       if (grobImGebiet(block, bbox)) {
-        const g = gebaeudeAusBlock(block, bbox);
-        if (g && !gesehen.has(g.id)) {
+        // Ein Block kann MEHRERE Baukoerper liefern (ein BuildingPart je Teil).
+        for (const g of gebaeudeAusBlock(block, bbox)) {
+          if (gesehen.has(g.id)) continue;
           gesehen.add(g.id);
           gefunden.push(g);
         }
@@ -255,6 +338,121 @@ export async function ausStrom(
     }
   }
   return gefunden;
+}
+
+/**
+ * Uebergabepuffer zwischen fflate-Rueckrufen und async-Iteration — MIT
+ * Gegendruck: der Erzeuger wartet, wenn der Verbraucher nicht nachkommt.
+ * Ohne diese Bremse laege die entpackte GML am Ende doch komplett im
+ * Speicher, nur haeppchenweise angeliefert.
+ */
+class ByteSchlange {
+  private puffer: (Uint8Array | null)[] = [];
+  private wecker: (() => void) | null = null;
+  private platzWecker: (() => void) | null = null;
+
+  schiebe(d: Uint8Array | null) {
+    this.puffer.push(d);
+    this.wecker?.();
+    this.wecker = null;
+  }
+
+  /** Erzeugerseite: warten, bis der Puffer wieder klein ist. */
+  async freierPlatz(max: number) {
+    while (this.puffer.length > max) {
+      await new Promise<void>((r) => (this.platzWecker = r));
+      this.platzWecker = null;
+    }
+  }
+
+  async *stroeme(): AsyncGenerator<Uint8Array> {
+    for (;;) {
+      if (this.puffer.length) {
+        const d = this.puffer.shift()!;
+        this.platzWecker?.();
+        this.platzWecker = null;
+        if (d === null) return;
+        yield d;
+        continue;
+      }
+      await new Promise<void>((r) => (this.wecker = r));
+      this.wecker = null;
+    }
+  }
+}
+
+/**
+ * Liest die GML-Eintraege eines ZIP-Archivs STREAMEND: das Archiv kommt in
+ * 4-MiB-Stuecken von der Platte, jeder Eintrag verlaesst den Entpacker in
+ * kleinen Stuecken und geht direkt durch ausStrom().
+ *
+ * Der fruehere Weg (unzipSync + ein Buffer je Eintrag) konnte fuer Darmstadt
+ * NIE funktionieren: die entpackte GML hat 1,56 GB, Buffer.toString() bricht
+ * bei Nodes Stringgrenze (~512 MB) mit "Cannot create a string longer than
+ * 0x1fffffe8 characters" ab (nachgestellt 08.08.2026).
+ */
+async function ausZipDatei(
+  datei: string,
+  bbox: BBox,
+  bericht?: (g: number, mb: number) => void,
+): Promise<GelaendeGebaeude[]> {
+  const gefunden: GelaendeGebaeude[] = [];
+  const verbraucher: Promise<void>[] = [];
+  let schlange: ByteSchlange | null = null;
+  let zipFehler: Error | null = null;
+
+  const entpacker = new Unzip();
+  entpacker.register(UnzipInflate);
+  entpacker.onfile = (eintrag) => {
+    if (!/\.(gml|xml)$/i.test(eintrag.name)) return;
+    const s = new ByteSchlange();
+    schlange = s;
+    eintrag.ondata = (fehler, daten, fertig) => {
+      if (fehler) {
+        zipFehler = zipFehler ?? fehler;
+        s.schiebe(null); // Verbraucher freigeben, sonst wartet er ewig
+        return;
+      }
+      if (daten?.length) s.schiebe(daten);
+      if (fertig) s.schiebe(null);
+    };
+    verbraucher.push(
+      ausStrom(s.stroeme(), bbox, bericht).then((teil) => {
+        gefunden.push(...teil);
+      }),
+    );
+    eintrag.start();
+  };
+
+  const strom = fs.createReadStream(datei, { highWaterMark: 4 * 1024 * 1024 });
+  for await (const stueck of strom as AsyncIterable<Buffer>) {
+    entpacker.push(new Uint8Array(stueck.buffer, stueck.byteOffset, stueck.byteLength), false);
+    if (zipFehler) break;
+    // Gegendruck: erst weiterlesen, wenn der Parser aufgeholt hat (~4 MB Puffer)
+    if (schlange) await (schlange as ByteSchlange).freierPlatz(64);
+  }
+  entpacker.push(new Uint8Array(0), true);
+  await Promise.all(verbraucher);
+  if (zipFehler) throw zipFehler;
+  return gefunden;
+}
+
+/**
+ * ZIP-Download in den Plattencache (data/cache/lod2/) — streamend geschrieben.
+ * Der Dateiname kommt aus der URL OHNE das Tagesdatum des Downloadcenter-Pfads,
+ * darum trifft ein erneuter Import desselben Kreises den Cache.
+ */
+async function zipInCache(url: string, userAgent: string): Promise<string> {
+  const name = decodeURIComponent(path.basename(new URL(url).pathname)) || 'lod2.zip';
+  const ziel = cache.pfad('lod2', name);
+  if (fs.existsSync(ziel) && fs.statSync(ziel).size > 1024) return ziel;
+  const res = await fetch(url, { headers: { 'User-Agent': userAgent } });
+  if (!res.ok || !res.body) throw new Error(`LoD2-Download fehlgeschlagen: HTTP ${res.status}`);
+  fs.mkdirSync(path.dirname(ziel), { recursive: true });
+  const tmp = `${ziel}.tmp`;
+  await pipeline(Readable.fromWeb(res.body as never), fs.createWriteStream(tmp));
+  fs.renameSync(tmp, ziel);
+  return ziel;
 }
 
 export interface Lod2Quelle {
@@ -291,22 +489,8 @@ export async function gebaeudeFuerGebiet(
   if (quelle.art === 'datei') {
     const datei = quelle.datei!;
     if (/\.zip$/i.test(datei)) {
-      // ZIP komplett lesen ist bei 159 MB vertretbar; die entpackten GML-Teile
-      // werden einzeln als Text durch den Streamparser geschickt.
-      const eintraege = unzipSync(new Uint8Array(fs.readFileSync(datei)));
-      const gefunden: GelaendeGebaeude[] = [];
-      for (const [name, daten] of Object.entries(eintraege)) {
-        if (!/\.(gml|xml)$/i.test(name)) continue;
-        const teil = await ausStrom(
-          (async function* () {
-            yield Buffer.from(daten);
-          })(),
-          bbox,
-          opts.bericht,
-        );
-        gefunden.push(...teil);
-      }
-      return { gebaeude: gefunden, quelle };
+      const gebaeude = await ausZipDatei(datei, bbox, opts.bericht);
+      return { gebaeude, quelle };
     }
     const strom = fs.createReadStream(datei, { highWaterMark: 4 * 1024 * 1024 });
     const gebaeude = await ausStrom(strom as unknown as AsyncIterable<Uint8Array>, bbox, opts.bericht);
@@ -314,24 +498,20 @@ export async function gebaeudeFuerGebiet(
   }
 
   const k = geoKonfig(opts.land ?? 'hessen');
+  if (/\.zip$/i.test(quelle.url!)) {
+    const zipPfad = await zipInCache(quelle.url!, k.geokodierung.userAgent);
+    const gebaeude = await ausZipDatei(zipPfad, bbox, opts.bericht);
+    return { gebaeude, quelle };
+  }
   const res = await fetch(quelle.url!, { headers: { 'User-Agent': k.geokodierung.userAgent } });
   if (!res.ok || !res.body) throw new Error(`LoD2-Download fehlgeschlagen: HTTP ${res.status}`);
-  const istZip = (res.headers.get('content-type') ?? '').includes('zip') || /\.zip$/i.test(quelle.url!);
-  if (istZip) {
-    const eintraege = unzipSync(new Uint8Array(await res.arrayBuffer()));
-    const gefunden: GelaendeGebaeude[] = [];
-    for (const [name, daten] of Object.entries(eintraege)) {
-      if (!/\.(gml|xml)$/i.test(name)) continue;
-      const teil = await ausStrom(
-        (async function* () {
-          yield Buffer.from(daten);
-        })(),
-        bbox,
-        opts.bericht,
-      );
-      gefunden.push(...teil);
-    }
-    return { gebaeude: gefunden, quelle };
+  if ((res.headers.get('content-type') ?? '').includes('zip')) {
+    // URL ohne .zip-Endung, Antwort trotzdem ein Archiv: erst auf Platte, dann streamend entpacken.
+    const ziel = cache.pfad('lod2', 'lod2-download.zip');
+    fs.mkdirSync(path.dirname(ziel), { recursive: true });
+    await pipeline(Readable.fromWeb(res.body as never), fs.createWriteStream(ziel));
+    const gebaeude = await ausZipDatei(ziel, bbox, opts.bericht);
+    return { gebaeude, quelle };
   }
   const gebaeude = await ausStrom(Readable.fromWeb(res.body as never) as unknown as AsyncIterable<Uint8Array>, bbox, opts.bericht);
   return { gebaeude, quelle };

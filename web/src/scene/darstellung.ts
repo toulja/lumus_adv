@@ -24,6 +24,7 @@ import { grundriss, masseVon, zugaengeWelt, bezeichnung } from '@shared/domain/o
 import { aufPolylinie, kreisRing, polylinieLaenge, wegKorridor, schwerpunkt, norm, sub, lot } from '@shared/geo/geometry';
 import { nachWgs } from '@shared/geo/proj';
 import type { Hoehenlage } from './gelaende.ts';
+import { verdichteRing } from './gelaende.ts';
 
 export const FARBEN = {
   gebaeude: Cesium.Color.fromCssColorString('#c3cfda'),
@@ -56,11 +57,58 @@ function prisma(ring: Ring, basis: number, oben: number): Cesium.PolygonGeometry
   });
 }
 
+/**
+ * HOEHENLAGE DER PLANOBJEKTE (Revision 08.08.2026).
+ *
+ * DER GESAMTE STAPEL, von unten nach oben — jede Zahl hat einen Eigentuemer:
+ *   0,020-0,092  Bodenzeichnung je Klasse   (palette.FLAECHEN_STIL, rang x 2 mm)
+ *   0,098        Auflagen (Zebra, Bahnsteig, Wasserbecken)   stadt.ts
+ *   0,100        Sockel aller Verkehrskoerper  verkehr.BODEN_STAPEL_M
+ *   0,112        Rillenschiene (buendig im Belag)             verkehr.ts
+ *   0,120/0,160  Gleisbett / Schwellen                        verkehr.GLEIS_HOEHE
+ *   0,250        Schienenkopf auf eigenem Bahnkoerper          verkehr.GLEIS_HOEHE
+ *   0,300+       PLANOBJEKTE — diese Datei
+ *
+ * Die erste Fassung dieser Revision hob die Planobjekte nur auf 0,102-0,12 m
+ * und kollidierte damit exakt mit Rillenschiene (0,112) und Gleisbett (0,120):
+ * ein Rettungsweg ueber eine Tramstrecke waere weiter zerschnitten worden.
+ * Planobjekte sind die FIGUR des Plans und liegen darum ueber ALLEM, was der
+ * Bestand am Boden zeichnet — auch ueber dem Schienenkopf.
+ */
+/*
+ * REVISION 09.08.2026 — von 0,30 m auf 0,05 m.
+ *
+ * Die alten Werte stammen aus der Zeit, in der jede Bauteilgruppe ihren
+ * eigenen pauschalen Sockel brauchte (Boden bis 0,092 / Verkehr 0,100 /
+ * Plan 0,300). Seit die Flaechen echte Konstruktionshoehen tragen und alles
+ * `hoehen.bauOben()` fragt, ist dieser Aufschlag falsch: Ein Rettungsweg
+ * schwebte damit 30 cm ueber dem Gehweg, auf dem er liegen soll.
+ *
+ * WARUM NICHT NULL: Planflaeche und Bodenzeichnung sind zwei getrennt
+ * vernetzte Flaechen. Beide bekommen ihre Hoehen nur an ihren eigenen
+ * Stuetzpunkten (alle 2 m) und werden dazwischen linear gespannt — auf
+ * gewoelbtem Gelaende laufen sie um einige Zentimeter auseinander. Bei 4 mm
+ * Versatz verschwand das Gleisband streckenweise unter der Fahrbahn
+ * (nachgemessen); 5 cm liegen sicher darueber und bleiben unter der
+ * Bordsteinhoehe von 12 cm, stossen also durch keine Kante.
+ */
+const PLAN_BLOCKFLAECHE_M = 0.05;
+const PLAN_STATION_POLYGON_M = 0.052;
+const PLAN_STATION_SCHEIBE_M = 0.056;
+const PLAN_WEG_M = 0.06;
+const PLAN_WEG_LINIE_M = 0.066;
+const PLAN_WEG_PFEIL_M = 0.07;
+const PLAN_BEANSTANDUNG_M = 0.08;
+
 /** Flaeche, die dem Gelaende folgt (Wege, Blockflaechen). */
 function bodenFlaeche(ring: Ring, hoehen: Hoehenlage, ueberGrund: number): Cesium.PolygonGeometry {
-  const punkte = ring.map((p) => {
+  // Verdichten vor dem Drapieren — sonst laeuft eine lange Kante als Sehne
+  // unter der Gelaendekuppe hindurch (Begruendung bei verdichteRing).
+  // Planobjekte folgen der GEBAUTEN Oberflaeche, nicht dem nackten Gelaende:
+  // Ein Rettungsweg, der einen 12 cm hohen Gehweg quert, laege sonst darin.
+  const punkte = verdichteRing(ring).map((p) => {
     const [lon, lat] = nachWgs(p);
-    return Cesium.Cartesian3.fromDegrees(lon, lat, hoehen.bei(p[0], p[1]) + ueberGrund);
+    return Cesium.Cartesian3.fromDegrees(lon, lat, hoehen.bauOben(p[0], p[1]) + ueberGrund);
   });
   return new Cesium.PolygonGeometry({
     polygonHierarchy: new Cesium.PolygonHierarchy(punkte),
@@ -204,7 +252,7 @@ export function baueWege(wege: Weg[], hoehen: Hoehenlage, auswahl: Set<string>):
       try {
         flaechen.push(
           new Cesium.GeometryInstance({
-            geometry: bodenFlaeche(ring, hoehen, 0.06),
+            geometry: bodenFlaeche(ring, hoehen, PLAN_WEG_M),
             id: `weg:${w.id}`,
             attributes: farbAttribut(farbe.withAlpha(gewaehlt ? 0.5 : 0.32)),
           }),
@@ -219,7 +267,7 @@ export function baueWege(wege: Weg[], hoehen: Hoehenlage, auswahl: Set<string>):
         geometry: new Cesium.PolylineGeometry({
           positions: w.polylinie.map((p) => {
             const [lon, lat] = nachWgs(p);
-            return Cesium.Cartesian3.fromDegrees(lon, lat, hoehen.bei(p[0], p[1]) + 0.12);
+            return Cesium.Cartesian3.fromDegrees(lon, lat, hoehen.bei(p[0], p[1]) + PLAN_WEG_LINIE_M);
           }),
           width: gewaehlt ? 4 : 2,
           vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
@@ -240,7 +288,7 @@ export function baueWege(wege: Weg[], hoehen: Hoehenlage, auswahl: Set<string>):
             geometry: new Cesium.PolylineGeometry({
               positions: pfeil(p, r, Math.min(2.4, w.breite * 0.5)).map((q) => {
                 const [lon, lat] = nachWgs(q);
-                return Cesium.Cartesian3.fromDegrees(lon, lat, hoehen.bei(q[0], q[1]) + 0.14);
+                return Cesium.Cartesian3.fromDegrees(lon, lat, hoehen.bei(q[0], q[1]) + PLAN_WEG_PFEIL_M);
               }),
               width: 3,
               vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
@@ -295,7 +343,7 @@ export function baueBlockflaechen(flaechen: Blockflaeche[], hoehen: Hoehenlage, 
     try {
       inst.push(
         new Cesium.GeometryInstance({
-          geometry: bodenFlaeche(b.polygon, hoehen, 0.04),
+          geometry: bodenFlaeche(b.polygon, hoehen, PLAN_BLOCKFLAECHE_M),
           id: `blockflaeche:${b.id}`,
           attributes: farbAttribut(farbe.withAlpha(auswahl.has(b.id) ? 0.42 : 0.26)),
         }),
@@ -342,7 +390,7 @@ export function baueStationen(stationen: Einsatzstation[], hoehen: Hoehenlage, a
     try {
       inst.push(
         new Cesium.GeometryInstance({
-          geometry: bodenFlaeche(kreisRing(punkt, s.polygon ? 6 : 4, 24), hoehen, 0.08),
+          geometry: bodenFlaeche(kreisRing(punkt, s.polygon ? 6 : 4, 24), hoehen, PLAN_STATION_SCHEIBE_M),
           id: `einsatzstation:${s.id}`,
           attributes: farbAttribut(farbe.withAlpha(auswahl.has(s.id) ? 0.65 : 0.42)),
         }),
@@ -369,7 +417,7 @@ export function baueStationen(stationen: Einsatzstation[], hoehen: Hoehenlage, a
       try {
         inst.push(
           new Cesium.GeometryInstance({
-            geometry: bodenFlaeche(s.polygon, hoehen, 0.05),
+            geometry: bodenFlaeche(s.polygon, hoehen, PLAN_STATION_POLYGON_M),
             id: `einsatzstation:${s.id}`,
             attributes: farbAttribut(farbe.withAlpha(0.22)),
           }),
@@ -489,7 +537,7 @@ export function baueBeanstandungen(ergebnisse: Pruefergebnis[], hoehen: Hoehenla
       try {
         flaechen.push(
           new Cesium.GeometryInstance({
-            geometry: bodenFlaeche(e.geometrie, hoehen, 0.15),
+            geometry: bodenFlaeche(e.geometrie, hoehen, PLAN_BEANSTANDUNG_M),
             attributes: farbAttribut(farbe.withAlpha(0.3)),
           }),
         );

@@ -15,75 +15,46 @@
  */
 
 import * as Cesium from 'cesium';
-import type { FlaechenArt, Gelaende, GelaendeFlaeche, Ring } from '@shared/domain/types';
+import type { FlaechenArt, Gelaende, GelaendeFlaeche, GelaendeLinienObjekt, Ring } from '@shared/domain/types';
 import { nachWgs } from '@shared/geo/proj';
 import type { Hoehenlage } from './gelaende.ts';
+import { verdichteRing } from './gelaende.ts';
+import {
+  FLAECHEN_STIL,
+  GEBAEUDE_STIL,
+  KONTUR_VERSATZ_M,
+  PLATTE_STIL,
+  gebaeudeVariante,
+  pruefePalette,
+  stilFuer,
+} from './palette.ts';
 
 // ---------------------------------------------------------------------------
-// Palette: ein Graustufen-Geruest mit sparsam eingesetzter Farbe.
-// Die Abstufung traegt die Information, nicht der Farbton.
+// Palette: EINZIGE Quelle ist palette.ts (CIELAB-konstruiert, mit
+// Selbstpruefung). Diese Datei haelt keine eigenen Farbwerte mehr — die
+// frueher hier gepflegte Zweitpalette ist genau der Grund gewesen, warum
+// Dokumentation und Bild auseinanderliefen.
 // ---------------------------------------------------------------------------
 
-/**
- * Palette nach docs/KARTENDESIGN.md, Abschnitt 5.4.
- *
- * Entscheidung HELLER GRUND — bewusst gegen die urspruengliche dunkle Fassung:
- * Alle untersuchten Referenzsysteme (basemap.de, OSM Carto, CARTO Positron)
- * legen ihr gesamtes Flaechenband zwischen L* 76 und 97. Der Grund ist nicht
- * Geschmack, sondern Arbeitsteilung: Ein Planungswerkzeug traegt farbige
- * Planobjekte — Rettungswege, Sperrflaechen, Staende, Fahrgeschaefte. Die
- * muessen herausstechen. Auf einem dunklen Grund konkurrieren sie mit dem
- * Untergrund; auf hellem Grund bleibt der gesamte Bereich L* < 65 bei hoher
- * Buntheit fuer sie reserviert und ist damit unverwechselbar.
- *
- * Alle Werte sind in CIELAB konstruiert, damit die Helligkeitsabstaende
- * belastbar sind. Die Tabelle nennt L* und den geforderten Mindestabstand.
- *
- *   Fahrbahn (OSM-Decker)   L* 97   #f5f6f8
- *   Platz / Fussgaengerzone L* 94   #ebefec
- *   Bauflaeche (Grundton)   L* 92   #ebe8e3
- *   Gehweg                  L* 90   #e1e2e5
- *   Strassenraum (Platte)   L* 88   #dadddf
- *   Gruenflaeche            L* 87   #d0dec7
- *   Radweg                  L* 86   #cfd8e2   (kuehler Stich b* -6)
- *   Wasser                  L* 82   #b9cfdc
- *   Wald                    L* 76   #adc2a1
- *   Hauptkontur             L* 58   #8b8b8d   (Abstand zur Fahrbahn 39 L*)
- *   Nebenkontur             L* 70   #aaabad
- *   Bahn                    L* 45   #6a6b6c
- */
-export const BODEN_FARBE: Record<FlaechenArt, string> = {
-  // Bauflaechen HELL, nicht dunkel.
-  //
-  // ALKIS weist jedem Quadratmeter eine Nutzung zu; die Grundstuecke der
-  // Randbebauung reichen bis in Plaetze hinein. Ein dunkler Ton stanzt dadurch
-  // Loecher in jede offene Flaeche — am Friedensplatz nachgemessen: zwischen
-  // den hellen Platzfeldern lagen dunkle Bauflaechen-Felder, obwohl der Belag
-  // dort derselbe ist. Die Figur-Grund-Trennung leisten die GEBAEUDE (hell,
-  // aufragend, mit Schatten), nicht eingefaerbte Grundstuecke. Dunkel ist
-  // allein das Strassennetz — wie in jeder guten Stadtkarte.
-  bebauung: '#c0bab2',
-  sonstige: '#bcb6ae',
-  landwirtschaft: '#a9b48d',
-  gruen: '#93a886',
-  wald: '#7d9270', // gleiche Farbtonrichtung wie Gruen, nur staerker (5.5)
-  wasser: '#7fa3ba',
-  bahn: '#8a8b8f',
-  fahrbahn: '#93989d', // heller Decker — die eigentliche Fahrbahn
-  platz: '#cbcdc9',
-  fussgaengerzone: '#cbcdc9',
-  weg: '#bfb8ae',
-  radweg: '#9fb0bd',
-  gehweg: '#c6c9cc',
-  treppe: '#c9ccce',
-};
+// Die Selbstpruefung laeuft einmal beim Laden: reisst eine spaetere
+// Farbaenderung einen der belegten Mindestabstaende, steht es in der Konsole
+// statt still im Bild.
+{
+  const selbst = pruefePalette();
+  if (!selbst.ok) console.warn('[Palette] Selbstpruefung fehlgeschlagen:', selbst.befunde);
+}
+
+/** Fuellfarben je Flaechenart — abgeleitet aus palette.FLAECHEN_STIL. */
+export const BODEN_FARBE: Record<FlaechenArt, string> = Object.fromEntries(
+  (Object.keys(FLAECHEN_STIL) as FlaechenArt[]).map((art) => [art, FLAECHEN_STIL[art].fuellung]),
+) as Record<FlaechenArt, string>;
 
 /**
  * ALKIS fuehrt den GESAMTEN Strassenraum als eine Flaeche (Gehweg, Parkstreifen
  * und Bankett eingeschlossen). Er ist die Buehne, nicht die Fahrbahn — und
  * bekommt darum einen eigenen, ruhigeren Ton als der OSM-Decker darueber.
  */
-export const PLATTE_FARBE = '#a5a9ad';
+export const PLATTE_FARBE = PLATTE_STIL.fuellung;
 
 /**
  * Belagsabhaengige Tonwertverschiebung in Prozent.
@@ -119,48 +90,20 @@ export function tonVerschieben(farbe: Cesium.Color, anteil: number): Cesium.Colo
   return new Cesium.Color(m(farbe.red), m(farbe.green), m(farbe.blue), farbe.alpha);
 }
 
-/**
- * Konturen. Nur ZWEI Stufen fuer das ganze Netz (Vorbild basemap.de: ein
- * einziger Konturton fuer alle Strassenklassen) — mehr Stufen erzeugen genau
- * die Unruhe, die der Auftraggeber als "bunte Masse" bemaengelt hat.
- */
-export const KONTUR = {
-  haupt: '#4e5153', // Fahrbahn, Platz, Fussgaengerzone
-  neben: '#5c6063', // Gehweg, Radweg, Weg, Treppe
-  gruen: '#5f6b57', // Gruenflaechen und Wald
-  keine: null as string | null,
-};
-
-/** Welche Klasse bekommt welche Kontur? */
-export const KONTUR_FUER: Record<FlaechenArt, keyof typeof KONTUR> = {
-  fahrbahn: 'haupt',
-  platz: 'haupt',
-  fussgaengerzone: 'haupt',
-  gehweg: 'neben',
-  radweg: 'neben',
-  weg: 'neben',
-  treppe: 'neben',
-  gruen: 'gruen',
-  wald: 'gruen',
-  wasser: 'neben',
-  bahn: 'haupt',
-  bebauung: 'keine',
-  landwirtschaft: 'keine',
-  sonstige: 'keine',
-};
-
 export const GEBAEUDE_FARBE = {
   /**
    * Wand L* 80, Dach L* 70 — der Abstand von 10 L* ist die untere Grenze, ab
    * der die Dachform ohne Licht lesbar bleibt; die Sonne erzeugt den Rest.
    * Das Dach ist zugleich leicht waermer als die Wand (Ziegel- statt Putzton).
    */
-  wand: Cesium.Color.fromCssColorString('#c8c6c4'),
-  dach: Cesium.Color.fromCssColorString('#b2aaa4'),
-  ersatzWand: Cesium.Color.fromCssColorString('#cbc9c7'),
-  ersatzDach: Cesium.Color.fromCssColorString('#b6aea8'),
+  wand: Cesium.Color.fromCssColorString(GEBAEUDE_STIL.wand),
+  dach: Cesium.Color.fromCssColorString(GEBAEUDE_STIL.dach),
+  /** Sockelband am Gebaeudefuss — AO-Ersatz genau dort, wo Haus auf Boden trifft. */
+  sockel: Cesium.Color.fromCssColorString(GEBAEUDE_STIL.sockel),
+  /** First- und Gratlinie — trennt die Dachflaechen auch bei gleicher Beleuchtung. */
+  dachFirst: GEBAEUDE_STIL.dachFirst,
   /** Kante: die 3D-Entsprechung der Strassenkontur (KARTENDESIGN 4.1). */
-  kante: '#8e8a86',
+  kante: GEBAEUDE_STIL.kante,
 };
 
 /**
@@ -214,8 +157,10 @@ export function insBasisband(farbe: Cesium.Color, zielHelligkeit = 0.72, maxSaet
   const hell = (max + min) / 2;
   const spanne = max - min;
   if (spanne < 1e-6) {
-    // Grauton: nur die Helligkeit angleichen
-    const v = hell * 0.35 + zielHelligkeit * 0.65;
+    // Grauton: nur die Helligkeit angleichen — mit DERSELBEN Klemme wie der
+    // Bunt-Zweig. Ohne sie fiel roof:colour=black auf v=0,43 und riss ganze
+    // Gebaeudekomplexe aus dem Basisband (Befund 08.08.2026).
+    const v = Math.max(0.55, Math.min(0.86, hell * 0.4 + zielHelligkeit * 0.6));
     return new Cesium.Color(v, v, v, farbe.alpha);
   }
   const saettigung = hell > 0.5 ? spanne / (2 - max - min) : spanne / (max + min);
@@ -269,16 +214,16 @@ export function dachTonFuer(g: {
 
   // Ohne Attribut entscheidet die Geometrie: ein First deutlich ueber der
   // Traufe ist ein geneigtes Dach — das ist eine Messung, keine Annahme.
-  const aufbau = (g.firstHoehe ?? 0) - (g.traufHoehe ?? 0);
+  // NUR wenn BEIDE Hoehen vorliegen: die Felder sind ABSOLUT (m ue. NHN,
+  // Darmstadt ~150) — mit ??0 kippte ein fehlendes Feld die Klassifikation
+  // deterministisch auf immer-ziegel bzw. immer-flach.
+  if (g.firstHoehe === undefined || g.traufHoehe === undefined) return waehle(DACH_TON.flach);
+  const aufbau = g.firstHoehe - g.traufHoehe;
   return aufbau > 0.5 ? waehle(DACH_TON.ziegel) : waehle(DACH_TON.flach);
 }
 
-/**
- * Hintergrund. Heller, leicht kuehler Ton — er darf nicht mit den Flaechen
- * konkurrieren, aber ein schwarzer Himmel liesse die helle Stadt wie einen
- * ausgeschnittenen Zettel wirken.
- */
-export const HIMMEL = '#cfd9e2';
+/** Hintergrund — direkt aus der Palette (dort begruendet und geprueft). */
+export { HIMMEL } from './palette.ts';
 
 // ---------------------------------------------------------------------------
 // Dreieckszerlegung ebener Flaechen im Raum
@@ -347,6 +292,13 @@ function zerlege(ring: P3[]): [number, number, number][] {
     const d3 = kreuz(c, a, p);
     return d1 >= -1e-12 && d2 >= -1e-12 && d3 >= -1e-12;
   };
+  // Toleranz auf DATENGENAUIGKEIT (CityGML/ALKIS runden auf mm, unsere Ringe
+  // auf cm): die beiden Kopien eines Beruehrpunkts duerfen sich um Rundung
+  // unterscheiden. Die alte 1e-9-Schwelle verfehlte reale Fast-Duplikate um
+  // sechs Groessenordnungen — der Ohrenschnitt blockierte und der
+  // Faecher-Fallback warf Bogenbaender ueber grosse Karree-Daecher.
+  const deckungsgleich = (p: [number, number], q: [number, number]) =>
+    Math.abs(p[0] - q[0]) < 2e-3 && Math.abs(p[1] - q[1]) < 2e-3;
 
   while (uebrig.length > 3 && schutz++ < 5000) {
     let geschnitten = false;
@@ -361,7 +313,16 @@ function zerlege(ring: P3[]): [number, number, number][] {
       let frei = true;
       for (const k of uebrig) {
         if (k === ia || k === ib || k === ic) continue;
-        if (drin(a, b, c, flach[k])) {
+        const p = flach[k];
+        // SELBSTBERUEHRENDE RINGE (Karree mit Innenhof): CityGML kodiert das
+        // Hofloch oft als Schleife im selben Ring — Eckpunkte kommen dann
+        // DOPPELT vor. Ein deckungsgleicher Punkt darf ein Ohr nicht
+        // blockieren, sonst findet der Schnitt nie ein Ohr und der
+        // Faecher-Fallback wirft Zacken quer ueber den Innenhof
+        // (Befund Staatsarchiv-Karree, 08.08.2026: Flaeche 4.626 statt
+        // 2.528,5 m2; mit dieser Ausnahme exakt und Hof bleibt offen).
+        if (deckungsgleich(p, a) || deckungsgleich(p, b) || deckungsgleich(p, c)) continue;
+        if (drin(a, b, c, p)) {
           frei = false;
           break;
         }
@@ -475,16 +436,16 @@ class FarbSammler {
  * Gezeichnet werden nur DACHkanten. Wandkanten waeren doppelt (jede Wand
  * grenzt an eine andere) und wuerden das Bild zusetzen.
  */
-export function baueGebaeudeKanten(gelaende: Gelaende, farbe = GEBAEUDE_FARBE.kante, breitePx = 1.3): Cesium.Primitive | null {
+export function baueGebaeudeKanten(gelaende: Gelaende, farbe = GEBAEUDE_FARBE.kante, breitePx = 1.3): Cesium.Primitive[] {
   const inst: Cesium.GeometryInstance[] = [];
   const c = Cesium.Color.fromCssColorString(farbe);
+  const cFirst = Cesium.Color.fromCssColorString(GEBAEUDE_FARBE.dachFirst);
   for (const g of gelaende.gebaeude) {
     if (g.grundriss.length < 3) continue;
-    // NUR der Gebaeudeumriss auf Traufhoehe.
-    // Zuvor wurde jede einzelne Dachteilflaeche umrandet — bei vielen kleinen
-    // Facetten ergab das eine Schraffur, die das Modell zusetzte statt es zu
-    // gliedern. Die Kante soll das Gebaeude vom Nachbarn trennen, nicht seine
-    // Dreieckszerlegung zeigen.
+    // Der Gebaeudeumriss auf Traufhoehe.
+    // Jede einzelne Dachteilflaeche zu umranden ergab eine Schraffur, die das
+    // Modell zusetzte statt es zu gliedern. Die Kante soll das Gebaeude vom
+    // Nachbarn trennen, nicht seine Dreieckszerlegung zeigen.
     const oben = g.traufHoehe ?? g.firstHoehe ?? g.bodenHoehe + 6;
     const pos = g.grundriss.map((p) => {
       const [lon, lat] = nachWgs(p);
@@ -498,21 +459,67 @@ export function baueGebaeudeKanten(gelaende: Gelaende, farbe = GEBAEUDE_FARBE.ka
           width: breitePx,
           vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
         }),
-        attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(c) },
+        attributes: {
+          color: Cesium.ColorGeometryInstanceAttribute.fromColor(c),
+          // Fern ausblenden: aus der Distanz verdichten sich die Kanten aller
+          // Gebaeude zu einer Schraffur, die das Bild zusetzt (Befund
+          // 08.08.2026, "Gebaeude sehen falsch aus"). Nah tragen sie die
+          // Lesbarkeit, fern traegt sie die Dachfarbe.
+          distanceDisplayCondition: new Cesium.DistanceDisplayConditionGeometryInstanceAttribute(0, 1200),
+        },
+      }),
+    );
+
+    // First- und Gratlinien — NUR die Kanten oberhalb der Traufe. Sie trennen
+    // die Dachflaechen eines Sattel-/Walm-/Zeltdachs auch dann, wenn beide
+    // zufaellig gleich beleuchtet sind (palette.GEBAEUDE_STIL.dachFirst).
+    // Kanten AN der Traufe zeichnet schon der Umriss; die 0,4-m-Schwelle
+    // haelt sie heraus.
+    if (g.dachflaechen?.length && g.traufHoehe !== undefined) {
+      const schwelle = g.traufHoehe + 0.4;
+      for (const flaeche of g.dachflaechen) {
+        for (let i = 0, j = flaeche.length - 1; i < flaeche.length; j = i++) {
+          const a = flaeche[j];
+          const b = flaeche[i];
+          if (a[2] < schwelle || b[2] < schwelle) continue;
+          const [lonA, latA] = nachWgs([a[0], a[1]]);
+          const [lonB, latB] = nachWgs([b[0], b[1]]);
+          inst.push(
+            new Cesium.GeometryInstance({
+              geometry: new Cesium.PolylineGeometry({
+                positions: [
+                  Cesium.Cartesian3.fromDegrees(lonA, latA, a[2] + 0.05),
+                  Cesium.Cartesian3.fromDegrees(lonB, latB, b[2] + 0.05),
+                ],
+                width: 1.0,
+                vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
+              }),
+              attributes: {
+                color: Cesium.ColorGeometryInstanceAttribute.fromColor(cFirst),
+                // Firste/Grate sind Nahbereichs-Detail — fern nur Schraffur.
+                distanceDisplayCondition: new Cesium.DistanceDisplayConditionGeometryInstanceAttribute(0, 700),
+              },
+            }),
+          );
+        }
+      }
+    }
+  }
+  // In Bloecken buendeln und ALLE zurueckgeben — die fruehere Fassung baute
+  // die Bloecke auf, gab aber nur die ersten 9.000 Instanzen zurueck; ab dem
+  // 9.001. Gebaeude fehlten die Kanten stillschweigend.
+  const prims: Cesium.Primitive[] = [];
+  const BLOCK = 3000;
+  for (let i = 0; i < inst.length; i += BLOCK) {
+    prims.push(
+      new Cesium.Primitive({
+        geometryInstances: inst.slice(i, i + BLOCK),
+        appearance: new Cesium.PolylineColorAppearance({ translucent: false }),
+        asynchronous: false,
       }),
     );
   }
-  if (!inst.length) return null;
-  const BLOCK = 3000;
-  const prims: Cesium.GeometryInstance[][] = [];
-  for (let i = 0; i < inst.length; i += BLOCK) prims.push(inst.slice(i, i + BLOCK));
-  // Cesium erlaubt nur EIN Primitive je Rueckgabe — bei mehr als BLOCK
-  // Gebaeuden wird zusammengefasst; die Zahl ist gross genug fuer 1 km2.
-  return new Cesium.Primitive({
-    geometryInstances: inst.slice(0, BLOCK * 3),
-    appearance: new Cesium.PolylineColorAppearance({ translucent: false }),
-    asynchronous: false,
-  });
+  return prims;
 }
 
 /**
@@ -558,7 +565,12 @@ export function baueGeschossbaender(gelaende: Gelaende, farbe = '#00000022'): Ce
             width: 1.0,
             vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
           }),
-          attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(c) },
+          attributes: {
+            color: Cesium.ColorGeometryInstanceAttribute.fromColor(c),
+            // Geschossbaender sind Fassaden-Nahdetail: aus der Ferne werden
+            // sie zur Schraffur, die ganze Quartiere schmutzig wirken laesst.
+            distanceDisplayCondition: new Cesium.DistanceDisplayConditionGeometryInstanceAttribute(0, 450),
+          },
         }),
       );
     }
@@ -587,6 +599,20 @@ export function baueStadt(gelaende: Gelaende): { prims: Cesium.Primitive[]; mitD
     imBuendel = 0;
   };
 
+  // Wandvarianten: 5 eng benachbarte Stufen (Spanne 4 L*), deterministisch aus
+  // der Gebaeude-ID — Materialkoernung statt weisser Einheitsmasse, ohne als
+  // Klassenunterschied zu lesen (Begruendung in palette.GEBAEUDE_VARIANTEN).
+  const wandCache = new Map<string, Cesium.Color>();
+  const wandVariante = (id: string) => {
+    const hex = gebaeudeVariante(id);
+    let c = wandCache.get(hex);
+    if (!c) {
+      c = Cesium.Color.fromCssColorString(hex);
+      wandCache.set(hex, c);
+    }
+    return c;
+  };
+
   for (const g of gelaende.gebaeude) {
     const dachFarbe = dachTonFuer(g);
     const wandFarbe = g.wandFarbe
@@ -594,10 +620,10 @@ export function baueStadt(gelaende: Gelaende): { prims: Cesium.Primitive[]; mitD
           try {
             return insBasisband(Cesium.Color.fromCssColorString(g.wandFarbe!), 0.78, 0.14);
           } catch {
-            return GEBAEUDE_FARBE.wand;
+            return wandVariante(g.id);
           }
         })()
-      : GEBAEUDE_FARBE.wand;
+      : wandVariante(g.id);
 
     const hatEcht = (g.dachflaechen?.length ?? 0) > 0;
     if (hatEcht) {
@@ -608,6 +634,8 @@ export function baueStadt(gelaende: Gelaende): { prims: Cesium.Primitive[]; mitD
       // ein Spalt, durch den man ins unbeleuchtete Innere sah — das waren die
       // dunklen Flecken rund um die Baukoerper. Ein 4 m tiefer Sockel schliesst
       // den Spalt zuverlaessig und liegt sonst unsichtbar im Boden.
+      // FARBE: das dunklere Sockelband der Palette (18 L* unter der Wand) —
+      // der guenstige AO-Ersatz genau dort, wo Haus auf Boden trifft.
       if (g.grundriss.length >= 3) {
         const ring = g.grundriss;
         const oben = g.bodenHoehe + 0.2;
@@ -620,7 +648,7 @@ export function baueStadt(gelaende: Gelaende): { prims: Cesium.Primitive[]; mitD
               [ring[i][0], ring[i][1], oben],
               [ring[j][0], ring[j][1], oben],
             ],
-            wandFarbe,
+            GEBAEUDE_FARBE.sockel,
           );
         }
       }
@@ -669,9 +697,14 @@ export function baueBodenzeichnung(
   hoehen: Hoehenlage,
   nurArten?: Set<FlaechenArt>,
 ): Cesium.Primitive[] {
+  // Reihenfolge aus der PALETTE, nicht aus dem gespeicherten Rang: die
+  // Rangskala der Palette ist die einzige, die zur Hoehenstaffel passt. Der
+  // gespeicherte Rang bleibt Feinsortierung INNERHALB einer Klasse — er traegt
+  // die Bruecken-Zuschlaege und hebt Auflagen (Zebra) ueber ihre Fahrbahn.
+  const stilVon = (f: GelaendeFlaeche) => stilFuer(f.art, f.quelle === 'alkis' ? 'alkis' : 'osm');
   const sortiert = [...flaechen]
     .filter((f) => !nurArten || nurArten.has(f.art))
-    .sort((a, b) => a.rang - b.rang);
+    .sort((a, b) => stilVon(a).rang - stilVon(b).rang || a.rang - b.rang);
 
   // WICHTIG: Bodenflaechen werden mit Cesiums PolygonGeometry gebaut, nicht mit
   // der eigenen Dreieckszerlegung. Grund: Nach der Vereinigung je Klasse ist
@@ -685,24 +718,56 @@ export function baueBodenzeichnung(
     if (f.polygon.length < 3) continue;
 
     // ALKIS liefert den gesamten Strassenraum als Buehne, OSM die Fahrbahn
-    // darauf. Beide tragen die Art "fahrbahn" — die Quelle entscheidet ueber
-    // die Rolle und damit ueber den Ton (KARTENDESIGN 5.2).
-    const istPlatte = f.art === 'fahrbahn' && f.quelle === 'alkis';
-    const ton = istPlatte ? PLATTE_FARBE : (BODEN_FARBE[f.art] ?? BODEN_FARBE.sonstige);
-    const farbe = tonVerschieben(Cesium.Color.fromCssColorString(ton), BELAG_TON[f.belag ?? ''] ?? 0);
-    // EINE Hoehe fuer alle Bodenflaechen — mit EINER Ausnahme.
-    // Nach der ueberschneidungsfreien Aufteilung liegt an keiner Stelle mehr
-    // als eine Bodenflaeche; der alte Hoehenstapel ist ueberfluessig.
-    // AUSNAHME sind aufgemalte Markierungen (Zebrastreifen) und Bahnsteige:
-    // sie sind bewusst KEINE Bodenklassen, sondern liegen als Auflage AUF dem
-    // Boden — auf gleicher Hoehe wuerden sie mit ihm um jeden Pixel kaempfen.
-    const istAuflage = f.belag === 'zebra' || f.belag === 'bahnsteig';
-    const versatz = istAuflage ? 0.07 : 0.03;
+    // darauf. Beide tragen die Art "fahrbahn" — stilFuer() loest das auf und
+    // liefert fuer die ALKIS-Geometrie die ruhige PLATTE (KARTENDESIGN 5.2).
+    const stil = stilVon(f);
+    const farbe = tonVerschieben(Cesium.Color.fromCssColorString(stil.fuellung), BELAG_TON[f.belag ?? ''] ?? 0);
+    // Hoehenstaffel JE KLASSE (rang x 2 mm aus der Palette) statt einer
+    // Einheitshoehe. Die Aufteilung ist zwar ueberschneidungsfrei GEDACHT,
+    // aber die Import-Rueckfallwege duerfen bewusst doppelt zeichnen ("die
+    // amtliche Basis ist die Wahrheit, ein Loch waere schlimmer") — mit einer
+    // Einheitshoehe flimmert genau dann jede dieser Stellen. Die Staffel macht
+    // die Darstellung gegen jede Restueberlappung robust.
+    // Auflagen (Zebrastreifen, Bahnsteige, Brunnenbecken) liegen als oberste
+    // Schicht AUF dem Boden: ueber der hoechsten Klassenstufe (treppe, 9,2 cm).
+    const istAuflage = f.belag === 'zebra' || f.belag === 'bahnsteig' || f.belag === 'wasserbecken';
+    // KONSTRUKTIONSHOEHE STATT MILLIMETER-STAPEL (Bauwerksmodell, Stufe 2).
+    //
+    // Liegt eine Konstruktionshoehe an der Flaeche, ist SIE die Hoehe: der
+    // Gehweg liegt dann 12 cm ueber der Fahrbahn, weil er gebaut ist, nicht
+    // weil eine Rangstufe ihn anhebt. Die alte Staffel (rang x 2 mm) bleibt
+    // als Rueckfallweg fuer Gelaende ohne Bauklassen erhalten — dort hat sie
+    // ihren Zweck: Restueberlappungen der Import-Notwege nicht flimmern zu
+    // lassen. Bei echten Hoehen erledigt sich das von selbst, weil die
+    // Flaechen dann gar nicht mehr koplanar sind.
+    //
+    // Auflagen (Zebrastreifen, Bahnsteige, Brunnenbecken) liegen AUF ihrer
+    // Wirtsflaeche: deren Bauhoehe plus 6 mm. Ein fester Wert waere hier
+    // falsch — ein Zebrastreifen auf einem 12 cm hohen Platz laege sonst
+    // darunter.
+    const konstruktion = f.konstruktionM;
+    const versatz =
+      konstruktion !== undefined
+        ? konstruktion + (istAuflage ? 0.006 : 0)
+        : istAuflage
+          ? 0.098
+          : stil.hoehenversatzM;
 
+    // RUHENDES WASSER WIRD ALS EBENE GEZEICHNET, nicht drapiert. Der Spiegel
+    // steht an der Flaeche (Import, wasserEinebnen). Ohne ihn bekaeme die
+    // Oberflaeche ihre Hoehen von den UFERPUNKTEN, und zwischen zwei
+    // verschieden hohen Ufern haengt die Flaeche durch — im Grossen Woog um bis
+    // zu 20 cm, worauf der eingeebnete Seegrund als heller Zacken durchstach.
+    const hoeheAn =
+      f.wasserspiegelM != null ? () => f.wasserspiegelM as number : (e: number, n: number) => hoehen.bei(e, n);
+
+    // VERDICHTEN vor dem Drapieren: ohne Zwischenpunkte laeuft eine lange
+    // Flaechenkante als Sehne unter der Gelaendekuppe hindurch und der Boden
+    // stoesst mitten in der Flaeche durch (Begruendung bei verdichteRing).
     const nachWelt = (ring: Ring) =>
-      ring.map((p) => {
+      verdichteRing(ring).map((p) => {
         const [lon, lat] = nachWgs(p);
-        return Cesium.Cartesian3.fromDegrees(lon, lat, hoehen.bei(p[0], p[1]) + versatz);
+        return Cesium.Cartesian3.fromDegrees(lon, lat, hoeheAn(p[0], p[1]) + versatz);
       });
 
     try {
@@ -727,17 +792,25 @@ export function baueBodenzeichnung(
 
     // --- Kontur ------------------------------------------------------------
     // Die Massnahme gegen "die Strassen sind nicht zu erkennen": eine duenne,
-    // BILDSCHIRMFESTE Linie am Rand. Bildschirmfest heisst, sie bleibt beim
-    // Herauszoomen sichtbar, waehrend eine in Metern gedachte Kontur
-    // verschwaende (KARTENDESIGN 1.1 und 5.1).
-    const konturStufe = istPlatte ? 'keine' : KONTUR_FUER[f.art];
-    const konturTon = KONTUR[konturStufe];
-    if (konturTon) {
-      const c = Cesium.Color.fromCssColorString(konturTon);
-      const breitePx = konturStufe === 'haupt' ? 1.7 : 1.2;
+    // BILDSCHIRMFESTE Linie am Rand (KARTENDESIGN 1.1: die Kontur ist eine
+    // Pixelgroesse und skaliert beim Zoomen nicht mit). Farbe und Gewicht je
+    // Klasse kommen aus der Palette; die Meterbreite der Palette wird auf die
+    // dort geforderten 0,7-1,6 px abgebildet (x4: 0,20 m -> 0,8 px usw.).
+    // Die Kontur liegt KONTUR_VERSATZ_M UNTER ihrer Fuellung: wo zwei Klassen
+    // aneinanderstossen, deckt die hoehere Fuellung die fremde Kontur ab und
+    // die Wege "fliessen" durcheinander statt sich zu zerschneiden.
+    if (stil.kontur && !istAuflage) {
+      const c = Cesium.Color.fromCssColorString(stil.kontur);
+      const breitePx = Math.max(0.7, Math.min(1.6, (stil.konturBreiteM ?? 0.25) * 4));
+      const konturVersatz = versatz + KONTUR_VERSATZ_M;
+      const nachWeltKontur = (ring: Ring) =>
+        verdichteRing(ring).map((p) => {
+          const [lon, lat] = nachWgs(p);
+          return Cesium.Cartesian3.fromDegrees(lon, lat, hoeheAn(p[0], p[1]) + konturVersatz);
+        });
       for (const ring of [f.polygon, ...(f.loecher ?? [])]) {
         if (ring.length < 3) continue;
-        const pos = nachWelt(ring);
+        const pos = nachWeltKontur(ring);
         pos.push(pos[0]);
         konturen.push(
           new Cesium.GeometryInstance({
@@ -776,6 +849,120 @@ export function baueBodenzeichnung(
     );
   }
   return prims;
+}
+
+// ---------------------------------------------------------------------------
+// Fahrbahnmarkierungen und Flaechen-Beschriftung
+// ---------------------------------------------------------------------------
+
+/** Leitlinie innerorts nach StVO-Praxis: 3 m Strich, 6 m Luecke. */
+const STRICH_M = 3;
+const TAKT_M = 9;
+/** Knapp ueber dem Fahrbahn-Decker (0,084), unter Radweg-Auflage (0,088). */
+const MARKIERUNG_VERSATZ_M = 0.086;
+/**
+ * Real sind Leitlinien weiss — auf unserem HELLEN Fahrbahn-Decker (L* 96,9)
+ * waere Weiss aber unsichtbar. Die amtliche Referenz loest es genauso:
+ * basemap.de zeichnet `Mittellinie_ausser_Autobahn` in rgb(153,153,153) auf
+ * der weissen Fahrbahn (KARTENDESIGN 2.5).
+ */
+const MARKIERUNG_FARBE = '#999999';
+
+/**
+ * Fahrbahnmarkierungen aus den beim Import geretteten Markierungslinien
+ * (Leitlinie fuer Hauptstrassen, Spurtrennstriche wo OSM die Spurenzahl
+ * kennt — der Versatz je Spur ist serverseitig bereits gerechnet). Die
+ * Striche folgen der 3/6-m-Taktung realer Leitlinien.
+ */
+export function baueFahrbahnmarkierungen(linien: GelaendeLinienObjekt[], hoehen: Hoehenlage): Cesium.Primitive[] {
+  const farbe = Cesium.Color.fromCssColorString(MARKIERUNG_FARBE);
+  const inst: Cesium.GeometryInstance[] = [];
+
+  const striche = (achse: Ring) => {
+    // Kumulierte Laengen fuer Punkt-bei-Station
+    const laengen = [0];
+    for (let i = 1; i < achse.length; i++) {
+      laengen.push(laengen[i - 1] + Math.hypot(achse[i][0] - achse[i - 1][0], achse[i][1] - achse[i - 1][1]));
+    }
+    const gesamt = laengen[laengen.length - 1];
+    const punktBei = (s: number): Ring[number] => {
+      let i = 1;
+      while (i < laengen.length - 1 && laengen[i] < s) i++;
+      const t = (s - laengen[i - 1]) / Math.max(1e-9, laengen[i] - laengen[i - 1]);
+      return [
+        achse[i - 1][0] + (achse[i][0] - achse[i - 1][0]) * t,
+        achse[i - 1][1] + (achse[i][1] - achse[i - 1][1]) * t,
+      ];
+    };
+    // Erst ab 6 m Strassenlaenge lohnt ein Strich
+    for (let s = TAKT_M / 2; s + STRICH_M < gesamt; s += TAKT_M) {
+      const a = punktBei(s);
+      const b = punktBei(s + STRICH_M);
+      const [lonA, latA] = nachWgs(a);
+      const [lonB, latB] = nachWgs(b);
+      inst.push(
+        new Cesium.GeometryInstance({
+          geometry: new Cesium.PolylineGeometry({
+            positions: [
+              Cesium.Cartesian3.fromDegrees(lonA, latA, hoehen.bei(a[0], a[1]) + MARKIERUNG_VERSATZ_M),
+              Cesium.Cartesian3.fromDegrees(lonB, latB, hoehen.bei(b[0], b[1]) + MARKIERUNG_VERSATZ_M),
+            ],
+            width: 1.4,
+            vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
+          }),
+          attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(farbe) },
+        }),
+      );
+    }
+  };
+
+  for (const l of linien) {
+    if (l.art !== 'markierung' || l.achse.length < 2) continue;
+    striche(l.achse);
+  }
+
+  const prims: Cesium.Primitive[] = [];
+  for (let i = 0; i < inst.length; i += 3000) {
+    prims.push(
+      new Cesium.Primitive({
+        geometryInstances: inst.slice(i, i + 3000),
+        appearance: new Cesium.PolylineColorAppearance({ translucent: false }),
+        asynchronous: false,
+      }),
+    );
+  }
+  return prims;
+}
+
+/**
+ * Beschriftungspunkte der Karte („P" auf Parkplaetzen) — beim Import VOR der
+ * Flaechen-Vereinigung gewonnen, weil die Union Einzelflaechen samt
+ * Bezeichnung verschmilzt.
+ */
+export function baueBeschriftungen(
+  beschriftungen: NonNullable<Gelaende['beschriftungen']>,
+  hoehen: Hoehenlage,
+): Cesium.LabelCollection | null {
+  const sammlung = new Cesium.LabelCollection();
+  for (const b of beschriftungen) {
+    const [lon, lat] = nachWgs(b.pos);
+    sammlung.add({
+      position: Cesium.Cartesian3.fromDegrees(lon, lat, hoehen.bei(b.pos[0], b.pos[1]) + 1.2),
+      text: b.text,
+      // Blau wie das reale Zeichen 314, aber entsaettigt unter dem
+      // Planobjekt-Reservat der Palette.
+      font: '700 14px system-ui, sans-serif',
+      fillColor: Cesium.Color.fromCssColorString('#35598c'),
+      outlineColor: Cesium.Color.WHITE,
+      outlineWidth: 3,
+      style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+      verticalOrigin: Cesium.VerticalOrigin.CENTER,
+      horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+      scaleByDistance: new Cesium.NearFarScalar(80, 1.1, 900, 0.5),
+      translucencyByDistance: new Cesium.NearFarScalar(500, 1.0, 1500, 0.0),
+    });
+  }
+  return sammlung.length ? sammlung : null;
 }
 
 /** Zaehlt die Flaechen je Art — fuer die Legende in der Oberflaeche. */

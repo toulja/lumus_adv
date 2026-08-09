@@ -20,6 +20,7 @@ const EBENEN_LABEL: Record<keyof Ebenen, string> = {
   luftbild: 'Luftbild',
   flurstuecke: 'Flurstücke',
   gelaende: 'Gelände',
+  schatten: 'Schlagschatten',
 };
 
 const EBENEN_REIHE: (keyof Ebenen)[] = [
@@ -32,6 +33,7 @@ const EBENEN_REIHE: (keyof Ebenen)[] = [
   'luftbild',
   'flurstuecke',
   'gelaende',
+  'schatten',
 ];
 
 const RASTER: { wert: 0 | 0.1 | 0.5 | 1; label: string }[] = [

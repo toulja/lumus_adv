@@ -10,16 +10,59 @@
  */
 
 import polygonClipping from 'polygon-clipping';
-import type { BBox, Gelaende, GelaendeFlaeche, GelaendePatch, Quellennachweis, Ring } from '../../shared/domain/types.ts';
-import { HoehenFeld, aufPolylinie, bboxFlaeche, bboxRing, bboxVonPunkten, polylinieLaenge, punktInRing, ringNormalisieren, schwerpunkt } from '../../shared/geo/geometry.ts';
+import type { BBox, Bruchkante, Gelaende, GelaendeFlaeche, GelaendeLinienObjekt, GelaendePatch, Punkt, Quellennachweis, Ring } from '../../shared/domain/types.ts';
+import { HoehenFeld, aufPolylinie, bboxFlaeche, bboxRing, bboxVonPunkten, flaeche, polylinieLaenge, punktInRing, ringNormalisieren, schwerpunkt } from '../../shared/geo/geometry.ts';
 import type { Stuetzpunkt } from '../../shared/geo/geometry.ts';
-import { gelaende as gelaendeStore, id, jetzt } from '../lib/store.ts';
+import { Hoehenraster } from '../../shared/geo/raster.ts';
+import { kachelHuelle, kachelnAmRaster } from '../../shared/geo/gelaendenetz.ts';
+import { gelaende as gelaendeStore, id, jetzt, WURZEL as DATEN_WURZEL } from '../lib/store.ts';
 import { geoKonfig } from './konfig.ts';
 import * as lod2 from './lod2.ts';
 import * as alkis from './alkis.ts';
+import * as dgm from './dgm.ts';
+import * as bauwerk from './bauwerk.ts';
 import { orthophoto } from './wms.ts';
 
 export const MAX_GEBIET_M2 = 2_000_000; // Lastenheft F1.1: max. 2 km2
+
+/**
+ * Zellgroesse des Hoehenrasters. 1 m ist die Aufloesung des amtlichen DGM1 —
+ * feiner waere erfunden, groeber waere das Wegwerfen amtlicher Genauigkeit,
+ * und genau das war der Fehler bis zum 08.08.2026.
+ */
+const RASTER_ZELL_M = 1;
+
+/**
+ * Zuschlag rundum. Die Stadtdetails reichen 50 m ueber das Gebiet hinaus
+ * (RAND_M in stadtdetails.ts); ohne denselben Zuschlag stuende ein Baum am
+ * Gebietsrand auf einem Ersatzwert.
+ */
+const RASTER_RAND_M = 60;
+
+/** Kachelkante. 256 m = Zweierpotenz mal Rasterweite (siehe gelaendenetz.ts). */
+const KACHEL_M = 256;
+
+/**
+ * Zulaessige Abweichung des gezeichneten Gelaendenetzes vom Raster.
+ *
+ * 2 cm (seit 09.08.2026, vorher 8 cm). Die Toleranz ist keine reine
+ * Geschmacksfrage, sie hat eine harte Untergrenze: die Bodenflaechen liegen
+ * gestaffelt 2,0 bis 9,2 cm ueber Grund. Ist die Netztoleranz GROESSER als der
+ * Versatz einer Klasse, sticht das vereinfachte Gelaende durch genau diese
+ * Flaechen — bei 8 cm sichtbar als heller Keil im Grossen Woog, dessen
+ * Wasserflaeche 4 cm Versatz hat. 2 cm liegt unter dem kleinsten Versatz und
+ * schliesst den ganzen Fehlerfall aus, statt ihn je Klasse nachzubessern.
+ *
+ * ACHTUNG: Dieser Wert ist beim Zusammenfuehren zweier Arbeitsstaende schon
+ * einmal still auf 0,08 zurueckgefallen, waehrend diese Begruendung stehen
+ * blieb. Wer ihn aendert, aendert auch den Text darueber — sonst widersprechen
+ * sich Zahl und Grund.
+ */
+const NETZ_TOLERANZ_M = 0.02;
+
+function datenWurzel(): string {
+  return DATEN_WURZEL;
+}
 
 export interface ImportAuftrag {
   id: string;
@@ -292,7 +335,13 @@ const WIRT: Record<string, string[]> = {
   // --- Fahrbahn: streng -----------------------------------------------------
   // Eine Fahrbahn gehoert in den Verkehrsraum. Bliebe sie ungebunden, wuerde
   // eine falsch erfasste OSM-Strasse Asphalt quer durch eine Gruenanlage legen.
-  fahrbahn: ['fahrbahn', 'platz', 'fussgaengerzone', 'weg', 'sonstige'],
+  // 'bebauung' ist hier aus DEMSELBEN Grund enthalten wie bei den Gehwegen
+  // (Messung unten): die ALKIS-Strassenparzelle ist vielerorts schmaler als
+  // die asphaltierte Flaeche — ohne Bauflaechen-Wirt riss der Fahrbahn-Decker
+  // mitten im Strassenzug ab und die Strasse wechselte scheinbar die Farbe
+  // (Befund 08.08.2026). Die Achsenbindung der Korridore verhindert weiterhin,
+  // dass eine falsch erfasste Strasse quer durch eine Gruenanlage laeuft.
+  fahrbahn: ['fahrbahn', 'platz', 'fussgaengerzone', 'weg', 'bebauung', 'sonstige'],
 
   // --- Fusswege, Radwege, Treppen: weit ------------------------------------
   // GEMESSEN am Pilotgebiet (736 OSM-Gehwegflaechen, Schwerpunkt gegen die
@@ -472,71 +521,63 @@ function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
   flaechen: GelaendeFlaeche[];
   bericht: { basis: number; verfeinert: number; verworfen: number };
 } {
-  const alsGeom = (f: GelaendeFlaeche) => [
-    geschlossenerRing(f.polygon),
-    ...(f.loecher ?? []).map(geschlossenerRing),
-  ];
-  /**
-   * Vereinigt eine Klasse — BLOCKWEISE und ausfallsicher.
-   *
-   * polygon-clipping bricht bei mehreren hundert komplexen Geometrien in einem
-   * Aufruf ab (nachgestellt: 736 Gehwegbaender -> Absturz). Der frueher hier
-   * stehende Notweg reichte dann die ROHgeometrie weiter; die anschliessende
-   * Verschneidung arbeitete auf einer nicht vereinigten Eingabe und loeschte
-   * die Klasse praktisch aus — von 5,48 ha Gehweg blieben 0,30 ha uebrig.
-   *
-   * Darum: in kleinen Bloecken vereinigen, jeden Block einzeln absichern und
-   * einen gescheiterten Block als Einzelgeometrien behalten, statt ihn zu
-   * verlieren. Das gilt fuer jede Stadt — die Blockgroesse ist der einzige
-   * Regler, nicht die Ortskenntnis.
-   */
-  const vereinige = (liste: GelaendeFlaeche[]): number[][][][] => {
-    if (!liste.length) return [];
-    const g = liste.map(alsGeom);
-    if (g.length === 1) return g as never;
-    const BLOCK = 60;
-    let acc: number[][][][] = [];
-    for (let i = 0; i < g.length; i += BLOCK) {
-      const blk = g.slice(i, i + BLOCK);
-      let teil: number[][][][];
-      try {
-        teil = polygonClipping.union(blk[0] as never, ...(blk.slice(1) as never[])) as never;
-      } catch {
-        // Block nicht vereinigbar: Einzelgeometrien behalten
-        teil = blk as never;
-      }
-      if (!acc.length) {
-        acc = teil;
-        continue;
-      }
-      try {
-        acc = polygonClipping.union(acc as never, teil as never) as never;
-      } catch {
-        // Zusammenfuehrung gescheitert: anhaengen statt verwerfen
-        acc = [...acc, ...teil];
-      }
+  // LOKALER URSPRUNG — der Schluessel zur Robustheit.
+  //
+  // polygon-clipping arbeitet mit einer Sweep-Line auf Fliesskomma. Bei den
+  // grossen UTM-Koordinaten (Rechtswert ~475.000, Hochwert ~5.524.000) bleibt
+  // nach der Ganzzahl kaum Mantisse fuer die Schnittrechnung; die Bibliothek
+  // bricht dann mit "Unable to find segment in SweepLine tree" ab. Nachgestellt:
+  // 640 Fahrbahnen in einem Aufruf -> Absturz mit grossen Koordinaten, aber
+  // fehlerfrei, sobald man alles um den Gebietsursprung nach ~0 verschiebt.
+  //
+  // Darum: ALLE Koordinaten vor jeder Clipping-Operation um O verschieben und
+  // die Ergebnisse zurueckschieben. Das beseitigt die Abbrueche vollstaendig —
+  // es braucht keine Bloecke und keine Rohgeometrie-Notwege mehr, die frueher
+  // die 17 % Ueberlappung erzeugt haben. Der Ursprung ist die kleinste Ecke
+  // aller Flaechen, gilt also fuer jede Stadt.
+  let ox = Infinity;
+  let oy = Infinity;
+  for (const f of flaechen) {
+    for (const p of f.polygon) {
+      if (p[0] < ox) ox = p[0];
+      if (p[1] < oy) oy = p[1];
     }
-    return acc;
+  }
+  if (!Number.isFinite(ox)) {
+    ox = 0;
+    oy = 0;
+  }
+
+  const alsGeom = (f: GelaendeFlaeche): number[][][] =>
+    [geschlossenerRing(f.polygon), ...(f.loecher ?? []).map(geschlossenerRing)].map((r) =>
+      r.map((p) => [p[0] - ox, p[1] - oy]),
+    );
+
+  // Vereinigung einer Liste von POLYGONEN (je Flaeche ein Polygon mit Loechern)
+  const vereinige = (liste: GelaendeFlaeche[]): number[][][][] => {
+    const polys = liste.map(alsGeom);
+    if (!polys.length) return [];
+    if (polys.length === 1) return polys as never;
+    return polygonClipping.union(polys[0] as never, ...(polys.slice(1) as never[])) as never;
+  };
+  // Vereinigung mehrerer MULTIPOLYGONE (Wirtsraum, belegte Flaeche)
+  const vereinigeMP = (mps: number[][][][][]): number[][][][] => {
+    const nn = mps.filter((m) => m.length);
+    if (!nn.length) return [];
+    if (nn.length === 1) return nn[0];
+    return polygonClipping.union(nn[0] as never, ...(nn.slice(1) as never[])) as never;
   };
 
-  /** Verschneiden und Abziehen ebenfalls absichern — gleiche Ausfallursache. */
   const schneide = (a: number[][][][], b: number[][][][]): number[][][][] => {
     if (!a.length || !b.length) return [];
-    try {
-      return polygonClipping.intersection(a as never, b as never) as never;
-    } catch {
-      return a;
-    }
+    return polygonClipping.intersection(a as never, b as never) as never;
   };
   const ziehAb = (a: number[][][][], b: number[][][][]): number[][][][] => {
     if (!a.length) return [];
     if (!b.length) return a;
-    try {
-      return polygonClipping.difference(a as never, b as never) as never;
-    } catch {
-      return a;
-    }
+    return polygonClipping.difference(a as never, b as never) as never;
   };
+
   const zuFlaechen = (
     geom: number[][][][],
     vorlage: GelaendeFlaeche,
@@ -546,7 +587,10 @@ function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
     const out: GelaendeFlaeche[] = [];
     let nr = 0;
     for (const poly of geom) {
-      const ringe = (poly as unknown as Ring[]).map(ringNormalisieren).filter((r) => r.length >= 3);
+      // Ringe zuruueck in Weltkoordinaten schieben
+      const ringe = (poly as unknown as Ring[])
+        .map((r) => ringNormalisieren(r.map((p) => [p[0] + ox, p[1] + oy] as [number, number])))
+        .filter((r) => r.length >= 3);
       if (!ringe.length) continue;
       out.push({
         id: `${praefix}_${nr++}`,
@@ -578,7 +622,15 @@ function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
   }
 
   const basisGeom = new Map<string, number[][][][]>();
-  for (const [art, liste] of alkisNach) basisGeom.set(art, vereinige(liste));
+  for (const [art, liste] of alkisNach) {
+    try {
+      basisGeom.set(art, vereinige(liste));
+    } catch {
+      // Verschiebung macht das praktisch unmoeglich; falls doch, die
+      // Einzelgeometrien behalten (gleiche Klasse -> Selbstueberlapp harmlos).
+      basisGeom.set(art, liste.map(alsGeom) as never);
+    }
+  }
 
   // --- 2. OSM-Verfeinerungen ----------------------------------------------
   const ergebnis: GelaendeFlaeche[] = [];
@@ -604,34 +656,38 @@ function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
       verworfen += liste.length;
       continue;
     }
-    let wirtsraum: number[][][][] = wirtsTeile[0];
-    for (let i = 1; i < wirtsTeile.length; i++) {
-      try {
-        wirtsraum = polygonClipping.union(wirtsraum as never, wirtsTeile[i] as never) as never;
-      } catch {
-        wirtsraum = [...wirtsraum, ...wirtsTeile[i]];
-      }
-    }
-
-    // AUF den Wirtsraum beschneiden — hier greift die Regel
-    let geom = schneide(vereinige(liste), wirtsraum);
-    geom = ziehAb(geom, belegt);
-    if (!geom.length) continue;
-
-    const neue = zuFlaechen(geom, liste[0], art, `osm_${art}`);
-    ergebnis.push(...neue);
-    verfeinert += neue.length;
     try {
-      belegt = belegt.length ? (polygonClipping.union(belegt as never, geom as never) as never) : geom;
+      // Wirtsraum aus den zulaessigen amtlichen Klassen (bereits verschoben)
+      const wirtsraum = vereinigeMP(wirtsTeile);
+      // AUF den Wirtsraum beschneiden — hier greift die Regel
+      let geom = schneide(vereinige(liste), wirtsraum);
+      geom = ziehAb(geom, belegt);
+      if (!geom.length) continue;
+
+      const neue = zuFlaechen(geom, liste[0], art, `osm_${art}`);
+      ergebnis.push(...neue);
+      verfeinert += neue.length;
+      belegt = belegt.length ? vereinigeMP([belegt, geom]) : geom;
     } catch {
-      /* Akkumulator behalten */
+      // Diese OSM-Klasse laesst sich nicht sauber verschneiden -> verwerfen.
+      // Der Boden bleibt vollstaendig: die amtliche Basis fuellt die Stelle in
+      // Schritt 3. Lieber ein Detail weniger als eine Ueberlappung.
+      verworfen += liste.length;
     }
   }
 
   // --- 3. Amtlicher Rest ---------------------------------------------------
   let basis = 0;
   for (const [art, geom] of basisGeom) {
-    const rest = ziehAb(geom, belegt);
+    let rest: number[][][][];
+    try {
+      rest = ziehAb(geom, belegt);
+    } catch {
+      // Abzug gescheitert: die volle amtliche Klasse zeichnen. Sie kann sich
+      // dann mit einer Verfeinerung ueberlappen — aber die amtliche Basis ist
+      // die Wahrheit, ein Loch waere schlimmer als eine Doppelzeichnung.
+      rest = geom;
+    }
     if (!rest.length) continue;
     const neue = zuFlaechen(rest, alkisNach.get(art)![0], art, `alkis_${art}`);
     ergebnis.push(...neue);
@@ -639,6 +695,257 @@ function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
   }
 
   return { flaechen: ergebnis, bericht: { basis, verfeinert, verworfen } };
+}
+
+/**
+ * Ebnet Gewaesser im Hoehenmodell ein (Hydro-Flattening).
+ *
+ * WARUM DAS SEIN MUSS: Ein Laserscanner bekommt von einer Wasseroberflaeche
+ * kaum ein Echo zurueck. Was das DGM1 innerhalb eines Sees fuehrt, ist darum
+ * nicht gemessen, sondern interpoliert — im Grossen Woog schwankt es um 1,83 m
+ * und steigt stellenweise 1,1 m ueber das Ufer. Gezeichnet ergab das eine
+ * weisse Erhebung mitten im See; das Luftbild zeigt dort offenes Wasser
+ * (nachgeprueft 09.08.2026).
+ *
+ * Ein See hat EINEN Spiegel, ein Bach ein GEFAELLE. Beides liefert dieselbe
+ * Rechnung: durch das untere Drittel der Uferpunkte wird eine Ebene
+ * h = a*e + b*n + c ausgeglichen. Beim ruhenden Gewaesser wird ihre Neigung von
+ * allein null, beim Wasserlauf folgt sie dem Gefaelle. Das untere Drittel,
+ * weil die hohen Uferpunkte zu Mauern, Bruecken und Boeschungsoberkanten
+ * gehoeren — nicht zum Wasser.
+ *
+ * Ueber 5 % Neigung wird NICHT eingeebnet: dann ist die Ausgleichung an einer
+ * Boeschung haengengeblieben, und geraten wird hier nicht.
+ *
+ * Es ist bewusst das HOEHENMODELL, das korrigiert wird, und nicht die
+ * Darstellung: Gebaeude, Baeume, Planobjekte und jede spaetere Simulation
+ * fragen dieselbe Oberflaeche ab. Eine nur gezeichnete Wasserflaeche waere
+ * wieder eine zweite Wahrheit.
+ */
+function wasserEinebnen(raster: Hoehenraster, flaechen: GelaendeFlaeche[]): { gewaesser: number; zellen: number; verworfen: number } {
+  const k = raster.kopf;
+  let gewaesser = 0;
+  let zellen = 0;
+  let verworfen = 0;
+  for (const f of flaechen) {
+    if (f.art !== 'wasser' || f.polygon.length < 3) continue;
+    const mE = f.polygon.reduce((s, p) => s + p[0], 0) / f.polygon.length;
+    const mN = f.polygon.reduce((s, p) => s + p[1], 0) / f.polygon.length;
+    const punkte = f.polygon
+      .map((p) => ({ e: p[0] - mE, n: p[1] - mN, h: raster.hoeheBei(p[0], p[1]) }))
+      .filter((p) => Number.isFinite(p.h));
+    if (punkte.length < 3) continue;
+    const ufer = [...punkte].sort((x, y) => x.h - y.h).slice(0, Math.max(3, Math.ceil(punkte.length / 3)));
+
+    // STEHENDES GEWAESSER ODER WASSERLAUF? Die Antwort steht in der Form.
+    // Gedrungenheit 4*pi*A/U^2: Kreis 1, langgestreckter Streifen gegen 0. Ein
+    // See ist waagerecht — bekaeme er die ausgeglichene Ebene, wuerde deren
+    // Restneigung ihn kippen (gemessen am Grossen Woog: 93 cm Unterschied ueber
+    // 250 m Seebreite, also erneut Gelaende im Wasser). Nur ein Wasserlauf
+    // bekommt Gefaelle.
+    let umfang = 0;
+    for (let i = 0; i < f.polygon.length; i++) {
+      const p = f.polygon[i];
+      const q = f.polygon[(i + 1) % f.polygon.length];
+      umfang += Math.hypot(q[0] - p[0], q[1] - p[1]);
+    }
+    const gedrungen = umfang > 0 ? (4 * Math.PI * Math.abs(flaeche(f.polygon))) / (umfang * umfang) : 1;
+    const istWasserlauf = gedrungen < 0.15;
+
+    let see = 0;
+    let snn = 0;
+    let sen = 0;
+    let se = 0;
+    let sn = 0;
+    let sh = 0;
+    let seh = 0;
+    let snh = 0;
+    for (const p of ufer) {
+      see += p.e * p.e;
+      snn += p.n * p.n;
+      sen += p.e * p.n;
+      se += p.e;
+      sn += p.n;
+      sh += p.h;
+      seh += p.e * p.h;
+      snh += p.n * p.h;
+    }
+    const m = ufer.length;
+    const det = see * (snn * m - sn * sn) - sen * (sen * m - sn * se) + se * (sen * sn - snn * se);
+    let spiegel: (e: number, n: number) => number;
+    if (!istWasserlauf) {
+      // Waagerecht auf das untere Viertel des Ufers — die Wasserlinie. Sie wird
+      // an der Flaeche vermerkt, damit die Zeichnung dieselbe Ebene benutzt und
+      // die Wasseroberflaeche nicht aus schwankenden Uferhoehen interpoliert.
+      const sortiert = punkte.map((p) => p.h).sort((x, y) => x - y);
+      const wasserlinie = sortiert[Math.floor(sortiert.length * 0.25)];
+      spiegel = () => wasserlinie;
+      f.wasserspiegelM = Math.round(wasserlinie * 1000) / 1000;
+    } else if (!Number.isFinite(det) || Math.abs(det) < 1e-6) {
+      // Kollineare oder zu wenige Uferpunkte: waagerecht auf den Medianwert.
+      const mitte = ufer[Math.floor(ufer.length / 2)].h;
+      spiegel = () => mitte;
+    } else {
+      const a = (seh * (snn * m - sn * sn) - sen * (snh * m - sn * sh) + se * (snh * sn - snn * sh)) / det;
+      const b = (see * (snh * m - sn * sh) - seh * (sen * m - sn * se) + se * (sen * sh - snh * se)) / det;
+      const c = (see * (snn * sh - sn * snh) - sen * (sen * sh - se * snh) + seh * (sen * sn - snn * se)) / det;
+      if (![a, b, c].every(Number.isFinite) || Math.hypot(a, b) > 0.05) {
+        verworfen++;
+        continue;
+      }
+      spiegel = (e, n) => a * (e - mE) + b * (n - mN) + c;
+    }
+
+    const es = f.polygon.map((p) => p[0]);
+    const ns = f.polygon.map((p) => p[1]);
+    const s0 = Math.max(0, Math.floor((Math.min(...es) - k.minE) / k.zellM));
+    const s1 = Math.min(k.spalten - 1, Math.ceil((Math.max(...es) - k.minE) / k.zellM));
+    const z0 = Math.max(0, Math.floor((Math.min(...ns) - k.minN) / k.zellM));
+    const z1 = Math.min(k.zeilen - 1, Math.ceil((Math.max(...ns) - k.minN) / k.zellM));
+    let gesetzt = 0;
+    for (let z = z0; z <= z1; z++) {
+      for (let s = s0; s <= s1; s++) {
+        const [e, n] = raster.zellMitte(s, z);
+        if (!punktInRing([e, n], f.polygon)) continue;
+        if ((f.loecher ?? []).some((l) => punktInRing([e, n], l))) continue;
+        raster.setze(s, z, spiegel(e, n));
+        gesetzt++;
+      }
+    }
+    if (gesetzt) {
+      gewaesser++;
+      zellen += gesetzt;
+    }
+  }
+  return { gewaesser, zellen, verworfen };
+}
+
+/**
+ * Schneidet die Bodenflaechen am bestellten Gebiet ab.
+ *
+ * WARUM (Befund 09.08.2026): ALKIS und OSM liefern GANZE Objekte, sobald sie das
+ * Gebiet auch nur beruehren. Eine Bundesstrasse, die am Rand hereinragt, kam
+ * dadurch in voller Laenge mit — gemessen bis 863 m ueber die Gebietskante
+ * hinaus. Dort gibt es kein Gelaende mehr, also lagen diese Flaechen auf der
+ * Ersatzhoehe und standen als schwebende helle Baender in der Luft.
+ *
+ * Flaechen werden geschnitten, GEBAEUDE NICHT: eine Strasse ist eine
+ * Oberflaeche und darf an der Gebietskante enden, ein Gebaeude ist ein Objekt —
+ * halbiert waere es eine Falschaussage. Ueberstehende Gebaeude bleiben darum
+ * ganz und stehen auf dem Gelaendesaum, der jetzt echte Hoehen hat.
+ */
+function amGebietSchneiden(flaechen: GelaendeFlaeche[], gebiet: BBox): GelaendeFlaeche[] {
+  const rechteck: [number, number][][] = [
+    [
+      [gebiet.minE, gebiet.minN],
+      [gebiet.maxE, gebiet.minN],
+      [gebiet.maxE, gebiet.maxN],
+      [gebiet.minE, gebiet.maxN],
+      [gebiet.minE, gebiet.minN],
+    ],
+  ];
+  const drin = (r: Ring) => r.every((p) => p[0] >= gebiet.minE && p[0] <= gebiet.maxE && p[1] >= gebiet.minN && p[1] <= gebiet.maxN);
+  const raus: GelaendeFlaeche[] = [];
+  for (const f of flaechen) {
+    if (drin(f.polygon) && (f.loecher ?? []).every(drin)) {
+      raus.push(f);
+      continue;
+    }
+    let teile: number[][][][];
+    try {
+      teile = polygonClipping.intersection(
+        [[geschlossenerRing(f.polygon), ...(f.loecher ?? []).map(geschlossenerRing)] as [number, number][][]],
+        rechteck,
+      ) as unknown as number[][][][];
+    } catch {
+      // Die Sweep-Line scheitert an entarteten Ringen. Dann lieber das Objekt
+      // ungeschnitten behalten als es verlieren — es steht im Saum, nicht im Gebiet.
+      raus.push(f);
+      continue;
+    }
+    let nr = 0;
+    for (const teil of teile) {
+      // OFFENE RINGE: polygon-clipping gibt Ringe GESCHLOSSEN zurueck (letzter
+      // Punkt gleich erstem), der Rest der Kette erwartet sie offen. Bleibt der
+      // Doppelpunkt stehen, baut Cesiums Ohrenschnitt daraus entartete Dreiecke
+      // — sichtbar als helle Zacken, die in die Flaeche stechen (aufgetreten am
+      // Grossen Woog, 09.08.2026). ringNormalisieren entfernt Doppelpunkte und
+      // den Schluss.
+      const aussen = ringNormalisieren(teil[0] as Ring);
+      if (aussen.length < 3) continue;
+      const loecher = teil.slice(1).map((l) => ringNormalisieren(l as Ring)).filter((l) => l.length >= 3);
+      raus.push({
+        ...f,
+        id: nr === 0 ? f.id : `${f.id}#${nr}`,
+        polygon: aussen,
+        loecher: loecher.length ? loecher : undefined,
+      });
+      nr++;
+    }
+  }
+  return raus;
+}
+
+/**
+ * Schneidet Linienobjekte (Gleise, Markierungen, Mauern) am Gebiet ab.
+ * Gleiche Begruendung wie bei den Flaechen — nur muss eine Linie dabei in
+ * mehrere Stuecke zerfallen duerfen.
+ */
+function linienAmGebietSchneiden(linien: GelaendeLinienObjekt[], gebiet: BBox): GelaendeLinienObjekt[] {
+  const drin = (p: Punkt) => p[0] >= gebiet.minE && p[0] <= gebiet.maxE && p[1] >= gebiet.minN && p[1] <= gebiet.maxN;
+  // Schnittpunkt der Strecke a->b mit der Gebietskante (parametrisch, Liang-Barsky
+  // auf einen einzelnen Ein- bzw. Austritt reduziert).
+  const kante = (a: Punkt, b: Punkt): Punkt => {
+    let t0 = 0;
+    let t1 = 1;
+    const dE = b[0] - a[0];
+    const dN = b[1] - a[1];
+    const pruefe = (p: number, q: number) => {
+      if (Math.abs(p) < 1e-12) return q >= 0;
+      const r = q / p;
+      if (p < 0) {
+        if (r > t1) return false;
+        if (r > t0) t0 = r;
+      } else {
+        if (r < t0) return false;
+        if (r < t1) t1 = r;
+      }
+      return true;
+    };
+    pruefe(-dE, a[0] - gebiet.minE);
+    pruefe(dE, gebiet.maxE - a[0]);
+    pruefe(-dN, a[1] - gebiet.minN);
+    pruefe(dN, gebiet.maxN - a[1]);
+    const t = drin(a) ? t1 : t0;
+    return [a[0] + dE * t, a[1] + dN * t];
+  };
+  const raus: GelaendeLinienObjekt[] = [];
+  for (const l of linien) {
+    if (l.achse.every(drin)) {
+      raus.push(l);
+      continue;
+    }
+    let stueck: Punkt[] = [];
+    let nr = 0;
+    const schliessen = () => {
+      if (stueck.length >= 2) raus.push({ ...l, id: nr === 0 ? l.id : `${l.id}#${nr}`, achse: stueck });
+      if (stueck.length >= 2) nr++;
+      stueck = [];
+    };
+    for (let i = 0; i < l.achse.length; i++) {
+      const p = l.achse[i];
+      const vorherDrin = i > 0 && drin(l.achse[i - 1]);
+      if (drin(p)) {
+        if (i > 0 && !vorherDrin) stueck.push(kante(l.achse[i - 1], p));
+        stueck.push(p);
+      } else if (vorherDrin) {
+        stueck.push(kante(l.achse[i - 1], p));
+        schliessen();
+      }
+    }
+    schliessen();
+  }
+  return raus;
 }
 
 function geschlossenerRing(r: Ring): Ring {
@@ -723,7 +1030,52 @@ async function ausfuehren(
   });
 
   // --- 2. Gelaendehoehen ----------------------------------------------------
-  melde(a, 'Gelaendehoehen werden abgeleitet', 0.45);
+  // REIHENFOLGE (seit 09.08.2026): zuerst das amtliche DGM1 in seiner ECHTEN
+  // Aufloesung von 1 m. Erst wenn keines vorliegt, wird aus den
+  // LoD2-Bodenhoehen genaehert — und das steht dann auch so im Nachweis.
+  // Vorher wurde selbst ein vorhandenes DGM1 auf 4,7 m heruntergerechnet und
+  // geglaettet; damit war jede Gelaendekante weg (docs/BAUWERKSMODELL.md, 1).
+  melde(a, 'Gelaendehoehen', 0.44, 'Suche amtliches Hoehenmodell (DGM1).');
+  // GEBIET DER HOEHEN != BESTELLTES GEBIET: Die Kacheln sind quadratisch und am
+  // globalen Raster ausgerichtet, ragen also ueber das Gebiet hinaus. Die Hoehen
+  // werden fuer die ganze Kachelhuelle geholt, sonst faellt der Ueberhang auf die
+  // Ersatzhoehe zurueck und wird zur erfundenen ebenen Platte (kachelHuelle).
+  // Bestellt bleibt a.bbox — Flaechen, Gebaeude und Baeume kommen weiterhin nur
+  // dafuer, und nur das zaehlt gegen MAX_GEBIET_M2.
+  const hoehenGebiet = kachelHuelle(a.bbox, KACHEL_M, RASTER_RAND_M);
+  let raster: Hoehenraster | null = null;
+  let hoehenHerkunft: Gelaende['hoehenHerkunft'] = 'flach';
+  let rasterQuelle = '';
+  let rasterKacheln: string[] | undefined;
+  let ergaenzteZellen = 0;
+
+  const dgmQuelle = dgm.quelleErmitteln(datenWurzel());
+  if (dgmQuelle) {
+    try {
+      const erg = dgm.rasterFuerGebiet(dgmQuelle, hoehenGebiet, {
+        zellM: RASTER_ZELL_M,
+        randM: 0,
+        bericht: (t) => melde(a, 'Gelaendehoehen', 0.45, t),
+      });
+      raster = erg.raster;
+      hoehenHerkunft = 'dgm1';
+      rasterQuelle = erg.quelle.beschreibung;
+      rasterKacheln = erg.kacheln;
+      ergaenzteZellen = erg.gefuellt;
+      const st = raster.statistik();
+      melde(
+        a,
+        'Gelaendehoehen',
+        0.47,
+        `DGM1 uebernommen: ${st.zellen.toLocaleString('de-DE')} Zellen a ${RASTER_ZELL_M} m aus ${erg.kacheln.length} Kacheln, ${st.min.toFixed(1)}–${st.max.toFixed(1)} m ue. NHN${erg.gefuellt ? `, ${erg.gefuellt} Zellen aus der Nachbarschaft ergaenzt` : ''}.`,
+      );
+    } catch (e) {
+      melde(a, 'Gelaendehoehen', 0.45, `DGM1 nicht verwendbar (${(e as Error).message}) — es wird aus den LoD2-Bodenhoehen genaehert.`);
+    }
+  } else {
+    melde(a, 'Gelaendehoehen', 0.45, 'Kein DGM1 vorhanden — die Hoehen werden aus den LoD2-Bodenhoehen genaehert.');
+  }
+
   const roh: Stuetzpunkt[] = [];
   for (const g of gebaeude) {
     let e = 0;
@@ -735,33 +1087,68 @@ async function ausfuehren(
     roh.push({ e: e / g.grundriss.length, n: n / g.grundriss.length, h: g.bodenHoehe });
   }
   const stuetz = ausreisserEntfernen(roh);
-  if (stuetz.length < roh.length) {
-    melde(a, 'Gelaendehoehen werden abgeleitet', 0.46, `${roh.length - stuetz.length} unplausible Bodenhoehen verworfen (Abgleich mit der Nachbarschaft).`);
+
+  if (!raster) {
+    if (stuetz.length < roh.length) {
+      melde(a, 'Gelaendehoehen', 0.46, `${roh.length - stuetz.length} unplausible Bodenhoehen verworfen (Abgleich mit der Nachbarschaft).`);
+    }
+    if (stuetz.length >= 3) {
+      raster = dgm.rasterAusStuetzpunkten(hoehenGebiet, stuetz, { zellM: RASTER_ZELL_M, randM: 0 });
+      hoehenHerkunft = 'lod2_interpoliert';
+      rasterQuelle = `abgeleitet aus ${stuetz.length} LoD2-Bodenhoehen`;
+    } else {
+      raster = dgm.rasterAusStuetzpunkten(hoehenGebiet, [{ e: a.bbox.minE, n: a.bbox.minN, h: 0 }], { zellM: RASTER_ZELL_M, randM: 0 });
+      hoehenHerkunft = 'flach';
+      rasterQuelle = 'flaches Ersatzgelaende';
+    }
   }
-  const feld = new HoehenFeld(stuetz, 120);
-  const hoehenHerkunft: Gelaende['hoehenHerkunft'] = stuetz.length >= 3 ? 'lod2_interpoliert' : 'flach';
+
   nachweise.push({
     datensatz: 'Gelaendehoehen',
-    dienst: hoehenHerkunft === 'lod2_interpoliert' ? 'abgeleitet aus LoD2-Bodenhoehen (Attribut AbsoluteHoehe)' : 'flaches Ersatzgelaende',
+    dienst:
+      hoehenHerkunft === 'dgm1'
+        ? `Amtliches Digitales Gelaendemodell DGM1 (1 m), ${rasterQuelle}`
+        : hoehenHerkunft === 'lod2_interpoliert'
+          ? 'abgeleitet aus LoD2-Bodenhoehen (Attribut AbsoluteHoehe)'
+          : 'flaches Ersatzgelaende',
     url: '',
     abgerufenAm: abgerufen,
     lizenz: k.gelaendehoehen.lizenz,
-    quellenvermerk: k.gelaendehoehen.quellenvermerk,
+    quellenvermerk:
+      hoehenHerkunft === 'dgm1'
+        ? '(c) Hessische Verwaltung fuer Bodenmanagement und Geoinformation (HVBG), DGM1 — bearbeitet (auf das Zielgebiet zugeschnitten)'
+        : k.gelaendehoehen.quellenvermerk,
     hinweis:
-      hoehenHerkunft === 'lod2_interpoliert'
-        ? `${stuetz.length} amtliche Bodenhoehen als Stuetzpunkte, dazwischen invers-distanzgewichtet interpoliert. Ein DGM1-Raster kann importiert werden und hat dann Vorrang.`
-        : 'Zu wenige Stuetzpunkte — Gelaende ist eben angenommen (k. A. zur echten Hoehenlage).',
+      hoehenHerkunft === 'dgm1'
+        ? `Raster ${raster.kopf.spalten} x ${raster.kopf.zeilen} Zellen a ${raster.kopf.zellM} m aus den Kacheln ${(rasterKacheln ?? []).join(', ')}.${ergaenzteZellen ? ` ${ergaenzteZellen} Zellen ohne Messwert wurden aus der Nachbarschaft ergaenzt — das ist eine Naeherung.` : ''}`
+        : hoehenHerkunft === 'lod2_interpoliert'
+          ? `${stuetz.length} amtliche Bodenhoehen als Stuetzpunkte, dazwischen invers-distanzgewichtet interpoliert. Zwischen den Gebaeuden ist das GENAEHERT, nicht gemessen. Ein DGM1 kann jederzeit nachgereicht werden und hat dann Vorrang.`
+          : 'Zu wenige Stuetzpunkte — Gelaende ist eben angenommen (k. A. zur echten Hoehenlage).',
   });
 
-  // --- 3. Kacheln mit Hoehengitter und Luftbild ----------------------------
+  // --- 3. Kacheln mit Luftbild ---------------------------------------------
+  // KACHELSCHNITT AM RASTER (seit 09.08.2026): Die Kacheln sind jetzt
+  // quadratisch, 256 m gross und am Hoehenraster ausgerichtet. Beides ist
+  // noetig, damit das Gelaendenetz je Kachel mit 257 x 257 Stuetzstellen
+  // gebaut werden kann, die EXAKT auf den Rasterwerten sitzen — bei den alten
+  // 300 x 333 m haetten die Stuetzstellen zwischen den Zellen gelegen, und aus
+  // jeder senkrechten Kante waere wieder eine Rampe geworden
+  // (Begruendung: shared/geo/gelaendenetz.ts, kachelnAmRaster).
+  //
+  // Das Hoehengitter je Kachel bleibt als GROBER Rueckfallweg erhalten (2D-
+  // Karte, Altbestaende ohne Raster). Es ist nicht mehr die Hoehenwahrheit,
+  // darum genuegen 33 Stuetzstellen statt 65.
   const gitter = opts.hoehenGitter ?? 33;
   const texturPx = Math.min(opts.texturPx ?? 1536, k.orthophoto.maxPixel);
-  const kacheln = kachelGitter(a.bbox, 300);
+  const kacheln = kachelnAmRaster(hoehenGebiet, raster.kopf.minE, raster.kopf.minN, KACHEL_M);
   const patches: GelaendePatch[] = [];
-  let hMin = Infinity;
-  let hMax = -Infinity;
-  let hSumme = 0;
-  let hAnzahl = 0;
+  const rasterStat = raster.statistik();
+  // Auf den Zentimeter runden: die Float32-Werte des DGM tragen mehr Stellen,
+  // als die Messung hergibt („131,91400146484375 m" behauptet Zehntelmillimeter).
+  let hMin = Math.round(rasterStat.min * 100) / 100;
+  let hMax = Math.round(rasterStat.max * 100) / 100;
+  let hSumme = Math.round(rasterStat.mittel * 100) / 100;
+  let hAnzahl = 1;
   let leere = 0;
 
   for (let i = 0; i < kacheln.length; i++) {
@@ -772,12 +1159,7 @@ async function ausfuehren(
       const n = bb.minN + ((bb.maxN - bb.minN) * z) / (gitter - 1);
       for (let s = 0; s < gitter; s++) {
         const e = bb.minE + ((bb.maxE - bb.minE) * s) / (gitter - 1);
-        const h = Math.round(feld.hoeheBei(e, n) * 100) / 100;
-        zeile.push(h);
-        if (h < hMin) hMin = h;
-        if (h > hMax) hMax = h;
-        hSumme += h;
-        hAnzahl++;
+        zeile.push(Math.round(raster.hoeheOder(e, n, rasterStat.mittel) * 100) / 100);
       }
       hoehen.push(zeile);
     }
@@ -874,6 +1256,72 @@ async function ausfuehren(
     melde(a, 'Wegenetz', 0.995, `OSM nicht verfuegbar: ${(e as Error).message}`);
   }
 
+  // --- 4b1b. Metadaten VOR der Vereinigung retten ---------------------------
+  // Die Union je Klasse verschmilzt Einzelflaechen. Achse, Spurenzahl und
+  // Bezeichnung EINER Flaeche waeren fuer die Sammelgeometrie falsch und
+  // gehen darum bewusst nicht mit. Was die Darstellung davon braucht, wird
+  // hier vorher in eigene Kanaele ueberfuehrt:
+  //   Fahrbahnachsen  -> Markierungslinien (Leitlinie bei Hauptstrassen,
+  //                      Spurtrennstriche wo OSM `lanes` kennt),
+  //   Parkplaetze     -> Beschriftungspunkte ("P").
+  const markierungen: GelaendeLinienObjekt[] = [];
+  const beschriftungen: NonNullable<Gelaende['beschriftungen']> = [];
+  {
+    // Anliegerstrassen sind real meist unmarkiert — dort waere eine Linie
+    // erfunden. Hauptklassen tragen innerorts praktisch immer eine Leitlinie.
+    const LEITLINIEN_KLASSEN = new Set(['motorway', 'trunk', 'primary', 'secondary', 'tertiary']);
+    const versetzt = (achse: Ring, abstand: number): Ring => {
+      if (Math.abs(abstand) < 1e-9) return achse;
+      const n = achse.length;
+      const out: Ring = [];
+      for (let i = 0; i < n; i++) {
+        let nx = 0;
+        let ny = 0;
+        if (i > 0) {
+          const dx = achse[i][0] - achse[i - 1][0];
+          const dy = achse[i][1] - achse[i - 1][1];
+          const l = Math.hypot(dx, dy) || 1;
+          nx += -dy / l;
+          ny += dx / l;
+        }
+        if (i < n - 1) {
+          const dx = achse[i + 1][0] - achse[i][0];
+          const dy = achse[i + 1][1] - achse[i][1];
+          const l = Math.hypot(dx, dy) || 1;
+          nx += -dy / l;
+          ny += dx / l;
+        }
+        const l = Math.hypot(nx, ny) || 1;
+        out.push([achse[i][0] + (nx / l) * abstand, achse[i][1] + (ny / l) * abstand]);
+      }
+      return out;
+    };
+    for (const f of flaechen) {
+      if (f.bezeichnung && /parkplatz/i.test(f.bezeichnung) && f.polygon.length >= 3 && flaeche(f.polygon) >= 80) {
+        beschriftungen.push({ pos: schwerpunkt(f.polygon), text: 'P' });
+      }
+      if (f.art !== 'fahrbahn' || !f.achsen?.length) continue;
+      let linienZahl = 0;
+      if (f.spuren && f.spuren >= 2) linienZahl = f.spuren - 1;
+      else if (f.strassenklasse && LEITLINIEN_KLASSEN.has(f.strassenklasse)) linienZahl = 1;
+      if (!linienZahl) continue;
+      const breite = f.breiteM ?? 5;
+      let lfd = 0;
+      for (const achse of f.achsen) {
+        if (achse.length < 2) continue;
+        for (let s = 1; s <= linienZahl; s++) {
+          markierungen.push({
+            id: `${f.id}_marke${lfd++}`,
+            art: 'markierung',
+            achse: versetzt(achse, (s * breite) / (linienZahl + 1) - breite / 2),
+            hoeheM: 0.02,
+            breiteM: 0.12,
+          });
+        }
+      }
+    }
+  }
+
   // --- 4b2. Union je Klasse -------------------------------------------------
   // Ohne diesen Schritt liegen 640 einzelne Fahrbahnplatten nebeneinander statt
   // eines Netzes: an jeder Segmentgrenze eine Naht, an jedem Ueberlapp eine
@@ -885,7 +1333,44 @@ async function ausfuehren(
   melde(a, 'Boden wird aufgebaut (ALKIS als Basis, OSM als Verfeinerung)', 0.992);
   const t0 = Date.now();
   const boden = bodenAufbauen(flaechen);
-  flaechen = boden.flaechen;
+  flaechen = amGebietSchneiden(boden.flaechen, a.bbox);
+
+  // Gewaesser einebnen — erst hier moeglich, weil vorher nicht bekannt ist, wo
+  // Wasser liegt. Das Raster ist die eine Oberflaeche, also wird es korrigiert
+  // und nicht die Zeichnung (Begruendung bei wasserEinebnen).
+  const wasser = wasserEinebnen(raster, flaechen);
+  if (wasser.gewaesser || wasser.verworfen) {
+    // Die Kachel-Hoehengitter stammen aus dem Raster VOR dem Einebnen. Ohne
+    // Nachziehen zeigt der grobe Rueckfallweg weiter den interpolierten
+    // Seegrund — wieder zwei Wahrheiten.
+    const ersatz = raster.statistik().mittel;
+    for (const p of patches) {
+      const g = p.spalten;
+      const neu: number[][] = [];
+      for (let z = 0; z < g; z++) {
+        const zeile: number[] = [];
+        const n = p.bbox.minN + ((p.bbox.maxN - p.bbox.minN) * z) / (g - 1);
+        for (let s = 0; s < g; s++) {
+          const e = p.bbox.minE + ((p.bbox.maxE - p.bbox.minE) * s) / (g - 1);
+          zeile.push(Math.round(raster.hoeheOder(e, n, ersatz) * 100) / 100);
+        }
+        neu.push(zeile);
+      }
+      p.hoehen = neu;
+    }
+    const st = raster.statistik();
+    hMin = Math.round(st.min * 100) / 100;
+    hMax = Math.round(st.max * 100) / 100;
+    hSumme = Math.round(st.mittel * 100) / 100;
+    melde(
+      a,
+      'Gewaesser eingeebnet',
+      0.993,
+      `${wasser.gewaesser} Gewaesserflaechen auf ihren Wasserspiegel gelegt (${wasser.zellen.toLocaleString('de-DE')} Rasterzellen)` +
+        `${wasser.verworfen ? `, ${wasser.verworfen} verworfen (Ufer zu steil fuer eine Spiegelebene)` : ''}.`,
+    );
+  }
+
   melde(
     a,
     'Boden aufgebaut',
@@ -895,6 +1380,36 @@ async function ausfuehren(
       `${boden.bericht.verworfen ? `, ${boden.bericht.verworfen} OSM-Flaechen ohne zulaessige Wirtsklasse verworfen` : ''}` +
       ` (${((Date.now() - t0) / 1000).toFixed(1)} s).`,
   );
+
+  // --- 4b. Konstruktionshoehen und Kanten (Bauwerksmodell, Stufe 2 und 3) ---
+  // Erst hier moeglich: die Kanten ergeben sich aus der NACHBARSCHAFT der
+  // fertig aufgeteilten Flaechen. Vorher liegen sie noch uebereinander.
+  let bruchkanten: Bruchkante[] = [];
+  try {
+    const hoehen = bauwerk.konstruktionshoehenSetzen(flaechen);
+    melde(
+      a,
+      'Konstruktionshoehen',
+      0.9945,
+      `${hoehen.gesetzt} Flaechen mit Konstruktionshoehe${hoehen.ohneKlasse.length ? ` (ohne Bauklasse: ${hoehen.ohneKlasse.join(', ')})` : ''}` +
+        `${hoehen.unbelegt.length ? `. ANNAHMEN (nicht belegt): ${hoehen.unbelegt.join(', ')}` : ''}.`,
+    );
+    const k = bauwerk.bruchkantenBilden(flaechen, (e, n) => raster.hoeheOder(e, n, rasterStat.mittel));
+    bruchkanten = k.kanten;
+    const teile = Object.entries(k.nachBauart).map(([b, e]) => `${e.anzahl} x ${b} (${e.laengeM.toLocaleString('de-DE')} m)`);
+    melde(
+      a,
+      'Kanten abgeleitet',
+      0.9948,
+      `${k.kanten.length} Kanten, ${k.laengeM.toLocaleString('de-DE')} m: ${teile.join(', ')}. ` +
+        `Vom Hoehenmodell selbst getragene Stufe: Median ${(k.gemesseneStufeMedianM * 100).toFixed(1)} cm ` +
+        `(darum wird die Konstruktionshoehe voll aufgelegt, nicht abgezogen).`,
+    );
+  } catch (e) {
+    // Ohne Bauklassen ist das Gelaende nicht falsch, nur flach — das gehoert
+    // ins Protokoll, statt den ganzen Import scheitern zu lassen.
+    melde(a, 'Konstruktionshoehen', 0.9948, `Bauklassen nicht anwendbar: ${(e as Error).message}`);
+  }
 
   // --- 4c. Stadtdetails: Baeume, Gleise, Haltestellen, Mauern, Moebel -------
   // Ohne sie bleibt das Modell eine Ansammlung von Kloetzen. Erst Baeume,
@@ -908,6 +1423,31 @@ async function ausfuehren(
     punkte = d.punkte;
     linien = d.linien;
     if (d.zusatzflaechen?.length) flaechen.push(...d.zusatzflaechen);
+
+    // --- Amtliches Baumkataster (falls im Cache vorhanden) ----------------
+    // Gemessene Baeume der Stadt schlagen die OSM-Einzelpunkte; OSM ergaenzt
+    // nur noch, was das Kataster nicht kennt (Privatgrund, Umland).
+    try {
+      const { katasterBaeume, mischeBaeume, KATASTER_QUELLE } = await import('./baumkataster.ts');
+      const kataster = katasterBaeume(a.bbox);
+      if (kataster.length) {
+        const gemischt = mischeBaeume(kataster, punkte);
+        punkte = gemischt.punkte;
+        melde(
+          a,
+          `${kataster.length} Katasterbaeume (amtlich gemessen), ${gemischt.osmBehalten} OSM-Baeume ergaenzt, ${gemischt.osmDubletten} OSM-Dubletten entfernt`,
+          0.997,
+        );
+        nachweise.push({
+          ...KATASTER_QUELLE,
+          abgerufenAm: abgerufen,
+          hinweis: `${kataster.length} Baeume mit gemessener Hoehe und Krone im Gebiet.`,
+        });
+      }
+    } catch (fehler) {
+      console.warn('[gelaende] Baumkataster uebersprungen:', (fehler as Error).message);
+    }
+
     const baeume = punkte.filter((p) => p.art === 'baum').length;
     const gleise = linien.filter((l) => l.art === 'gleis').length;
     const halte = punkte.filter((p) => p.art === 'haltestelle').length;
@@ -1004,6 +1544,28 @@ async function ausfuehren(
   }
 
   // --- 5. Speichern ---------------------------------------------------------
+  // Das Raster wird als eigene Binaerdatei abgelegt, nicht in die
+  // Gelaendedatei geschrieben: 2,16 Mio. Zellen waeren als JSON rund 14 MB,
+  // die der Browser bei jedem Projektwechsel zeichenweise auseinandernehmen
+  // muesste (die Gelaendedatei ist mit 11 MB ohnehin schon der langsamste
+  // Schritt beim Projektoeffnen).
+  // Konstruktionshoehen NACHZIEHEN: Die Stadtdetails haben nach Schritt 4b
+  // weitere Flaechen beigesteuert (Bahnsteige, Zebrastreifen). Ohne diesen
+  // zweiten Durchgang blieben genau die ohne Hoehe und fielen in der
+  // Darstellung auf den alten Millimeter-Stapel zurueck — also zwei
+  // verschiedene Hoehenlogiken in derselben Strasse. Die KANTEN bleiben
+  // bewusst aus dem ersten Durchgang: sie gehoeren zur lueckenlosen
+  // Grundaufteilung, nicht zu den Auflagen, die darauf liegen.
+  try {
+    const nach = bauwerk.konstruktionshoehenSetzen(flaechen);
+    melde(a, 'Konstruktionshoehen', 0.9985, `${nach.gesetzt} von ${flaechen.length} Flaechen mit Konstruktionshoehe (nach den Stadtdetails nachgezogen).`);
+  } catch {
+    /* ohne Bauklassen bleibt es beim Rueckfallweg */
+  }
+
+  gelaendeStore.rasterSchreiben(gid, raster.puffer());
+  melde(a, 'Hoehenmodell gespeichert', 0.999, `Raster ${raster.kopf.spalten} x ${raster.kopf.zeilen} a ${raster.kopf.zellM} m (${((raster.werte.length * 4) / 1048576).toFixed(1)} MB).`);
+
   const g: Gelaende = {
     id: gid,
     name: a.name,
@@ -1014,11 +1576,26 @@ async function ausfuehren(
     hoeheMin: Number.isFinite(hMin) ? hMin : 0,
     hoeheMax: Number.isFinite(hMax) ? hMax : 0,
     hoehenHerkunft,
+    hoehenmodell: {
+      datei: 'hoehen.bin',
+      zellM: raster.kopf.zellM,
+      spalten: raster.kopf.spalten,
+      zeilen: raster.kopf.zeilen,
+      minE: raster.kopf.minE,
+      minN: raster.kopf.minN,
+      herkunft: hoehenHerkunft === 'flach' ? 'lod2_interpoliert' : hoehenHerkunft,
+      quelle: rasterQuelle,
+      kacheln: rasterKacheln,
+      ergaenzteZellen: ergaenzteZellen || undefined,
+      netzToleranzM: NETZ_TOLERANZ_M,
+    },
     patches,
     gebaeude,
     flaechen,
+    bruchkanten: bruchkanten.length ? bruchkanten : undefined,
     punkte,
-    linien,
+    linien: linienAmGebietSchneiden([...linien, ...markierungen], a.bbox),
+    beschriftungen: beschriftungen.length ? beschriftungen : undefined,
     flurstuecke,
     quellennachweis: nachweise,
     erstelltAm: jetzt(),
@@ -1039,68 +1616,55 @@ async function ausfuehren(
 export function dgmImportieren(gid: string, inhalt: string): { punkte: number; hMin: number; hMax: number } {
   const g = gelaendeStore.laden(gid);
   if (!g) throw new Error('Gelaende nicht gefunden.');
-  const punkte: Stuetzpunkt[] = [];
 
-  if (/^\s*ncols/i.test(inhalt)) {
-    // ESRI-ASCII-Grid
-    const zeilen = inhalt.split(/\r?\n/);
-    const kopf: Record<string, number> = {};
-    let i = 0;
-    for (; i < zeilen.length; i++) {
-      const m = /^\s*(\w+)\s+(-?[\d.]+)/.exec(zeilen[i]);
-      if (!m) break;
-      kopf[m[1].toLowerCase()] = Number(m[2]);
-    }
-    const { ncols, nrows, xllcorner, yllcorner, cellsize } = kopf;
-    const nodata = kopf.nodata_value ?? -9999;
-    for (let z = 0; z < nrows; z++) {
-      const werte = (zeilen[i + z] ?? '').trim().split(/\s+/).map(Number);
-      for (let s = 0; s < ncols; s++) {
-        const h = werte[s];
-        if (!Number.isFinite(h) || h === nodata) continue;
-        punkte.push({ e: xllcorner + (s + 0.5) * cellsize, n: yllcorner + (nrows - z - 0.5) * cellsize, h });
-      }
-    }
-  } else {
-    // XYZ: "E N H" je Zeile
-    for (const zeile of inhalt.split(/\r?\n/)) {
-      const t = zeile.trim();
-      if (!t || t.startsWith('#')) continue;
-      const [e, n, h] = t.split(/[\s;,]+/).map(Number);
-      if (Number.isFinite(e) && Number.isFinite(n) && Number.isFinite(h)) punkte.push({ e, n, h });
-    }
+  // Das Ergebnis ist jetzt ein echtes Raster, kein umgerechnetes Kachelgitter.
+  // Der alte Weg legte die importierten Hoehen auf das 4,7-m-Gitter der
+  // Kacheln — ein 1-m-Modell wurde damit beim Einlesen wieder weichgezeichnet.
+  const { raster, punkte } = dgm.rasterAusText(inhalt, g.bbox, RASTER_ZELL_M);
+  const st = raster.statistik();
+  if (!Number.isFinite(st.min) || st.zellen === st.ohneWert) {
+    throw new Error('Die Datei deckt das Gebiet dieses Gelaendes nicht ab.');
   }
-  if (punkte.length < 3) throw new Error('Die Datei enthaelt keine auswertbaren Hoehenpunkte (erwartet XYZ oder ESRI-ASCII-Grid).');
+  raster.luecken_fuellen();
+  gelaendeStore.rasterSchreiben(gid, raster.puffer());
 
-  const feld = new HoehenFeld(punkte, 50);
-  let hMin = Infinity;
-  let hMax = -Infinity;
+  // Grobes Rueckfallgitter der Kacheln mitziehen, damit 2D-Karte und
+  // Altbestandspfade dieselbe Hoehenlage zeigen wie das Raster.
   for (const p of g.patches) {
     for (let z = 0; z < p.zeilen; z++) {
       const n = p.bbox.minN + ((p.bbox.maxN - p.bbox.minN) * z) / (p.zeilen - 1);
       for (let s = 0; s < p.spalten; s++) {
         const e = p.bbox.minE + ((p.bbox.maxE - p.bbox.minE) * s) / (p.spalten - 1);
-        const h = Math.round(feld.hoeheBei(e, n) * 100) / 100;
-        p.hoehen[z][s] = h;
-        if (h < hMin) hMin = h;
-        if (h > hMax) hMax = h;
+        p.hoehen[z][s] = Math.round(raster.hoeheOder(e, n, st.mittel) * 100) / 100;
       }
     }
   }
-  g.hoeheMin = hMin;
-  g.hoeheMax = hMax;
-  g.hoeheMittel = Math.round(((hMin + hMax) / 2) * 100) / 100;
+
+  g.hoeheMin = Math.round(st.min * 100) / 100;
+  g.hoeheMax = Math.round(st.max * 100) / 100;
+  g.hoeheMittel = Math.round(st.mittel * 100) / 100;
   g.hoehenHerkunft = 'dgm1';
+  g.hoehenmodell = {
+    datei: 'hoehen.bin',
+    zellM: raster.kopf.zellM,
+    spalten: raster.kopf.spalten,
+    zeilen: raster.kopf.zeilen,
+    minE: raster.kopf.minE,
+    minN: raster.kopf.minN,
+    herkunft: 'import',
+    quelle: 'manueller Import (XYZ / ESRI-ASCII-Raster)',
+    netzToleranzM: NETZ_TOLERANZ_M,
+  };
   g.quellennachweis = g.quellennachweis.filter((q) => q.datensatz !== 'Gelaendehoehen');
   g.quellennachweis.push({
     datensatz: 'Gelaendehoehen DGM1',
-    dienst: 'manueller Import (XYZ/ASCII-Grid)',
+    dienst: 'manueller Import (XYZ/ASCII-Raster)',
     url: '',
     abgerufenAm: jetzt(),
     lizenz: geoKonfig('hessen').gelaendehoehen.lizenz,
     quellenvermerk: '(c) HVBG, Digitales Gelaendemodell DGM1',
-    hinweis: `${punkte.length} Hoehenpunkte importiert.`,
+    hinweis: `${punkte} Hoehenpunkte importiert, Raster ${raster.kopf.spalten} x ${raster.kopf.zeilen} a ${raster.kopf.zellM} m.`,
   });
   gelaendeStore.speichern(g);
-  return { punkte: punkte.length, hMin, hMax };
+  return { punkte, hMin: g.hoeheMin, hMax: g.hoeheMax };
 }

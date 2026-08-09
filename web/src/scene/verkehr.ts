@@ -221,17 +221,6 @@ export const VERKEHR_FARBEN = {
 // hier EINMAL und ist benannt — eine Zahl mitten im Code waere in einem halben
 // Jahr nicht mehr nachvollziehbar.
 
-/** Schwellenabstand im Gleisbau (Regelteilung, rund 1600 Schwellen je km). */
-const SCHWELLE_ABSTAND_M = 0.63;
-/** Schwellenbreite in Gleisrichtung. */
-const SCHWELLE_BREITE_M = 0.26;
-/** Ueberstand der Schwelle beidseits der Spur (halb je Seite). */
-const SCHWELLE_UEBERSTAND_M = 0.5;
-/** Breite des Schienenkopfs — schmal, aber nie unter einem sichtbaren Wert. */
-const SCHIENE_BREITE_M = 0.1;
-/** Spurweite, wenn die Quelle keine fuehrt: Meterspur (Darmstadt). */
-const SPURWEITE_STANDARD_M = 1.0;
-
 /**
  * DER GEZEICHNETE BODEN LIEGT NICHT AUF NULL.
  *
@@ -251,31 +240,7 @@ const SPURWEITE_STANDARD_M = 1.0;
  * nur den gemeinsamen Nullpunkt vom Gelaende auf die gezeichnete
  * Strassenoberflaeche, und dort gehoert er auch hin.
  */
-const BODEN_STAPEL_M = 0.1;
-
-/**
- * Hoehenstaffelung der drei Gleislagen ueber der gezeichneten Oberflaeche.
- * Die Werte sind klein, aber ihre REIHENFOLGE ist entscheidend: gleich hohe
- * Flaechen uebereinander flackern (Z-Fighting). Von unten nach oben: Bett
- * (knapp ueber Grund), Schwelle, Schienenoberkante 15 cm — das entspricht dem
- * wirklichen Aufbau, bei dem der Schienenkopf gut eine Handbreit ueber der
- * Schwellenoberkante steht.
- */
-const GLEIS_HOEHE = {
-  bett: BODEN_STAPEL_M + 0.02,
-  schwelle: BODEN_STAPEL_M + 0.06,
-  schiene: BODEN_STAPEL_M + 0.15,
-};
-
-/**
- * Obergrenze fuer die Gesamtzahl der Schwellen einer Szene.
- * Bei 0,63 m Teilung ergeben sich rund 1600 Schwellen je Kilometer Gleis. Fuer
- * das Zielgebiet (66 Gleiswege Darmstadt Innenstadt) sind das gut 10 000 — kein
- * Problem. Die Grenze faengt nur den Fall ab, dass jemand ein Gebiet mit einem
- * ganzen Rangierbahnhof laedt; dann fehlen Schwellen am Rand, aber die Szene
- * baut in endlicher Zeit. Ohne die Grenze waere es ein Einfrieren ohne Meldung.
- */
-const SCHWELLEN_MAX = 40000;
+const BODEN_STAPEL_M = 0;
 
 /** Bahnsteig: Regelmass eines kurzen Strassenbahn-Kaps. */
 const STEIG_LAENGE_M = 6;
@@ -475,43 +440,6 @@ function entdoppeln(linie: Punkt[]): Punkt[] {
 }
 
 /**
- * Seitlich versetzte Kopie einer Achse (positiv = links, negativ = rechts).
- *
- * An jedem Knick wird auf der Winkelhalbierenden versetzt (Gehrung) — nur so
- * bleibt der Abstand zur Ausgangsachse in der Kurve wirklich konstant. Ein
- * blosser Versatz je Segment liesse die Schienen an jedem Knick um die halbe
- * Segmentbreite auseinanderklaffen. Dieselbe Rechnung steckt in `bandRing`;
- * hier wird sie fuer eine ACHSE gebraucht, nicht fuer einen Rand.
- *
- * Sehr spitze Kehren wuerden die Gehrung ins Unendliche treiben; ab dem
- * Vierfachen des Versatzes wird begrenzt.
- */
-function versetzt(linie: Punkt[], versatz: number): Punkt[] {
-  const p = entdoppeln(linie);
-  if (p.length < 2) return [];
-  const grenze = Math.abs(versatz) * 4;
-  const out: Punkt[] = [];
-  for (let i = 0; i < p.length; i++) {
-    const vor = i > 0 ? norm(sub(p[i], p[i - 1])) : null;
-    const nach = i < p.length - 1 ? norm(sub(p[i + 1], p[i])) : null;
-    const n1 = vor ? norm(lot(vor)) : null;
-    const n2 = nach ? norm(lot(nach)) : null;
-    if (!n1 || !n2) {
-      // Anfang und Ende: senkrecht zur einzigen bekannten Richtung
-      const n = (n1 ?? n2) as Punkt;
-      out.push([p[i][0] + n[0] * versatz, p[i][1] + n[1] * versatz]);
-      continue;
-    }
-    const m = norm([n1[0] + n2[0], n1[1] + n2[1]]);
-    const cos = dot(m, n1);
-    const roh = Math.abs(cos) < 1e-6 ? versatz : versatz / cos;
-    const begrenzt = Math.sign(roh) * Math.min(Math.abs(roh), grenze);
-    out.push([p[i][0] + m[0] * begrenzt, p[i][1] + m[1] * begrenzt]);
-  }
-  return out;
-}
-
-/**
  * Zerlegt eine lange Achse in ueberlappende Stuecke (Ueberlappung: ein ganzes
  * Segment). Die Ueberlappung wird doppelt gezeichnet — bei gleicher Farbe und
  * gleicher Hoehe ist das unsichtbar, waehrend eine Stossfuge an einer Kurve
@@ -545,24 +473,9 @@ function flaecheAufGelaende(
 ): void {
   if (ring.length < 3) return;
   s.flaeche(
-    ring.map((p) => [p[0], p[1], hoehen.bei(p[0], p[1]) + ueberGrund] as Punkt3D),
+    ring.map((p) => [p[0], p[1], hoehen.bauOben(p[0], p[1]) + ueberGrund] as Punkt3D),
     farbe,
   );
-}
-
-/** Band aus Achse und Breite, dem Gelaende folgend (Gleisbett, Schiene). */
-function bandAufGelaende(
-  s: TeileSammler,
-  achse: Punkt[],
-  breite: number,
-  hoehen: Hoehenlage,
-  ueberGrund: number,
-  farbe: Cesium.Color,
-): void {
-  for (const stueck of bandStuecke(achse)) {
-    const ring = bandRing(stueck, breite);
-    if (ring) flaecheAufGelaende(s, ring, hoehen, ueberGrund, farbe);
-  }
 }
 
 /**
@@ -665,79 +578,15 @@ function drehungVon(p: GelaendePunktObjekt): number {
 }
 
 // ===========================================================================
-// 4  GLEISE
+// 4  GLEISE — ausgelagert
 // ===========================================================================
-
-/**
- * Baut die Gleise in drei Lagen: Gleisbett, Schwellen, Schienen.
- *
- * Zur SCHWELLENFRAGE: Schwellen bekommt nur ein eigener Bahnkoerper. Liegt die
- * Schiene als Rillenschiene im Pflaster, ist von einer Schwelle nichts zu
- * sehen — dort waere die Querstreifung frei erfunden. Wovon die Unterscheidung
- * abhaengt, entscheidet nicht diese Datei: `stadtdetails.ts` liefert das Feld
- * `eigenerBahnkoerper` und vermerkt dort ausdruecklich, dass es eine HEURISTIK
- * ist (OSM fuehrt kein solches Merkmal; im Zielgebiet trug keiner der 73
- * Gleiswege `embedded` oder `surface`). Nur ein ausdrueckliches `false`
- * unterdrueckt die Schwellen.
- */
-export function baueGleise(linien: GelaendeLinienObjekt[], hoehen: Hoehenlage): Cesium.Primitive[] {
-  const s = new TeileSammler();
-  let schwellen = 0;
-
-  for (const l of linien) {
-    if (l.art !== 'gleis') continue;
-    const achse = entdoppeln(l.achse);
-    if (achse.length < 2) continue;
-
-    const spur = l.spurweiteM && l.spurweiteM > 0 ? l.spurweiteM : SPURWEITE_STANDARD_M;
-
-    // --- a) Gleisbett ------------------------------------------------------
-    // Mindestens so breit, dass beide Schienen mit Rand darauf liegen — sonst
-    // schwebte die Schiene neben ihrem eigenen Bett.
-    const bettBreite = Math.max(l.breiteM, spur + SCHWELLE_UEBERSTAND_M + 0.3);
-    bandAufGelaende(s, achse, bettBreite, hoehen, GLEIS_HOEHE.bett, VERKEHR_FARBEN.gleisbett);
-
-    // --- b) Schwellen ------------------------------------------------------
-    if (l.eigenerBahnkoerper !== false) {
-      const laenge = polylinieLaenge(achse);
-      const anzahl = Math.floor(laenge / SCHWELLE_ABSTAND_M);
-      const halbQuer = (spur + SCHWELLE_UEBERSTAND_M) / 2;
-      const halbLaengs = SCHWELLE_BREITE_M / 2;
-      for (let i = 0; i <= anzahl && schwellen < SCHWELLEN_MAX; i++) {
-        const { p, richtung } = aufPolylinie(achse, i * SCHWELLE_ABSTAND_M);
-        const quer = norm(lot(richtung));
-        const h = hoehen.bei(p[0], p[1]) + GLEIS_HOEHE.schwelle;
-        const ecke = (dq: number, dl: number): Punkt3D => [
-          p[0] + quer[0] * dq + richtung[0] * dl,
-          p[1] + quer[1] * dq + richtung[1] * dl,
-          h,
-        ];
-        s.viereck(
-          ecke(-halbQuer, -halbLaengs),
-          ecke(halbQuer, -halbLaengs),
-          ecke(halbQuer, halbLaengs),
-          ecke(-halbQuer, halbLaengs),
-          VERKEHR_FARBEN.schwelle,
-        );
-        schwellen++;
-      }
-    }
-
-    // --- c) Schienen -------------------------------------------------------
-    // Die beiden Schienenachsen sind seitlich versetzte Kopien der Gleisachse.
-    for (const seite of [1, -1]) {
-      const schienenAchse = versetzt(achse, (seite * spur) / 2);
-      if (schienenAchse.length < 2) continue;
-      bandAufGelaende(s, schienenAchse, SCHIENE_BREITE_M, hoehen, GLEIS_HOEHE.schiene, VERKEHR_FARBEN.schiene);
-    }
-  }
-
-  // Bodennah und damit UNGESCHATTET — wie die Bodenzeichnung. Die Erkennbarkeit
-  // kommt aus dem Helligkeitsabstand, nicht aus Licht und Schatten; unter der
-  // Sonne wuerde ein halbes Gleis im Fassadenschatten verschwinden.
-  const p = s.primitive('gleis', false, true);
-  return p ? [p] : [];
-}
+//
+// Die frueher hier stehende `baueGleise` zeichnete je OSM-Weg drei flache
+// Baender (Bett, Schwelle, Schiene), gehalten von einer Millimeter-Staffelung.
+// Sie ist am 09.08.2026 ersetzt worden durch web/src/scene/gleise.ts: dort
+// wird ein echter Querschnitt entlang eines VERNETZTEN Strangs extrudiert
+// (shared/geo/netz.ts, shared/geo/profil.ts, shared/bau/oberbau.ts).
+// Begruendung und Messwerte: docs/BAUWERKSMODELL.md, Stufe 4 und 5.
 
 // ===========================================================================
 // 5  HALTESTELLEN
@@ -897,6 +746,217 @@ export function baueBarrieren(linien: GelaendeLinienObjekt[], hoehen: Hoehenlage
  * Vegetation, Haltestellen zu `baueHaltestellen()`. Jedes Element wird genau
  * einmal gebaut.
  */
+// ===========================================================================
+//    LICHTSIGNALANLAGEN UND VERKEHRSZEICHEN
+// ===========================================================================
+
+/**
+ * Regelmasse nach RiLSA bzw. StVO-Aufstellvorschriften.
+ * Signalgeber Ø 200 mm, drei Kammern -> Gehaeuse rund 0,95 m hoch; Unterkante
+ * ueber Gehweg mindestens 2,10 m. Verkehrszeichen: Unterkante 2,00 m ueber
+ * Gehweg, Rundschild Ø 600 mm (Regelgroesse innerorts).
+ */
+const AMPEL_MAST_H_M = 3.6;
+const AMPEL_MAST_D_M = 0.13;
+/** Unterkante des Signalgebers ueber Gehweg (RiLSA: mindestens 2,10 m). */
+const AMPEL_KOPF_UNTEN_M = 2.15;
+/** Gehaeuse: drei Kammern à 200 mm Leuchte. */
+const AMPEL_KOPF_H_M = 1.0;
+const AMPEL_KOPF_B_M = 0.34;
+const AMPEL_KOPF_T_M = 0.24;
+const AMPEL_LAMPE_D_M = 0.2;
+/**
+ * KONTRASTBLENDE — der schwarze Rahmen um den Signalgeber.
+ * Sie ist das praegnanteste Merkmal einer deutschen Lichtsignalanlage: erst
+ * sie macht die Ampel gegen jeden Hintergrund als Ampel lesbar. Ohne sie war
+ * im Modell nur ein dunkles Kaestchen am Mast zu sehen (Nutzerbefund
+ * 09.08.2026: „ich sehe sie noch gar nicht"). Regelmass rund 0,55 x 1,25 m.
+ */
+const AMPEL_BLENDE_B_M = 0.56;
+const AMPEL_BLENDE_H_M = 1.26;
+const AMPEL_BLENDE_T_M = 0.05;
+/** Sonnenblende ueber jeder Leuchte. */
+const AMPEL_SCHIRM_T_M = 0.13;
+/** Fussgaengersignal: zwei Kammern, tiefer angebracht. */
+const AMPEL_FUSS_UNTEN_M = 0.95;
+const AMPEL_FUSS_H_M = 0.68;
+
+const ZEICHEN_MAST_H_M = 2.6;
+const ZEICHEN_MAST_D_M = 0.06;
+const ZEICHEN_SCHILD_D_M = 0.6;
+const ZEICHEN_SCHILD_UNTEN_M = 2.0;
+const ZEICHEN_DICKE_M = 0.05;
+
+/**
+ * Farben. Die Lampen tragen ihre Signalfarben, bleiben aber deutlich unter
+ * dem Buntheits-Reservat der Planobjekte (palette.PLAN_CHROMA_MIN = 40) —
+ * sie sind 20 cm gross und sollen den Ort kenntlich machen, nicht mit einem
+ * Rettungsweg um Aufmerksamkeit streiten.
+ */
+const ZEICHEN_FARBEN = {
+  mast: Cesium.Color.fromCssColorString('#6f7276'),
+  gehaeuse: Cesium.Color.fromCssColorString('#4a4d50'),
+  /** Kontrastblende — dunkelster Koerper der Szene neben der Bahnkontur. */
+  blende: Cesium.Color.fromCssColorString('#33363a'),
+  rot: Cesium.Color.fromCssColorString('#b4544c'),
+  gelb: Cesium.Color.fromCssColorString('#c19a4e'),
+  gruen: Cesium.Color.fromCssColorString('#5f8f66'),
+  /** Schildflaeche: Vorfahrt/Halt sind rot umrandet, Rest neutral. */
+  schildRot: Cesium.Color.fromCssColorString('#b4544c'),
+  schildNeutral: Cesium.Color.fromCssColorString('#c9ccce'),
+};
+
+/**
+ * Ampeln und Verkehrszeichen als Koerper.
+ *
+ * WAS HIER NICHT BEHAUPTET WIRD: Das Piktogramm eines Schildes wird nicht
+ * modelliert — OSM fuehrt fuer die meisten Standorte nur „stop" bzw.
+ * „give_way", nicht die Schildgeometrie. Gezeichnet wird darum Mast und
+ * Schildflaeche in der Regelgroesse; die Zeichennummer steht im Datensatz
+ * (`zeichen`) und kann in der Oberflaeche angezeigt werden.
+ */
+export function baueVerkehrszeichen(punkte: GelaendePunktObjekt[], hoehen: Hoehenlage): Cesium.Primitive[] {
+  const s = new TeileSammler();
+
+  for (const p of punkte) {
+    if (p.art !== 'ampel' && p.art !== 'verkehrszeichen') continue;
+    const boden = standHoehe(hoehen, p.pos);
+    const dreh = ((p.drehungGrad ?? 0) * Math.PI) / 180;
+    // Blickrichtung des Signalgebers/Schildes und die Querachse dazu.
+    const vor: Punkt = [Math.sin(dreh), Math.cos(dreh)];
+    const quer: Punkt = [vor[1], -vor[0]];
+
+    /** Quader um `mitte`, ausgerichtet an (vor, quer). */
+    const quader = (mitte: Punkt, breite: number, tiefe: number, unten: number, oben: number, farbe: Cesium.Color) => {
+      const hb = breite / 2;
+      const ht = tiefe / 2;
+      const ring: Ring = [
+        [mitte[0] - quer[0] * hb - vor[0] * ht, mitte[1] - quer[1] * hb - vor[1] * ht],
+        [mitte[0] + quer[0] * hb - vor[0] * ht, mitte[1] + quer[1] * hb - vor[1] * ht],
+        [mitte[0] + quer[0] * hb + vor[0] * ht, mitte[1] + quer[1] * hb + vor[1] * ht],
+        [mitte[0] - quer[0] * hb + vor[0] * ht, mitte[1] - quer[1] * hb + vor[1] * ht],
+      ];
+      koerperFest(s, ring, unten, oben, farbe, true);
+    };
+    /** Punkt `d` Meter vor dem Standpunkt. */
+    const davor = (d: number): Punkt => [p.pos[0] + vor[0] * d, p.pos[1] + vor[1] * d];
+
+    if (p.art === 'ampel') {
+      koerperFest(s, kreisRing(p.pos, AMPEL_MAST_D_M, 8), boden - EINSINKEN_M, boden + AMPEL_MAST_H_M, ZEICHEN_FARBEN.mast);
+
+      // 1. Kontrastblende — der schwarze Rahmen, an dem man die Ampel erkennt.
+      const blendeMitte = davor(AMPEL_MAST_D_M / 2 + AMPEL_BLENDE_T_M / 2);
+      const blendeUnten = boden + AMPEL_KOPF_UNTEN_M - (AMPEL_BLENDE_H_M - AMPEL_KOPF_H_M) / 2;
+      quader(blendeMitte, AMPEL_BLENDE_B_M, AMPEL_BLENDE_T_M, blendeUnten, blendeUnten + AMPEL_BLENDE_H_M, ZEICHEN_FARBEN.blende);
+
+      // 2. Signalgeber-Gehaeuse davor
+      const kopfMitte = davor(AMPEL_MAST_D_M / 2 + AMPEL_BLENDE_T_M + AMPEL_KOPF_T_M / 2);
+      const kopfUnten = boden + AMPEL_KOPF_UNTEN_M;
+      quader(kopfMitte, AMPEL_KOPF_B_M, AMPEL_KOPF_T_M, kopfUnten, kopfUnten + AMPEL_KOPF_H_M, ZEICHEN_FARBEN.gehaeuse);
+
+      // 3. Drei Leuchten mit Sonnenblende, in Fahrtrichtung schauend
+      const vorderkante = AMPEL_MAST_D_M / 2 + AMPEL_BLENDE_T_M + AMPEL_KOPF_T_M;
+      const lampen: [number, Cesium.Color][] = [
+        [AMPEL_KOPF_H_M - 0.2, ZEICHEN_FARBEN.rot],
+        [AMPEL_KOPF_H_M / 2, ZEICHEN_FARBEN.gelb],
+        [0.2, ZEICHEN_FARBEN.gruen],
+      ];
+      for (const [dz, farbe] of lampen) {
+        const z = kopfUnten + dz;
+        const m = davor(vorderkante + 0.015);
+        // Senkrecht stehende Scheibe in der Ebene (quer, hoch)
+        const scheibe: Punkt3D[] = [];
+        for (let i = 0; i < 12; i++) {
+          const w = (i / 12) * Math.PI * 2;
+          scheibe.push([
+            m[0] + quer[0] * ((Math.cos(w) * AMPEL_LAMPE_D_M) / 2),
+            m[1] + quer[1] * ((Math.cos(w) * AMPEL_LAMPE_D_M) / 2),
+            z + (Math.sin(w) * AMPEL_LAMPE_D_M) / 2,
+          ]);
+        }
+        s.flaeche(scheibe, farbe);
+        // Sonnenblende: kurzes Dach ueber der Leuchte
+        const schirmMitte = davor(vorderkante + AMPEL_SCHIRM_T_M / 2);
+        quader(
+          schirmMitte,
+          AMPEL_LAMPE_D_M + 0.06,
+          AMPEL_SCHIRM_T_M,
+          z + AMPEL_LAMPE_D_M / 2,
+          z + AMPEL_LAMPE_D_M / 2 + 0.025,
+          ZEICHEN_FARBEN.gehaeuse,
+        );
+      }
+
+      // 4. Fussgaengersignal am selben Mast, tiefer und zur Seite blickend —
+      // an einer Fussgaengerfurt gehoert es dazu und macht den Mast als
+      // Anlage erkennbar. Zwei Kammern (rot oben, gruen unten).
+      const fussMitte = davor(AMPEL_MAST_D_M / 2 + 0.11);
+      const fussUnten = boden + AMPEL_FUSS_UNTEN_M;
+      quader(fussMitte, 0.26, 0.22, fussUnten, fussUnten + AMPEL_FUSS_H_M, ZEICHEN_FARBEN.gehaeuse);
+      for (const [dz, farbe] of [
+        [AMPEL_FUSS_H_M - 0.17, ZEICHEN_FARBEN.rot],
+        [0.17, ZEICHEN_FARBEN.gruen],
+      ] as [number, Cesium.Color][]) {
+        const z = fussUnten + dz;
+        const m = davor(AMPEL_MAST_D_M / 2 + 0.11 + 0.12);
+        const scheibe: Punkt3D[] = [];
+        for (let i = 0; i < 10; i++) {
+          const w = (i / 10) * Math.PI * 2;
+          scheibe.push([
+            m[0] + quer[0] * (Math.cos(w) * 0.075),
+            m[1] + quer[1] * (Math.cos(w) * 0.075),
+            z + Math.sin(w) * 0.075,
+          ]);
+        }
+        s.flaeche(scheibe, farbe);
+      }
+      continue;
+    }
+
+    // --- Verkehrszeichen: Mast, Schildkoerper, Rand ------------------------
+    koerperFest(s, kreisRing(p.pos, ZEICHEN_MAST_D_M, 6), boden - EINSINKEN_M, boden + ZEICHEN_MAST_H_M, ZEICHEN_FARBEN.mast);
+    const zeichen = p.zeichen ?? '';
+    // Rot umrandet sind die Vorschriftzeichen (Halt 206, Vorfahrt gewaehren
+    // 205, Geschwindigkeit 274). Der Rest bleibt neutral.
+    const randRot = /DE:(205|206|274)/.test(zeichen);
+    const zMitte = boden + ZEICHEN_SCHILD_UNTEN_M + ZEICHEN_SCHILD_D_M / 2;
+    const scheibeBei = (radius: number, tiefe: number): Punkt3D[] => {
+      const m = davor(ZEICHEN_MAST_D_M / 2 + tiefe);
+      const out: Punkt3D[] = [];
+      for (let i = 0; i < 14; i++) {
+        const w = (i / 14) * Math.PI * 2;
+        out.push([
+          m[0] + quer[0] * Math.cos(w) * radius,
+          m[1] + quer[1] * Math.cos(w) * radius,
+          zMitte + Math.sin(w) * radius,
+        ]);
+      }
+      return out;
+    };
+    // Schildkoerper als flacher Zylinder: aus JEDER Richtung sichtbar, nicht
+    // nur von vorn (die frueher gezeichnete Einzelscheibe verschwand, sobald
+    // man von der Seite kam).
+    const vorne = scheibeBei(ZEICHEN_SCHILD_D_M / 2, ZEICHEN_DICKE_M);
+    const hinten = scheibeBei(ZEICHEN_SCHILD_D_M / 2, 0);
+    for (let i = 0; i < vorne.length; i++) {
+      const j = (i + 1) % vorne.length;
+      s.viereck(hinten[i], hinten[j], vorne[j], vorne[i], ZEICHEN_FARBEN.mast);
+    }
+    s.flaeche(vorne, randRot ? ZEICHEN_FARBEN.schildRot : ZEICHEN_FARBEN.schildNeutral);
+    s.flaeche([...hinten].reverse(), ZEICHEN_FARBEN.mast);
+    // Helles Innenfeld — so liest das Schild als Ring mit Feld statt als
+    // Farbfleck. Das PIKTOGRAMM wird bewusst nicht erfunden.
+    if (randRot) {
+      s.flaeche(scheibeBei(ZEICHEN_SCHILD_D_M / 2 - 0.075, ZEICHEN_DICKE_M + 0.004), ZEICHEN_FARBEN.schildNeutral);
+    }
+  }
+
+  // Beleuchtet wie alle aufragenden Koerper — der Mast soll eine Sonnenseite
+  // haben, sonst steht er als Papierstreifen im Bild.
+  const p = s.primitive('verkehrszeichen', false, false);
+  return p ? [p] : [];
+}
+
 export function baueStrassenmoebel(punkte: GelaendePunktObjekt[], hoehen: Hoehenlage): Cesium.Primitive[] {
   const s = new TeileSammler();
 

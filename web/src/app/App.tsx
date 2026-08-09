@@ -77,9 +77,47 @@ export function App() {
         {sicht === 'dashboard' && <Dashboard oeffneProjekt={oeffneProjekt} />}
         {sicht === 'polizei' && <PolizeiSicht oeffneProjekt={oeffneProjekt} />}
         {sicht === 'projekt' && projektId && <Arbeitsflaeche />}
-        {sicht === 'projekt' && !projektId && <div className="leer">Kein Projekt geoeffnet.</div>}
+        {sicht === 'projekt' && !projektId && <ProjektNichtDa zurueck={schliesseProjekt} />}
       </main>
       <Fehlerleiste />
+    </div>
+  );
+}
+
+/**
+ * Was zu sehen ist, solange in der Projektansicht KEIN Projekt geladen ist.
+ *
+ * Vorher stand hier nur „Kein Projekt geoeffnet." — eine Sackgasse: sie nannte
+ * weder den Grund noch einen Rueckweg, und sie erschien auch waehrend des
+ * normalen Ladens sowie nach einem fehlgeschlagenen Abruf (dessen Fehlerleiste
+ * sich nach 9 s selbst schliesst). Wer darauf landete, sah nur einen leeren
+ * Bildschirm mit einem Satz, der nichts erklaert (Nutzerbefund 08.08.2026).
+ */
+function ProjektNichtDa({ zurueck }: { zurueck: () => void }) {
+  const laedt = nutzeZustand((s) => s.laedt);
+  const fehler = nutzeZustand((s) => s.fehler);
+
+  if (laedt) {
+    return (
+      <div className="leer">
+        <p>Projekt wird geladen …</p>
+        <p className="hinweis">Das Gelände umfasst mehrere tausend Gebäude — der erste Aufbau dauert einen Moment.</p>
+        <div className="laedt-balken" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="leer">
+      <p>Das Projekt konnte nicht geöffnet werden.</p>
+      {fehler && <p className="hinweis">Grund: {fehler}</p>}
+      <p className="hinweis">
+        Häufigste Ursache: Die Anmeldung gilt nicht mehr, oder das angemeldete Konto hat für dieses Projekt keine Rolle.
+        Melden Sie sich neu an — als Veranstalter (Tolga Karakaya) sehen Sie alle Projekte.
+      </p>
+      <button type="button" className="knopf" onClick={zurueck}>
+        Zurück zur Übersicht
+      </button>
     </div>
   );
 }

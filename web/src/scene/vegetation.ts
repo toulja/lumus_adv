@@ -40,6 +40,7 @@
 import * as Cesium from 'cesium';
 import type { GelaendeLinienObjekt, GelaendePunktObjekt } from '@shared/domain/types';
 import { bandRing, signierteFlaeche } from '@shared/geo/geometry';
+import { nachWgs } from '@shared/geo/proj';
 import type { Hoehenlage } from './gelaende.ts';
 import { zerlegeFlaeche, type Punkt3D } from './stadt.ts';
 
@@ -517,7 +518,7 @@ export function baueBaeume(punkte: GelaendePunktObjekt[], hoehen: Hoehenlage): C
   };
 
   for (const b of punkte) {
-    if (b.art !== 'baum') continue;
+    if (b.art !== 'baum' && b.art !== 'strauch') continue;
 
     // --- Masse: gemessen schlaegt Annahme, danach Streuung, danach Schranke --
     const rohHoehe = b.hoeheM ?? BAUM_HOEHE_ERSATZ;
@@ -528,7 +529,17 @@ export function baueBaeume(punkte: GelaendePunktObjekt[], hoehen: Hoehenlage): C
     const kroneR = klemm(rohKrone * s.kroneFaktor, KRONE_MIN, KRONE_MAX) / 2;
 
     // --- Rahmen: einmal je Baum, danach nur noch Matrixmultiplikationen -----
-    const rahmen = Cesium.Transforms.eastNorthUpToFixedFrame(hoehen.welt(b.pos, 0));
+    // Der Baum steht auf der GEBAUTEN Oberflaeche, nicht auf einem pauschalen
+    // Sockel. Frueher waren es 0,1 m ueber dem Gelaende (wie verkehr.ts), weil
+    // die Bodenzeichnung 2-9,8 cm hoch stapelte und der Stammfuss sonst darin
+    // steckte. Mit Konstruktionshoehen ist der Boden eines Baumes an der
+    // Strasse der Gehweg (12 cm) und im Park das Gelaende (0 cm) — genau das
+    // liefert `bauOben`. Die 2 cm Rest sind Einbindung, damit der Fuss bei
+    // streifendem Licht nicht als Fuge aufblitzt.
+    const [lonB, latB] = nachWgs(b.pos);
+    const rahmen = Cesium.Transforms.eastNorthUpToFixedFrame(
+      Cesium.Cartesian3.fromDegrees(lonB, latB, hoehen.bauOben(b.pos[0], b.pos[1]) - 0.02),
+    );
     const welt = (p: [number, number, number]): Cesium.Cartesian3 =>
       Cesium.Matrix4.multiplyByPoint(rahmen, new Cesium.Cartesian3(p[0], p[1], p[2]), new Cesium.Cartesian3());
 
@@ -548,6 +559,18 @@ export function baueBaeume(punkte: GelaendePunktObjekt[], hoehen: Hoehenlage): C
     const stammR = hoehe / STAMM_SCHLANKHEIT / 2;
     const kronenFarbe = band[s.ton];
 
+    if (b.art === 'strauch') {
+      // Strauch: bodennaher, abgeplatteter Busch OHNE Stamm — die Baum-Klemmen
+      // gelten hier nicht (ein 1-m-Busch darf 1 m bleiben).
+      const strauchHoehe = klemm((b.hoeheM ?? 1.5) * s.hoeheFaktor, 0.4, 4);
+      const strauchR = klemm((b.kroneM ?? strauchHoehe * 1.2) * s.kroneFaktor, 0.5, 6) / 2;
+      // Mitte auf halber Hoehe, Unterkante knapp UNTER dem Sockel (der Rahmen
+      // steht schon auf Gelaende + 0,1 m) — der Busch waechst aus dem Boden.
+      einsetzen(kugel, strauchR, strauchR, strauchHoehe / 2, strauchHoehe / 2 - 0.06, VEGETATION_FARBEN.hecke);
+      if (++imBuendel >= BUENDEL_BAEUME) abschliessen();
+      continue;
+    }
+
     if (b.laubart === 'nadelbaum') {
       // Kegel: Grundkreis auf dem Kronenansatz, Spitze exakt auf der Baumhoehe.
       const kegelHoehe = Math.max(0.5, hoehe - stammFrei);
@@ -555,8 +578,15 @@ export function baueBaeume(punkte: GelaendePunktObjekt[], hoehen: Hoehenlage): C
       einsetzen(ZYLINDER_NETZ, stammR, stammR, stammFrei, 0, VEGETATION_FARBEN.stamm);
     } else if (b.laubart === 'immergruen') {
       // Immergruen: eine geschlossene, kompakte Kugel.
-      const mitteZ = Math.max(hoehe - kroneR, stammFrei);
-      einsetzen(kugel, kroneR, kroneR, kroneR, mitteZ, kronenFarbe);
+      //
+      // Die Kugel wird VERTIKAL an die verfuegbare Hoehe gekoppelt, statt sie
+      // per max() anzuheben: bei breiter Krone und niedrigem Baum (27 Faelle im
+      // Pilotbestand, z. B. h=6 m mit 10 m Krone) ragte die alte Konstruktion
+      // 23 % ueber die GEMESSENE Baumhoehe hinaus und meterweit unter den
+      // Boden. Die Messung ist die Obergrenze, nicht ein Richtwert.
+      const rzImmer = Math.min(kroneR, (hoehe - Math.min(stammFrei, hoehe * 0.25)) / 2);
+      const mitteZ = hoehe - rzImmer;
+      einsetzen(kugel, kroneR, kroneR, rzImmer, mitteZ, kronenFarbe);
       einsetzen(ZYLINDER_NETZ, stammR, stammR, mitteZ, 0, VEGETATION_FARBEN.stamm);
     } else {
       // LAUBBAUM aus mehreren Ballen statt einer Kugel.
@@ -570,8 +600,11 @@ export function baueBaeume(punkte: GelaendePunktObjekt[], hoehen: Hoehenlage): C
       // Die Ballen bleiben INNERHALB des gemessenen Kronendurchmessers und die
       // Oberkante auf der gemessenen Baumhoehe — die Messung wird nicht
       // aufgeweicht, nur die Form innerhalb der Messung wird glaubwuerdiger.
-      const rz = kroneR * KRONE_ABPLATTUNG;
-      const mitteZ = Math.max(hoehe - rz, stammFrei);
+      // Wie beim Immergruen: die vertikale Halbachse folgt der verfuegbaren
+      // Hoehe, damit die Kronenoberkante die gemessene Baumhoehe TRIFFT statt
+      // sie zu ueberschreiten.
+      const rz = Math.min(kroneR * KRONE_ABPLATTUNG, (hoehe - Math.min(stammFrei, hoehe * 0.25)) / 2);
+      const mitteZ = hoehe - rz;
 
       // Ballenanordnung deterministisch aus der Id — dieselbe Baumreihe sieht
       // bei jedem Laden gleich aus.
@@ -661,8 +694,14 @@ export function baueHecken(linien: GelaendeLinienObjekt[], hoehen: Hoehenlage): 
     }
 
     const n = unten.length;
-    // 2 cm ueber Grund: verhindert Z-Flackern gegen die Bodenzeichnung.
-    const ecken = [...unten.map((p) => hoehen.welt(p, 0.02)), ...oben.map((p) => hoehen.welt(p, hoeheM))];
+    // Fuss UNTER der gezeichneten Oberflaeche (0,098 m Auflagen + Sockel
+    // 0,1 m), Oberkante ueber dem Sockel: eine Hecke waechst aus dem Boden,
+    // sie steht nicht darauf. Die alten 2 cm lagen MITTEN in der
+    // Bodenzeichnung — die Hecke war unten angeschnitten.
+    const ecken = [
+      ...unten.map((p) => hoehen.welt(p, -0.05)),
+      ...oben.map((p) => hoehen.welt(p, 0.1 + hoeheM)),
+    ];
 
     const dreiecke: [number, number, number][] = [];
     for (let i = 0; i < n; i++) {

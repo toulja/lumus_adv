@@ -240,6 +240,36 @@ export const gelaende = {
     sicherstellen(path.dirname(p));
     fs.writeFileSync(p, daten);
   },
+
+  /**
+   * Pfad des binaeren Hoehenrasters.
+   *
+   * Es liegt bewusst NEBEN der Gelaendedatei, nicht darin: das Raster des
+   * Pilotgebiets hat 2,16 Mio. Zellen. Als Zahlen im JSON waeren das rund
+   * 14 MB, die der Browser bei jedem Projektwechsel zeichenweise auseinander-
+   * nehmen muesste. Als Binaerdatei sind es 8 MB, die er in einem Stueck holt
+   * und ohne Umwandlung als Float32Array benutzt.
+   *
+   * Dieselbe Pfadabsicherung wie bei den Texturen (Befund 07.08.2026).
+   */
+  rasterPfad(gid: string): string {
+    const p = path.resolve(GELAENDE_DIR, path.basename(gid), 'hoehen.bin');
+    const wurzel = path.resolve(GELAENDE_DIR) + path.sep;
+    if (!p.startsWith(wurzel)) throw new Error('Ungueltiger Rasterpfad.');
+    return p;
+  },
+  rasterSchreiben(gid: string, puffer: ArrayBuffer) {
+    const p = this.rasterPfad(gid);
+    sicherstellen(path.dirname(p));
+    fs.writeFileSync(p, Buffer.from(puffer));
+  },
+  rasterVorhanden(gid: string): boolean {
+    try {
+      return fs.existsSync(this.rasterPfad(gid));
+    } catch {
+      return false;
+    }
+  },
 };
 
 // ---------------------------------------------------------------------------

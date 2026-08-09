@@ -320,11 +320,15 @@ function baumMass(tags: Record<string, string>): BaumMass {
   };
 }
 
+/** Klassenannahme fuer Einzelstraeucher ohne Massangabe. */
+const STRAUCH_HOEHE_M = 1.5;
+
 async function baeume(bbox: BBox, ziel: BBox, ua: string): Promise<GelaendePunktObjekt[]> {
   const g = gebietsfilter(bbox);
   const rumpf =
     `[out:json][timeout:60];(` +
     `node["natural"="tree"]${g};` +
+    `node["natural"="shrub"]${g};` +
     `way["natural"="tree_row"]${g};` +
     `);out geom;`;
   const elemente = await overpass(rumpf, 'detail_baeume', bbox, ua);
@@ -332,6 +336,24 @@ async function baeume(bbox: BBox, ziel: BBox, ua: string): Promise<GelaendePunkt
   const out: GelaendePunktObjekt[] = [];
   for (const el of elemente) {
     const tags = el.tags ?? {};
+
+    // Einzelstrauch: niedriger Busch ohne Stamm — eigene Art, damit die
+    // Darstellung ihn nicht als Mini-Baum mit Stamm zeichnet.
+    if (el.type === 'node' && tags.natural === 'shrub') {
+      const pos = knotenPos(el);
+      if (!pos || !bboxEnthaelt(ziel, pos)) continue;
+      const hoehe = osmBreite(tags.height);
+      const krone = osmBreite(tags.diameter_crown);
+      out.push({
+        id: `det_strauch_n${el.id}`,
+        art: 'strauch',
+        pos: p2(pos),
+        hoeheM: r2(hoehe ?? STRAUCH_HOEHE_M),
+        kroneM: r2(krone ?? Math.max(1, (hoehe ?? STRAUCH_HOEHE_M) * 1.2)),
+        gemessen: hoehe !== null,
+      });
+      continue;
+    }
 
     if (el.type === 'node' && tags.natural === 'tree') {
       const pos = knotenPos(el);
@@ -701,7 +723,11 @@ const MOEBEL_ART: Record<string, PunktArt> = {
 /** Klassenhoehe einer Strassenlaterne, wenn OSM keine fuehrt. */
 const LATERNE_HOEHE_M = 5;
 
-async function strassenmoebel(bbox: BBox, ziel: BBox, ua: string): Promise<GelaendePunktObjekt[]> {
+async function strassenmoebel(
+  bbox: BBox,
+  ziel: BBox,
+  ua: string,
+): Promise<{ punkte: GelaendePunktObjekt[]; flaechen: GelaendeFlaeche[]; linien: GelaendeLinienObjekt[] }> {
   const g = gebietsfilter(bbox);
   // Brunnen und Fahrradstaender sind haeufig als FLAECHE erfasst — dann zaehlt
   // ihr Mittelpunkt, sonst fehlten sie ganz.
@@ -714,12 +740,48 @@ async function strassenmoebel(bbox: BBox, ziel: BBox, ua: string): Promise<Gelae
   const elemente = await overpass(rumpf, 'detail_moebel', bbox, ua);
 
   const out: GelaendePunktObjekt[] = [];
+  const flaechen: GelaendeFlaeche[] = [];
+  const linien: GelaendeLinienObjekt[] = [];
   for (const el of elemente) {
     const tags = el.tags ?? {};
     const amenity = (tags.amenity ?? '').trim().toLowerCase();
     const istLaterne = tags.highway === 'street_lamp';
     const art = istLaterne ? 'laterne' : MOEBEL_ART[amenity];
     if (!art) continue;
+
+    // Als FLAECHE erfasste Brunnen bekommen ihre ECHTE Geometrie: das
+    // Wasserbecken als Auflage-Flaeche, der Beckenrand als niedrige Mauer
+    // entlang des Rings. Die pauschale 3-m-Scheibe aus dem Punkt-Pfad waere
+    // fuer den grossen Herrngarten-Brunnen schlicht falsch.
+    if (art === 'brunnen' && el.type === 'way') {
+      const ring = ringNormalisieren(punkteNachUtm(el.geometry).map(p2));
+      if (ring.length >= 3 && flaeche(ring) >= 4) {
+        // Flaechenschwerpunkt, NICHT wegMitte(): ringNormalisieren entfernt den
+        // Schlusspunkt, damit greift die geschlossen-Erkennung in wegMitte
+        // nicht mehr und sie liefert die Streckenmitte des Umrings — bei einem
+        // runden Becken ein Punkt auf dem Rand statt in der Mitte.
+        const mitte = schwerpunkt(ring);
+        if (bboxEnthaelt(ziel, mitte)) {
+          flaechen.push({
+            id: `det_brunnen_w${el.id}`,
+            art: 'wasser',
+            polygon: ring,
+            quelle: 'osm',
+            bezeichnung: text(tags.name) ?? 'Brunnen',
+            rang: OSM_RANG.treppe + 1, // Auflage auf Platz/Gehweg
+            belag: 'wasserbecken',
+          });
+          linien.push({
+            id: `det_brunnenrand_w${el.id}`,
+            art: 'mauer',
+            achse: [...ring, ring[0]],
+            hoeheM: 0.4,
+            breiteM: 0.3,
+          });
+        }
+        continue;
+      }
+    }
 
     const pos = elementPos(el);
     if (!pos || !bboxEnthaelt(ziel, pos)) continue;
@@ -742,7 +804,7 @@ async function strassenmoebel(bbox: BBox, ziel: BBox, ua: string): Promise<Gelae
     if (art === 'bank') eintrag.drehungGrad = richtungGrad(tags.direction);
     out.push(eintrag);
   }
-  return out;
+  return { punkte: out, flaechen, linien };
 }
 
 // ---------------------------------------------------------------------------
@@ -893,6 +955,99 @@ async function ueberwege(bbox: BBox, ziel: BBox, ua: string): Promise<GelaendeFl
 }
 
 // ---------------------------------------------------------------------------
+// G) Lichtsignalanlagen und Verkehrszeichen
+// ---------------------------------------------------------------------------
+
+/**
+ * Ampeln (`highway=traffic_signals`) und Verkehrszeichen (`highway=stop`,
+ * `highway=give_way`, `traffic_sign=*`).
+ *
+ * OSM fuehrt diese Elemente als KNOTEN AUF der Fahrbahnachse — nicht dort, wo
+ * der Mast wirklich steht. Ein Signalgeber mitten auf der Fahrbahn waere
+ * falsch; darum wird der Knoten quer zur Fahrbahn an den Rand versetzt
+ * (halbe Fahrbahnbreite + Gehwegabstand) und die Ausrichtung von der
+ * Fahrbahnachse uebernommen. Beides ist eine ABLEITUNG aus der Achse, keine
+ * Vermessung des Maststandorts — `gemessen` bleibt darum false.
+ */
+const AMPEL_VERSATZ_M = 5.5;
+const ZEICHEN_VERSATZ_M = 4.5;
+/** Weiter als das von einer Fahrbahnachse entfernt gilt die Zuordnung nicht. */
+const ACHSE_MAX_M = 30;
+
+async function verkehrszeichen(bbox: BBox, ziel: BBox, ua: string): Promise<GelaendePunktObjekt[]> {
+  const g = gebietsfilter(bbox);
+  const rumpf =
+    `[out:json][timeout:60];(` +
+    `node["highway"="traffic_signals"]${g};` +
+    `node["highway"="stop"]${g};` +
+    `node["highway"="give_way"]${g};` +
+    `node["traffic_sign"]${g};` +
+    `way["highway"~"${ZEBRA_ACHSE_KLASSEN}"]${g};` +
+    `);out geom;`;
+  const elemente = await overpass(rumpf, 'detail_zeichen', bbox, ua);
+
+  const achsen: Punkt[][] = [];
+  const knoten: OsmElement[] = [];
+  for (const el of elemente) {
+    if (el.type === 'node') {
+      knoten.push(el);
+      continue;
+    }
+    if (el.type !== 'way' || !el.tags?.highway) continue;
+    const linie = punkteNachUtm(el.geometry);
+    if (linie.length >= 2) achsen.push(linie);
+  }
+
+  const out: GelaendePunktObjekt[] = [];
+  for (const el of knoten) {
+    const tags = el.tags ?? {};
+    const hw = (tags.highway ?? '').trim();
+    const istAmpel = hw === 'traffic_signals';
+    const zeichenNr = text(tags.traffic_sign);
+    const istZeichen = hw === 'stop' || hw === 'give_way' || Boolean(zeichenNr);
+    if (!istAmpel && !istZeichen) continue;
+
+    const pos = knotenPos(el);
+    if (!pos || !bboxEnthaelt(ziel, pos)) continue;
+
+    // Naechste Fahrbahnachse suchen — sie gibt Richtung UND Versatzseite vor.
+    let laengs: Punkt | null = null;
+    let beste = Infinity;
+    for (const achse of achsen) {
+      for (let i = 1; i < achse.length; i++) {
+        const d = abstandPunktStrecke(pos, achse[i - 1], achse[i]);
+        if (d < beste) {
+          beste = d;
+          laengs = norm(sub(achse[i], achse[i - 1]));
+        }
+      }
+    }
+    let stand = pos;
+    let drehung = 0;
+    if (laengs && beste <= ACHSE_MAX_M) {
+      const quer = norm(lot(laengs));
+      const v = istAmpel ? AMPEL_VERSATZ_M : ZEICHEN_VERSATZ_M;
+      stand = [pos[0] + quer[0] * v, pos[1] + quer[1] * v];
+      // Der Signalgeber schaut ENTGEGEN der Fahrtrichtung, also auf den
+      // ankommenden Verkehr.
+      drehung = ((Math.atan2(-laengs[0], -laengs[1]) * 180) / Math.PI + 360) % 360;
+    }
+
+    out.push({
+      id: `det_${istAmpel ? 'ampel' : 'zeichen'}_n${el.id}`,
+      art: istAmpel ? 'ampel' : 'verkehrszeichen',
+      pos: p2(stand),
+      drehungGrad: r2(drehung),
+      // Standort aus der Achse abgeleitet, nicht vermessen.
+      gemessen: false,
+      ...(zeichenNr ? { zeichen: zeichenNr } : hw === 'stop' ? { zeichen: 'DE:206' } : hw === 'give_way' ? { zeichen: 'DE:205' } : {}),
+      name: text(tags.name),
+    });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Alles zusammen
 // ---------------------------------------------------------------------------
 
@@ -936,10 +1091,16 @@ export async function stadtdetails(bbox: BBox, opts?: DetailOpts): Promise<Stadt
     punkte.push(...b.punkte);
   });
   await teil('Strassenmoebel', async () => {
-    punkte.push(...(await strassenmoebel(bbox, ziel, ua)));
+    const m = await strassenmoebel(bbox, ziel, ua);
+    punkte.push(...m.punkte);
+    zusatzflaechen.push(...m.flaechen);
+    linien.push(...m.linien);
   });
   await teil('Ueberwege', async () => {
     zusatzflaechen.push(...(await ueberwege(bbox, ziel, ua)));
+  });
+  await teil('Verkehrszeichen', async () => {
+    punkte.push(...(await verkehrszeichen(bbox, ziel, ua)));
   });
 
   return { punkte, linien, zusatzflaechen };

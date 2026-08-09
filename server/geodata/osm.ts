@@ -21,6 +21,7 @@
  * umgesetzt (Warteschlange + Dateicache unter data/cache/osm/).
  */
 
+import fs from 'node:fs';
 import polygonClipping from 'polygon-clipping';
 import type {
   BBox,
@@ -41,6 +42,7 @@ import {
   wegKorridor,
 } from '../../shared/geo/geometry.ts';
 import { bboxNachWgs, nachUtm } from '../../shared/geo/proj.ts';
+import { RANG } from './nutzung.ts';
 import { cache } from '../lib/store.ts';
 import { geoKonfig } from './konfig.ts';
 
@@ -71,22 +73,15 @@ export function standardUserAgent(): string {
 // Zeichenreihenfolge (identisch zu nutzung.ts — hoehere Werte liegen oben)
 // ---------------------------------------------------------------------------
 
-export const OSM_RANG: Record<FlaechenArt, number> = {
-  sonstige: 6,
-  landwirtschaft: 8,
-  bebauung: 10,
-  wald: 12,
-  gruen: 14,
-  wasser: 16,
-  bahn: 18,
-  fahrbahn: 20,
-  platz: 24,
-  fussgaengerzone: 26,
-  weg: 28,
-  gehweg: 30,
-  radweg: 32,
-  treppe: 34,
-};
+// EINE Rangtabelle fuer beide Quellen: die fruehere OSM-eigene Kopie wich bei
+// fuenf Klassen von nutzung.RANG ab, obwohl ihr Kommentar Gleichheit
+// behauptete — beim Mischen beider Quellen in einer rangsortierten
+// Zeichenliste kollidierten dadurch z. B. ALKIS-Gruen (10) und
+// OSM-Bebauung (10). Seit dem Palette-Umbau ordnet der Renderer primaer nach
+// palette.FLAECHEN_STIL; der gespeicherte Rang bleibt Feinsortierung und
+// Traeger des Bruecken-Zuschlags — und muss dafuer quellenuebergreifend
+// konsistent sein.
+export const OSM_RANG = RANG;
 
 /** Bruecken liegen ueber allem, was an derselben Stelle am Boden liegt. */
 const BRUECKEN_ZUSCHLAG = 10;
@@ -337,10 +332,82 @@ function fehlerText(text: string): string {
   return (m?.[1] ?? text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0, 200)).trim();
 }
 
-function cacheSchluessel(art: string, bbox: BBox): string {
-  const r = (x: number) => Math.round(x);
-  return `${art}_${r(bbox.minE)}_${r(bbox.minN)}_${r(bbox.maxE)}_${r(bbox.maxN)}.json`;
+/**
+ * Kurzer, stabiler Hash der Abfrage (FNV-1a) fuer den Cache-Schluessel.
+ *
+ * OHNE ihn invalidiert der Cache NIE: Der Schluessel bestand nur aus Art und
+ * Gebiet, also lieferte eine ERWEITERTE Abfrage weiterhin die alten Elemente
+ * aus data/cache/osm/. Real passiert am 08.08.2026: der neue
+ * `natural=shrub`-Zweig blieb wirkungslos, bis die Cache-Datei von Hand
+ * geloescht wurde. Mit dem Hash bekommt jede geaenderte Abfrage automatisch
+ * eine eigene Datei; die alte bleibt liegen und schadet nicht.
+ */
+function abfrageHash(rumpf: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < rumpf.length; i++) {
+    h ^= rumpf.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
 }
+
+/** Gemeinsamer Namensteil aller Cache-Staende EINER Abfrageart in EINEM Gebiet. */
+function cachePraefix(art: string, bbox: BBox): string {
+  const r = (x: number) => Math.round(x);
+  return `${art}_${r(bbox.minE)}_${r(bbox.minN)}_${r(bbox.maxE)}_${r(bbox.maxN)}`;
+}
+
+function cacheSchluessel(art: string, bbox: BBox, rumpf: string): string {
+  return `${cachePraefix(art, bbox)}_${abfrageHash(rumpf)}.json`;
+}
+
+/**
+ * ALTBESTAND als Rueckfall, wenn der Abruf scheitert.
+ *
+ * Overpass antwortet unter Last mit 429/504. Ohne diesen Rueckfall entstand
+ * daraus eine STILLE DATENLUECKE: am 08.08.2026 fielen bei einem Neu-Import
+ * Baeume, Barrieren und Ueberwege komplett aus (349 OSM-Baeume weg), weil der
+ * Abruf scheiterte und der passende Cache-Eintrag durch eine Abfrage-Aenderung
+ * einen neuen Schluessel bekommen hatte. Ein veralteter Stand MIT Hinweis ist
+ * ehrlicher als ein leises Nichts — und weit besser als ein abgebrochener
+ * Import. Genommen wird der zuletzt geschriebene Stand derselben Art und
+ * desselben Gebiets, gleich unter welchem Abfrage-Hash.
+ */
+function ausAltbestand(art: string, bbox: BBox): { elemente: OsmElement[]; datei: string; stand?: string } | null {
+  const praefix = cachePraefix(art, bbox);
+  let ordner: string[];
+  try {
+    ordner = fs.readdirSync(cache.pfad('osm'));
+  } catch {
+    return null;
+  }
+  const treffer = ordner
+    .filter((n) => n.startsWith(praefix) && n.endsWith('.json'))
+    .map((n) => {
+      let zeit = 0;
+      try {
+        zeit = fs.statSync(cache.pfad('osm', n)).mtimeMs;
+      } catch {
+        /* Datei verschwunden — ueberspringen */
+      }
+      return { n, zeit };
+    })
+    .sort((a, b) => b.zeit - a.zeit);
+  for (const { n } of treffer) {
+    const alt = cache.jsonLesen<OsmCache | null>(null, 'osm', n);
+    if (alt && Array.isArray(alt.elements) && alt.elements.length) {
+      return { elemente: alt.elements, datei: n, stand: alt.stand };
+    }
+  }
+  return null;
+}
+
+/**
+ * Meldungen ueber benutzte Altbestaende — der Aufrufer (Gelaende-Import) soll
+ * sie in den Quellennachweis bzw. das Auftragsprotokoll uebernehmen, damit
+ * niemand einen veralteten Stand fuer frisch abgerufen haelt.
+ */
+export const altbestandMeldungen: string[] = [];
 
 /**
  * Eine Overpass-Abfrage mit Warteschlange, Dateicache und Wiederholversuch.
@@ -355,41 +422,58 @@ export async function overpass(
   bbox: BBox,
   userAgent: string,
 ): Promise<OsmElement[]> {
-  const schluessel = cacheSchluessel(art, bbox);
+  const schluessel = cacheSchluessel(art, bbox, rumpf);
   const gecacht = cache.jsonLesen<OsmCache | null>(null, 'osm', schluessel);
   if (gecacht && Array.isArray(gecacht.elements)) return gecacht.elements;
 
-  const elemente = await nacheinander(async () => {
-    for (let versuch = 0; versuch < 2; versuch++) {
-      const res = await fetch(OVERPASS_URL, {
-        method: 'POST',
-        headers: {
-          'User-Agent': userAgent,
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Accept: 'application/json',
-        },
-        body: new URLSearchParams({ data: rumpf }).toString(),
-      });
-      if (res.ok) {
-        const daten = (await res.json()) as { elements?: OsmElement[] };
-        return daten.elements ?? [];
-      }
-      const text = await res.text().catch(() => '');
-      // 429 = Drossel, 504 = Auslastung, 400 mit Dispatcher-Meldung = ebenfalls
-      // Drossel (Overpass meldet die Slot-Sperre am 07.08.2026 nachweislich als
-      // HTTP 400 mit HTML-Seite, nicht als 429). Alles davon ist voruebergehend.
-      if (versuch === 0 && (res.status === 429 || res.status === 504 || istDrossel(text))) {
-        await new Promise((r) => setTimeout(r, 5000));
-        continue;
+  let elemente: OsmElement[];
+  try {
+    elemente = await nacheinander(async () => {
+      // Drei Versuche mit wachsender Pause: Overpass ist unter Last regelmaessig
+      // fuer einige Sekunden dicht (nachgestellt 08.08.2026, HTTP 429/504).
+      for (let versuch = 0; versuch < 3; versuch++) {
+        const res = await fetch(OVERPASS_URL, {
+          method: 'POST',
+          headers: {
+            'User-Agent': userAgent,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Accept: 'application/json',
+          },
+          body: new URLSearchParams({ data: rumpf }).toString(),
+        });
+        if (res.ok) {
+          const daten = (await res.json()) as { elements?: OsmElement[] };
+          return daten.elements ?? [];
+        }
+        const text = await res.text().catch(() => '');
+        // 429 = Drossel, 504 = Auslastung, 400 mit Dispatcher-Meldung = ebenfalls
+        // Drossel (Overpass meldet die Slot-Sperre am 07.08.2026 nachweislich als
+        // HTTP 400 mit HTML-Seite, nicht als 429). Alles davon ist voruebergehend.
+        if (versuch < 2 && (res.status === 429 || res.status === 504 || istDrossel(text))) {
+          await new Promise((r) => setTimeout(r, 5000 * (versuch + 1)));
+          continue;
+        }
+        throw new Error(
+          `Overpass-API nicht erreichbar (HTTP ${res.status}). ${fehlerText(text)}`.trim(),
+        );
       }
       throw new Error(
-        `Overpass-API nicht erreichbar (HTTP ${res.status}). ${fehlerText(text)}`.trim(),
+        'Overpass-API dauerhaft ausgelastet (Drossel) — Bodenzeichnung aus OSM k. A.',
       );
-    }
-    throw new Error(
-      'Overpass-API dauerhaft ausgelastet (Drossel) — Bodenzeichnung aus OSM k. A.',
-    );
-  });
+    });
+  } catch (fehler) {
+    // Abruf gescheitert: lieber ein veralteter Stand MIT Hinweis als eine
+    // stille Luecke (Begruendung bei ausAltbestand).
+    const alt = ausAltbestand(art, bbox);
+    if (!alt) throw fehler;
+    const meldung =
+      `${art}: Abruf gescheitert (${(fehler as Error).message.slice(0, 90)}) — ` +
+      `es gilt der zwischengespeicherte Stand vom ${alt.stand ? new Date(alt.stand).toLocaleString('de-DE') : 'unbekannt'} ` +
+      `(${alt.elemente.length} Objekte, ${alt.datei}).`;
+    console.warn(`[osm] ${meldung}`);
+    altbestandMeldungen.push(meldung);
+    return alt.elemente;
+  }
 
   cache.jsonSchreiben({ stand: new Date().toISOString(), bbox, elements: elemente } as OsmCache, 'osm', schluessel);
   return elemente;
@@ -577,17 +661,37 @@ export async function osmWegflaechen(
     } else {
       polygone = korridorPolygone(linie, k.breiteM, ziel);
     }
-    out.push(
-      ...alsGelaendeFlaechen(
-        'w',
-        el.id,
-        polygone,
-        k.art,
-        k.rang,
-        bezeichnungVon(tags, tags.highway ?? ''),
-        belagVon(tags),
-      ),
+    const flaechen = alsGelaendeFlaechen(
+      'w',
+      el.id,
+      polygone,
+      k.art,
+      k.rang,
+      bezeichnungVon(tags, tags.highway ?? ''),
+      belagVon(tags),
     );
+
+    // Fahrbahnen tragen ihre Achse und die getaggten Fahrdaten mit — die
+    // Grundlage fuer Leitlinien und Spurtrennstriche in der Darstellung.
+    // Nur Getaggtes wird uebernommen (lanes/oneway), geraten wird nichts.
+    if (k.art === 'fahrbahn' && !alsFlaeche && flaechen.length) {
+      const achsen = abschnitteImGebiet(linie, ziel).filter((t) => t.length >= 2);
+      const spuren = zahlAus(tags.lanes);
+      // Die Achsen gehoeren dem WEG, nicht jedem seiner Korridor-Teilstuecke:
+      // ein Weg kann mehrere Polygone liefern (Union-Reste, Gebietsschnitt).
+      // Haengte man die volle Achsenliste an jedes Teilstueck, entstuenden im
+      // Import so viele Markierungssaetze wie Teilstuecke — dieselbe Leitlinie
+      // mehrfach uebereinander.
+      const ersteFlaeche = flaechen[0];
+      ersteFlaeche.achsen = achsen.length ? achsen : undefined;
+      for (const f of flaechen) {
+        f.breiteM = k.breiteM;
+        if (spuren !== null && spuren >= 1 && spuren <= 12) f.spuren = spuren;
+        if (tags.oneway === 'yes' || tags.oneway === '-1') f.einbahn = true;
+        f.strassenklasse = (tags.highway ?? '').replace(/_link$/, '') || undefined;
+      }
+    }
+    out.push(...flaechen);
   }
   return out;
 }
@@ -634,9 +738,17 @@ export async function osmFlaechen(
     const ring = ringSauber(punkteNachUtm(g));
     if (ring.length < 3) continue;
 
-    const ersatz = tags.landuse ?? tags.leisure ?? tags.natural ?? tags.amenity ?? tags['area:highway'] ?? '';
+    // Parkplaetze tragen ihre Rolle IMMER in der Bezeichnung (auch benannte:
+    // „Name (Parkplatz)") — die Darstellung erkennt sie daran und beschriftet
+    // sie mit „P", sonst laese ein Parkplatz wie eine Fahrbahnflaeche.
+    const istParkplatz = tags.amenity === 'parking';
+    const ersatz = istParkplatz
+      ? 'Parkplatz'
+      : (tags.landuse ?? tags.leisure ?? tags.natural ?? tags.amenity ?? tags['area:highway'] ?? '');
+    let bezeichnung = bezeichnungVon(tags, ersatz);
+    if (istParkplatz && !/parkplatz/i.test(bezeichnung)) bezeichnung = `${bezeichnung} (Parkplatz)`;
     out.push(
-      ...alsGelaendeFlaechen('f', el.id, [[ring]], k.art, k.rang, bezeichnungVon(tags, ersatz), belagVon(tags)),
+      ...alsGelaendeFlaechen('f', el.id, [[ring]], k.art, k.rang, bezeichnung, belagVon(tags)),
     );
   }
   return out;
