@@ -290,7 +290,38 @@ Neu: `shared/bau/treppe.ts`, `web/src/scene/treppen.ts`.
 keine Sohle — ein Bach liegt weiterhin auf dem Ufer statt darin. Brücken und Tunnel tragen
 ihr Höhenband noch nicht; Tunnel werden beim Import weiterhin verworfen.
 
-## 10. Offen — zu belegen, bevor es implementiert wird
+## 10. Die Gleiszone braucht ein Loch in der Fahrbahn — nachgewiesen
+
+Der Versuch, das Gleis als **Auflage** über die Fahrbahn zu legen, ist
+gescheitert, und zwar messbar. `scene.drillPick` senkrecht auf die Gleisachse
+(Rheinstraße, 475357/5524443) liefert von vorn nach hinten:
+
+```
+1. boden:fahrbahn:osm_fahrbahn_118
+2. gleis:0
+3. gelaende:p8
+```
+
+Die Fahrbahn liegt **über** dem Gleis, obwohl das Gleisband rechnerisch 4,5 cm
+höher angesetzt ist. Der Grund ist kein Rechenfehler, sondern eine Eigenschaft
+des Modells: Bodenzeichnung und Gleisband sind zwei getrennt vernetzte Flächen.
+Beide tasten dasselbe Gelände an **verschiedenen** Stützpunkten ab, und die
+zulässige Abweichung des Geländenetzes beträgt 8 cm. Ein Zeichenversatz, der
+das sicher überbietet, müsste größer sein als die Bordsteinhöhe von 12 cm — dann
+stünde das Gleis als Rampe über der Straße.
+
+Damit ist die Auflage-Lösung endgültig ausgeschieden. Die Gleiszone muss beim
+Import **aus den Bodenflächen ausgeschnitten** werden; erst dann kann das Gleis
+bündig liegen (Zeichenversatz 0) und man sieht in die Rille hinein, statt auf
+die Fahrbahn, die ungeschnitten darüber hinwegläuft.
+
+Vorgehen für die Umsetzung: In `server/geodata/gelaende.ts` nach den
+Stadtdetails je Gleisachse einen Korridor der Eindeckungsbreite aus
+Segment-Rechtecken bilden (nicht `bandRing` — dessen Selbstschnitt ist ein
+offener Befund), diese vereinigen und von den Bodenflächen abziehen. Danach
+`zPlatte` in `shared/bau/oberbau.ts` auf 0 setzen.
+
+## 11. Offen — zu belegen, bevor es implementiert wird
 
 - Regelbordhöhe, Rillentiefe, Bahnsteighöhen, Schwellenmaße, Böschungsneigungen:
   jede Zahl braucht eine Fundstelle (RASt 06, EAÖ, BOStrab §, DIN 18040-3). Bis
