@@ -353,7 +353,7 @@ export function rampenAbsenken(
   flaechen: GelaendeFlaeche[],
   raster: Hoehenraster,
   vertikal: VertikalMasse | null,
-): { linien: GelaendeLinienObjekt[]; kanten: Bruchkante[]; troege: Ring[]; bericht: HoehenbandBericht } {
+): { linien: GelaendeLinienObjekt[]; kanten: Bruchkante[]; troege: Ring[]; sohlen: Ring[]; bericht: HoehenbandBericht } {
   const bericht: HoehenbandBericht = {
     straenge: 0,
     groessterStrang: 0,
@@ -375,7 +375,9 @@ export function rampenAbsenken(
   const linien: GelaendeLinienObjekt[] = [];
   const kanten: Bruchkante[] = [];
   const troege: Ring[] = [];
-  if (!vertikal) return { linien, kanten, troege, bericht };
+  /** Der Aushub OHNE Zugabe — daran wird die Rampenfahrbahn zugeschnitten. */
+  const sohlen: Ring[] = [];
+  if (!vertikal) return { linien, kanten, troege, sohlen, bericht };
 
   const hoeheBei = (e: number, n: number) => raster.hoeheOder(e, n, raster.statistik().mittel);
   const offene = flaechen.filter((f) => !f.lage && (f.art === 'fahrbahn' || f.art === 'platz' || f.art === 'fussgaengerzone' || f.art === 'gehweg' || f.art === 'weg'));
@@ -536,7 +538,23 @@ export function rampenAbsenken(
       }
       f.lage = { ...(f.lage ?? {}), herkunft };
       if (!eigene.length) continue;
-      const ebene = ebeneAusgleichen(eigene.map((z) => [z.e, z.n, z.oberkante - tiefeVon(z.weg)] as [number, number, number]));
+      /*
+       * DIE EBENE WIRD UEBER DIE OFFENEN ZELLEN GELEGT, nicht ueber alle.
+       *
+       * Ein Polygonstueck reicht regelmaessig vom offenen Trog bis unter die
+       * Decke. Nimmt man alle seine Zellen in die Ausgleichung, zieht der tiefe,
+       * ueberdeckte Teil die Ebene nach unten — und im offenen Teil, dem
+       * einzigen, der spaeter gezeichnet wird, liegt sie dann UNTER dem
+       * ausgehobenen Boden. Nachgemessen am Lauf vom 10.08.2026: 12,4 % der
+       * zugeschnittenen Fahrbahn lagen so noch bis zu 2,80 m unter der Erde.
+       *
+       * Gezeichnet wird nur der offene Teil; also muss die Ebene zu ihm passen.
+       * Hat ein Stueck gar keine offene Zelle, faellt es beim Zuschnitt ohnehin
+       * heraus — dann darf die Ausgleichung ueber alles laufen.
+       */
+      const offen = eigene.filter((z) => tiefeVon(z.weg) < deckung - 1e-6);
+      const traegt = offen.length >= 3 ? offen : eigene;
+      const ebene = ebeneAusgleichen(traegt.map((z) => [z.e, z.n, z.oberkante - tiefeVon(z.weg)] as [number, number, number]));
       f.lage.hoehenEbene = ebene;
       f.lage.tiefeM = Math.round(Math.max(...eigene.map((z) => tiefeVon(z.weg))) * 100) / 100;
       // DIE GEZEICHNETE FAHRBAHN IST DIE VORLAGE FUER DEN AUSHUB, nicht der
@@ -574,12 +592,49 @@ export function rampenAbsenken(
     // stehen, holte er sich seine Hoehen aus dem Graben und haenge in Fetzen
     // hinein — im Bild vom 10.08.2026 genau so zu sehen.
     const r = k.zellM / 2 + SCHNITT_ZUGABE_M;
+    const h = k.zellM / 2;
+    /*
+     * DIE SOHLE IST DAS INNERE DES AUSHUBS, nicht der Aushub selbst.
+     *
+     * Das Bodenloch darf GROESSER sein als der Aushub (sonst haengt ein Streifen
+     * Bodenflaeche in den Graben) — die Rampenfahrbahn muss KLEINER sein. Der
+     * Grund ist das Raster: Zwischen einer ausgehobenen und einer stehen
+     * gebliebenen Zelle steigt das gezeichnete Gelaendenetz ueber EINEN Meter um
+     * die volle Grabentiefe an. Die Fahrbahn ist dort eine Ebene und schneidet
+     * durch diese Rampe hindurch. Nachgemessen am Lauf vom 10.08.2026: 42 % der
+     * zugeschnittenen Fahrbahn lag noch unter dem Boden, bis zu 3,13 m tief —
+     * fast alles davon in diesem einen Zellstreifen am Grabenrand.
+     *
+     * Darum zaehlt fuer die Fahrbahn nur eine Zelle, deren vier Nachbarn
+     * EBENFALLS ausgehoben sind. Sie endet damit einen Meter vor der Trogwand —
+     * und dort steht die Wand, nicht die Strasse.
+     */
+    const offenSchluessel = new Set(offeneZellen.map((z) => z.z * k.spalten + z.sp));
     for (const z of offeneZellen) {
       troege.push([
         [z.e - r, z.n - r],
         [z.e + r, z.n - r],
         [z.e + r, z.n + r],
         [z.e - r, z.n + r],
+      ] as Ring);
+      // ALLE ACHT Nachbarn, nicht nur die vier geraden: Ein Polygon reicht auch
+      // ueber die Ecke einer Zelle hinaus, und dort steht dieselbe Trogwand.
+      let innen = true;
+      for (let dz = -1; dz <= 1 && innen; dz++) {
+        for (let ds = -1; ds <= 1; ds++) {
+          if (!dz && !ds) continue;
+          if (!offenSchluessel.has((z.z + dz) * k.spalten + z.sp + ds)) {
+            innen = false;
+            break;
+          }
+        }
+      }
+      if (!innen) continue;
+      sohlen.push([
+        [z.e - h, z.n - h],
+        [z.e + h, z.n - h],
+        [z.e + h, z.n + h],
+        [z.e - h, z.n + h],
       ] as Ring);
     }
 
@@ -663,7 +718,7 @@ export function rampenAbsenken(
     }
   }
 
-  return { linien, kanten, troege, bericht };
+  return { linien, kanten, troege, sohlen, bericht };
 }
 
 /**

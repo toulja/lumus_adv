@@ -197,9 +197,31 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
     szene.screenSpaceCameraController.enableCollisionDetection = false;
     // Rechtsziehen soll die Szene umkreisen statt zu zoomen
     szene.screenSpaceCameraController.zoomEventTypes = [Cesium.CameraEventType.PINCH];
+    /*
+     * DREHEN WIE IN GOOGLE MAPS — STRG festhalten und ziehen.
+     *
+     * BEFUND DES AUFTRAGGEBERS (10.08.2026): „ich will auch drehen koennen und
+     * nicht nur aus einer Perspektive schauen … wenn ich Strg druecke, dann
+     * soll die Maus fixieren und links und rechts gehen soll es drehen."
+     *
+     * Bis dahin ging das Umkreisen NUR mit der rechten Maustaste. Wer mit einem
+     * Zeigegeraet ohne rechte Taste arbeitet oder die Google-Maps-Gewohnheit
+     * mitbringt, kam an die Ansicht nicht heran.
+     *
+     * WAS HIER STEHT: Cesiums `tiltEventTypes` fasst beides zusammen — waagerecht
+     * ziehen dreht den Azimut, senkrecht ziehen die Neigung, und der Drehpunkt
+     * unter dem Zeiger wird beim Drucken einmal bestimmt und dann FESTGEHALTEN.
+     * Genau das meint „die Maus fixiert". Ein Eintrag der Form
+     * `{ eventType, modifier }` gilt nur mit gedrueckter Taste; das gewoehnliche
+     * Linksziehen (Verschieben) und der Linksklick (Auswahl) bleiben
+     * unangetastet, weil Cesium Aktionen nach Typ UND Modifier ablegt.
+     *
+     * NICHT geaendert: RIGHT_DRAG bleibt, wer es gewohnt ist, behaelt es.
+     */
     szene.screenSpaceCameraController.tiltEventTypes = [
       Cesium.CameraEventType.RIGHT_DRAG,
       Cesium.CameraEventType.PINCH,
+      { eventType: Cesium.CameraEventType.LEFT_DRAG, modifier: Cesium.KeyboardEventModifier.CTRL },
     ];
     /*
      * EIGENER RAD-ZOOM — der eingebaute taugt fuer diese Szene nicht.

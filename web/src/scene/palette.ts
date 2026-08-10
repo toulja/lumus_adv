@@ -755,6 +755,65 @@ export const GEBAEUDE_STIL = {
 };
 
 /**
+ * DIE DACHLANDSCHAFT — die Toene, die WIRKLICH gezeichnet werden.
+ *
+ * Sie standen bis zum 10.08.2026 in web/src/scene/stadt.ts und waren damit fuer
+ * `pruefePalette()` unsichtbar. Das ist genau einmal teuer geworden: Als die
+ * Flaechenleiter neu gerechnet wurde, fiel die Bauflaeche von L* 90,71 auf
+ * 54,68 — die Ziegeltoene (L* 54,09 bis 61,22) blieben stehen und lagen danach
+ * mit DL* 0,59 bis 6,54 auf dem Untergrund, weit unter der eigenen Regel von 9.
+ * Betroffen waren 1.144 von 4.053 Gebaeuden. Die Selbstpruefung schwieg, weil
+ * sie `GEBAEUDE_STIL.dach` prueft — eine Farbe, die in keinem Zeichenaufruf
+ * vorkommt.
+ *
+ * Die Lehre steht jetzt in der Anordnung: Was gezeichnet wird, wohnt bei der
+ * Palette und wird geprueft. `GEBAEUDE_STIL.dach` bleibt als Bezugswert der
+ * Dokumentation stehen, die Pruefung nimmt seit dem 10.08. DIESE Liste.
+ *
+ * DAS FENSTER, aus den Regeln der Datei abgeleitet:
+ *   >= L* 63,68  (Bauflaeche 54,68 + MIN_DL_GETRENNT)
+ *   >= L* 64,11  (Firstlinie 52,11 + 12, sonst traegt die Gratlinie nicht)
+ *   <= L* 69,98  (Wand 79,98 - MIN_DL_WAND_DACH)
+ *
+ * Sechs Komma drei L* fuer drei Dacharten — die Helligkeit allein kann sie
+ * nicht trennen. Sie trennt darum die WAERME (KARTENDESIGN 3.2): Ziegel warm
+ * (b* rund +10), Pult halbwarm (+6), Flachdach neutral (0). Genau dafuer gibt
+ * es `MIN_DAB_ERSATZ`, und die Pruefung unten wendet es an.
+ */
+export const DACH_TON = {
+  /**
+   * Ziegel, geneigt. Vier Alterungsstufen — Ziegel altern nie gleichmaessig.
+   * L* 64,14 / 65,60 / 67,07 / 68,84, a* rund +9, b* rund +10.
+   */
+  ziegel: ['#bb9d91', '#b7998e', '#bfa296', '#b3958c'],
+  /** Flachdach: Bitumen oder Kies, kuehl und neutral. L* 66,54 / 68,39 / 69,88. */
+  flach: ['#a6a7a6', '#a1a2a2', '#aaabaa'],
+  /**
+   * Pultdach — zwischen beiden, meist Anbauten und Nebengebaeude.
+   * L* 64,76 / 66,99. Am 10.08. waermer gestellt (b* +4,4 -> +6,3): gegen das
+   * hellste Flachdach standen nur DL* 5,21 UND Dab 4,30 — beides unter der
+   * Schranke, das Pultdach war vom Flachdach nicht zu unterscheiden.
+   */
+  pult: ['#aaa297', '#a49c92'],
+};
+
+/*
+ * ENTFERNT AM 10.08.2026: `metall` (#b4bbbf) und `schiefer` (#8b9095).
+ *
+ * Beide waren fuer OSM `roof:material` gedacht und wurden nie gezeichnet —
+ * `dachTonFuer()` in web/src/scene/stadt.ts kennt nur flach, pult und ziegel,
+ * und der Importer traegt `roof:material` gar nicht ein. Aufgefallen sind sie
+ * erst, als die Pruefung von einem Stellvertreter auf die echten Toene
+ * umgestellt wurde: `metall` lag mit DL* 4,53 unter der Wand und haette den
+ * Lauf rot gemacht — fuer eine Farbe, die niemand sieht.
+ *
+ * Zwei tote Zahlen zu behalten und stillzustellen waere der falsche Ausweg
+ * gewesen. Wer die Unterscheidung will, traegt `roof:material` im Importer nach
+ * (server/geodata/stadtdetails.ts, osmGebaeudeMerkmale) und rechnet die Toene
+ * dann in DAS FENSTER dieser Datei — L* 63,68 bis 69,98.
+ */
+
+/**
  * Wandtoene fuer die Streuung ueber den Bestand — 5 sehr eng benachbarte Stufen.
  *
  * JA, VARIATION HILFT — ABER NUR IN DIESER GROESSENORDNUNG.
@@ -1294,6 +1353,62 @@ export function pruefePalette(): { ok: boolean; befunde: string[] } {
         `Dachflaeche ${z2(dach)} hebt sich nicht von der Bauflaeche ${z2(bau)} ab (DL* ${z2(Math.abs(bau - dach))} < ${MIN_DL_GETRENNT}) — ` +
           `aus der Vogelperspektive verschmelzen Flachdach und Baufeld.`,
       );
+    }
+
+    /*
+     * DIE DACHTOENE, DIE WIRKLICH GEZEICHNET WERDEN.
+     *
+     * Bis zum 10.08.2026 prueften die zwei Zeilen darueber `GEBAEUDE_STIL.dach`
+     * — eine Farbe, die in keinem Zeichenaufruf vorkommt. Die Pruefung bestand
+     * damit, waehrend 1.144 Gebaeude mit DL* 0,59 auf dem Untergrund lagen.
+     * Geprueft wird darum jetzt JEDER Ton aus DACH_TON, einzeln, und nicht ein
+     * Stellvertreter.
+     */
+    const dachToene: [string, string][] = [
+      ...DACH_TON.ziegel.map((h) => ['Ziegeldach', h] as [string, string]),
+      ...DACH_TON.flach.map((h) => ['Flachdach', h] as [string, string]),
+      ...DACH_TON.pult.map((h) => ['Pultdach', h] as [string, string]),
+    ];
+    for (const [name, hex] of dachToene) {
+      const l = lStern(hex);
+      if (Math.abs(bau - l) < MIN_DL_GETRENNT) {
+        befunde.push(
+          `${name} ${hex} (L* ${z2(l)}) hebt sich nicht von der Bauflaeche ${z2(bau)} ab ` +
+            `(DL* ${z2(Math.abs(bau - l))} < ${MIN_DL_GETRENNT}) — aus der Vogelperspektive verschmelzen Dach und Baufeld.`,
+        );
+      }
+      if (wand - l < MIN_DL_WAND_DACH) {
+        befunde.push(`${name} ${hex} (L* ${z2(l)}) liegt nur DL* ${z2(wand - l)} < ${MIN_DL_WAND_DACH} unter der Wand — die Dachform wird flau.`);
+      }
+    }
+    /*
+     * UND DIE DACHARTEN GEGENEINANDER. Das Fenster zwischen Bauflaeche und Wand
+     * ist nur 6,3 L* breit; drei Dacharten passen dort nicht mit Helligkeit
+     * hinein. Sie duerfen sich darum ueber die WAERME trennen — aber sie
+     * muessen sich trennen, sonst sieht jede Stadt gleich aus.
+     */
+    for (const [aName, aListe] of [
+      ['Ziegeldach', DACH_TON.ziegel],
+      ['Pultdach', DACH_TON.pult],
+    ] as [string, string[]][]) {
+      for (const [bName, bListe] of [
+        ['Flachdach', DACH_TON.flach],
+        ['Pultdach', DACH_TON.pult],
+      ] as [string, string[]][]) {
+        if (aName === bName) continue;
+        for (const a of aListe) {
+          for (const b of bListe) {
+            const dl = Math.abs(lStern(a) - lStern(b));
+            const dab = abstandAB(a, b);
+            if (dl < MIN_DL_GETRENNT && dab < MIN_DAB_ERSATZ) {
+              befunde.push(
+                `${aName} ${a} und ${bName} ${b} sind nicht zu unterscheiden: DL* ${z2(dl)} < ${MIN_DL_GETRENNT} UND ` +
+                  `Dab ${z2(dab)} < ${MIN_DAB_ERSATZ}.`,
+              );
+            }
+          }
+        }
+      }
     }
     const first = lStern(GEBAEUDE_STIL.dachFirst);
     if (dach - first < 12) befunde.push(`Gebaeude: Firstlinie zu hell (DL* ${z2(dach - first)} < 12) — Sattel- und Walmdach lesen gleich.`);

@@ -21,6 +21,7 @@ import { hoeheImHoehenband } from '@shared/bau/hoehenlage';
 import type { Hoehenlage } from './gelaende.ts';
 import { verdichteRing } from './gelaende.ts';
 import {
+  DACH_TON,
   FLAECHEN_STIL,
   GEBAEUDE_STIL,
   KONTUR_VERSATZ_M,
@@ -122,33 +123,18 @@ export const GEBAEUDE_FARBE = {
 };
 
 /**
- * Dachlandschaft.
+ * Dachlandschaft — die Toene stehen in der PALETTE, nicht hier.
  *
  * Die Dachform ist das, was einer deutschen Innenstadt aus der Vogelperspektive
- * ihren Charakter gibt — das Nebeneinander von Ziegel und Flachdach. Bisher
- * trugen alle 2.563 Gebaeude denselben Ton; damit sah jede Stadt gleich aus.
+ * ihren Charakter gibt: das Nebeneinander von Ziegel und Flachdach. Die
+ * Unterscheidung kommt aus dem AMTLICHEN Modell und ist geometrisch belegt,
+ * nicht geraten (First mehr als 0,5 m ueber der Traufe = geneigtes Dach).
  *
- * Die Unterscheidung kommt aus dem AMTLICHEN Modell und ist geometrisch
- * belegt, nicht geraten: Liegt der First mehr als 0,5 m ueber der Traufe, hat
- * das Gebaeude ein geneigtes Dach (1.130 von 2.563 im Pilotgebiet). Das
- * CityGML-Attribut `Dachtyp_tridicon` verfeinert das, wo es gepflegt ist
- * (1.917 Gebaeude).
- *
- * Die Toene bleiben GEDAEMPFT. Ein Ziegeldach ist warm, kein Signalrot — die
- * kraeftigen Farben bleiben den Planobjekten vorbehalten (KARTENDESIGN 5.4).
+ * Die FARBEN sind am 10.08.2026 nach web/src/scene/palette.ts gewandert. Sie
+ * standen hier und waren damit fuer pruefePalette() unsichtbar — als die
+ * Flaechenleiter neu gerechnet wurde, blieben sie stehen und lagen danach auf
+ * dem Untergrund. Die Begruendung der Werte steht jetzt bei DACH_TON dort.
  */
-export const DACH_TON = {
-  /** Ziegel, geneigt. Vier Alterungsstufen — Ziegel altern nie gleichmaessig. */
-  ziegel: ['#a5887c', '#9e8177', '#aa8e82', '#987b72'],
-  /** Flachdach: Bitumen oder Kies, kuehl und neutral. */
-  flach: ['#a6a7a6', '#a1a2a2', '#aaabaa'],
-  /** Pultdach — zwischen beiden, meist Anbauten und Nebengebaeude. */
-  pult: ['#a8a29a', '#a29c95'],
-  /** Metall oder Glas (nur aus OSM `roof:material`). */
-  metall: '#b4bbbf',
-  /** Schiefer und Zink — dunkler, kuehl. */
-  schiefer: '#8b9095',
-};
 
 /**
  * Zwingt eine fremde Farbe ins Basisband der Palette.
@@ -223,7 +209,7 @@ export function dachTonFuer(g: {
   const form = (g.dachform ?? '').toLowerCase();
   if (form.includes('flat')) return waehle(DACH_TON.flach);
   if (form.includes('leanto') || form.includes('shed')) return waehle(DACH_TON.pult);
-  if (form.includes('gable') || form.includes('hip') || form.includes('pyramid') || form.includes('mansard')) {
+  if (form.includes('gable') || form.includes('hip') || form.includes('pyramid') || form.includes('mansard') || form.includes('tent')) {
     return waehle(DACH_TON.ziegel);
   }
 

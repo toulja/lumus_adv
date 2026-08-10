@@ -1272,14 +1272,41 @@ function gleiszoneAusschneiden(
  * bestimmt ihn aus der Ueberdeckung); den ueberdeckten Teil des Tunnels traegt
  * die Strasse darueber, und die bleibt unversehrt.
  *
- * Flaechen MIT Hoehenband bleiben unberuehrt — die Rampe selbst ist es, die den
- * Trog fuellt.
+ * DIE RAMPENFAHRBAHN WIRD AM SELBEN UMRISS ZUGESCHNITTEN — Befund des
+ * Auftraggebers, 10.08.2026: „die Strasse vom Tunnel soll nicht weitergefuehrt
+ * werden, man soll nur die Tunneleinfahrt sehen; was unterirdisch ist, ist
+ * unterirdisch."
+ *
+ * Er hat recht, und es ist keine Frage der Darstellung. Bis hierhin wurde die
+ * Tunnelflaeche auf ihrer VOLLEN Laenge gefuehrt und auf ihrer Ausgleichsebene
+ * gezeichnet. Hinter dem Portal liegt sie damit unter dem nicht ausgehobenen
+ * Gelaende — unsichtbar, wo der Boden dichthaelt, und in Fetzen durchblitzend,
+ * wo Gelaendenetz und Ebene sich schneiden. Nachgemessen am Datensatz
+ * gel_ac266e9db45b09df: von 5.186 m2 Tunnelflaeche liegen 2.769 m2 mindestens
+ * 2,90 m unter dem Gelaende, die tiefste Stelle 7,32 m; fuenf Stuecke sind zu
+ * 100 % ueberdeckt.
+ *
+ * Also wird die Fahrbahn am Trog VERSCHNITTEN statt uebersprungen: Was im
+ * offenen Trog liegt, bleibt; was darunter weiterlaeuft, faellt aus dem Modell.
+ * Damit ist nicht die Zeichnung korrigiert, sondern das Modell ehrlich — es
+ * behauptet nur noch, was man auch sehen kann.
+ *
+ * WELCHE FLAECHEN DAS TRIFFT, und welche ausdruecklich nicht:
+ *  - NUR Flaechen mit `lage.tiefeM` — das setzt allein `rampenAbsenken`, und
+ *    zwar erst, nachdem der Strang wirklich abgesenkt wurde.
+ *  - NICHT Bruecken: `brueckenEinmessen` setzt ebenfalls eine `hoehenEbene`
+ *    (10 der 39 im Bestand), aber kein `tiefeM`. Eine Bruecke liegt oben.
+ *  - NICHT die 30 als Tunnel erfassten Wege, die zu flach fuer eine Decke sind
+ *    und darum auf Strassenniveau bleiben — sie haben keinen Trog, und ein
+ *    Verschnitt wuerde sie restlos loeschen.
  */
 function troegeAusschneiden(
   flaechen: GelaendeFlaeche[],
   troege: Ring[],
-): { flaechen: GelaendeFlaeche[]; beschnitten: number; flaecheM2: number } {
-  if (!troege.length) return { flaechen, beschnitten: 0, flaecheM2: 0 };
+  sohlen: Ring[],
+): { flaechen: GelaendeFlaeche[]; beschnitten: number; flaecheM2: number; rampenGekuerzt: number; rampenGanzUnterTage: number } {
+  const leer = { flaechen, beschnitten: 0, flaecheM2: 0, rampenGekuerzt: 0, rampenGanzUnterTage: 0 };
+  if (!troege.length) return leer;
   let ox = Infinity;
   let oy = Infinity;
   for (const f of flaechen) for (const p of f.polygon) {
@@ -1290,27 +1317,102 @@ function troegeAusschneiden(
     if (p[0] < ox) ox = p[0];
     if (p[1] < oy) oy = p[1];
   }
-  if (!Number.isFinite(ox)) return { flaechen, beschnitten: 0, flaecheM2: 0 };
+  if (!Number.isFinite(ox)) return leer;
 
   const stuecke = troege
     .filter((t) => t.length >= 3)
     .map((t) => [geschlossenerRing(t).map((p) => [p[0] - ox, p[1] - oy])] as number[][][]);
-  if (!stuecke.length) return { flaechen, beschnitten: 0, flaecheM2: 0 };
+  if (!stuecke.length) return leer;
   let zone: number[][][][] = [];
+  let zoneVereint = true;
   try {
     zone = polygonClipping.union(stuecke[0] as never, ...(stuecke.slice(1) as never[])) as never as number[][][][];
   } catch {
     zone = stuecke as never as number[][][][];
+    zoneVereint = false;
   }
-  if (!zone.length) return { flaechen, beschnitten: 0, flaecheM2: 0 };
+  if (!zone.length) return leer;
+
+  // DER ENGERE UMRISS fuer die Rampenfahrbahn: nur die wirklich ausgehobenen
+  // Zellen, ohne die Zugabe des Bodenlochs (Begruendung im Kopf und bei
+  // SCHNITT_ZUGABE_M in server/geodata/hoehenband.ts).
+  //
+  // JE STUECK NUR SEINE EIGENEN ZELLEN. Eine Vereinigung aller 1.519
+  // Zellquadrate in einem Zug ueberfordert die Sweep-Line: im Lauf vom
+  // 10.08.2026 scheiterten 6 der 29 Verschnitte, und weil der Fehlerzweig die
+  // Flaeche GANZ behielt, lagen genau diese sechs Stuecke anschliessend zu
+  // 100 % unter der Erde — das Gegenteil dessen, was der Schnitt bezweckt.
+  // Darum wird je Flaeche nur ueber die Zellen vereinigt, die sie beruehrt
+  // (Dutzende statt Tausende), und ein Fehlschlag LOESCHT das Stueck, statt es
+  // zu behalten: ein fehlendes Stueck Rampe faellt weniger ins Gewicht als eine
+  // Fahrbahn drei Meter unter dem Pflaster.
+  const sohlenFelder = sohlen
+    .filter((t) => t.length >= 3)
+    .map((t) => ({
+      minE: Math.min(...t.map((p) => p[0])),
+      minN: Math.min(...t.map((p) => p[1])),
+      maxE: Math.max(...t.map((p) => p[0])),
+      maxN: Math.max(...t.map((p) => p[1])),
+      geom: [geschlossenerRing(t).map((p) => [p[0] - ox, p[1] - oy])] as number[][][],
+    }));
+  const sohleFuer = (f: GelaendeFlaeche): number[][][][] | null => {
+    const bb = bboxVonPunkten(f.polygon);
+    const teile = sohlenFelder
+      .filter((z) => z.maxE >= bb.minE && z.minE <= bb.maxE && z.maxN >= bb.minN && z.minN <= bb.maxN)
+      .map((z) => z.geom);
+    if (!teile.length) return null;
+    try {
+      return polygonClipping.union(teile[0] as never, ...(teile.slice(1) as never[])) as never as number[][][][];
+    } catch {
+      return null;
+    }
+  };
 
   const alsGeom = (f: GelaendeFlaeche): number[][][] =>
     [geschlossenerRing(f.polygon), ...(f.loecher ?? []).map(geschlossenerRing)].map((r) => r.map((p) => [p[0] - ox, p[1] - oy]));
   const raus: GelaendeFlaeche[] = [];
   let beschnitten = 0;
+  let rampenGekuerzt = 0;
+  let rampenGanzUnterTage = 0;
   for (const f of flaechen) {
-    // Die Rampe selbst und alles mit eigenem Hoehenband bleibt: sie FUELLT den Trog.
-    if (f.lage || f.art === 'wasser') {
+    if (f.art === 'wasser') {
+      raus.push(f);
+      continue;
+    }
+    // DIE ABGESENKTE RAMPE WIRD VERSCHNITTEN — nur ihr offener Teil bleibt.
+    // Erkennungsmerkmal ist `tiefeM`; es setzt allein rampenAbsenken, und zwar
+    // erst nach dem Aushub (Bruecken und die Durchfahrten auf Strassenniveau
+    // haben es nicht — Begruendung im Kopf dieser Funktion).
+    if (f.lage?.tiefeM != null) {
+      const sohle = sohleFuer(f);
+      let drin: number[][][][] | null = null;
+      if (sohle) {
+        try {
+          drin = polygonClipping.intersection([alsGeom(f)] as never, sohle as never) as never as number[][][][];
+        } catch {
+          drin = null;
+        }
+      }
+      if (!drin || !drin.length) {
+        // Kein offener Trog unter diesem Stueck (oder der Verschnitt scheiterte):
+        // oberirdisch existiert es nicht.
+        rampenGanzUnterTage++;
+        continue;
+      }
+      rampenGekuerzt++;
+      let nr = 0;
+      for (const poly of drin) {
+        const ringe = (poly as unknown as Ring[])
+          .map((r) => ringNormalisieren(r.map((p) => [p[0] + ox, p[1] + oy] as Punkt)))
+          .filter((r) => r.length >= 3);
+        if (!ringe.length) continue;
+        raus.push({ ...f, id: nr === 0 ? f.id : `${f.id}#r${nr}`, polygon: ringe[0], loecher: ringe.length > 1 ? ringe.slice(1) : undefined });
+        nr++;
+      }
+      continue;
+    }
+    // Alles andere mit eigenem Hoehenband (Bruecken, Durchfahrten) bleibt ganz.
+    if (f.lage) {
       raus.push(f);
       continue;
     }
@@ -1341,7 +1443,7 @@ function troegeAusschneiden(
     const r = (poly as unknown as Ring[])[0];
     if (r && r.length >= 3) flaecheM2 += Math.abs(flaeche(r.map((p) => [p[0] + ox, p[1] + oy] as Punkt)));
   }
-  return { flaechen: raus, beschnitten, flaecheM2: Math.round(flaecheM2) };
+  return { flaechen: raus, beschnitten, flaecheM2: Math.round(flaecheM2), rampenGekuerzt, rampenGanzUnterTage };
 }
 
 /**
@@ -1943,11 +2045,11 @@ async function ausfuehren(
     const b = r.bericht;
     // DER TROG BEKOMMT SEIN LOCH. Ohne diesen Schnitt saecken die Flaechen
     // ueber dem Aushub mit hinein (Begruendung bei troegeAusschneiden).
-    let trogSchnitt = { beschnitten: 0, flaecheM2: 0 };
+    let trogSchnitt = { beschnitten: 0, flaecheM2: 0, rampenGekuerzt: 0, rampenGanzUnterTage: 0 };
     if (r.troege.length) {
-      const t = troegeAusschneiden(flaechen, r.troege);
+      const t = troegeAusschneiden(flaechen, r.troege, r.sohlen);
       flaechen = t.flaechen;
-      trogSchnitt = { beschnitten: t.beschnitten, flaecheM2: t.flaecheM2 };
+      trogSchnitt = t;
     }
     for (const text of b.luecken) {
       datenluecken.push({ elementart: 'tunnel', bezeichnung: 'Unterirdischer Strang', art: 'unter_erwartung', text, orte: [] });
@@ -1962,6 +2064,7 @@ async function ausfuehren(
           `tiefste ${b.tiefsteM.toFixed(2)} m, ${b.mitIncline} mit gemessener Neigung aus OSM, ` +
           `${b.rasterZellen.toLocaleString('de-DE')} Rasterzellen eingeschnitten), ${b.portale} Portale` +
           `${trogSchnitt.beschnitten ? `; ${trogSchnitt.flaecheM2.toLocaleString('de-DE')} m² Trog aus ${trogSchnitt.beschnitten} Bodenflaechen ausgeschnitten` : ''}` +
+          `${trogSchnitt.rampenGekuerzt || trogSchnitt.rampenGanzUnterTage ? `; die Rampenfahrbahn endet am Portal (${trogSchnitt.rampenGekuerzt} Stuecke auf den offenen Trog gekuerzt, ${trogSchnitt.rampenGanzUnterTage} lagen ganz unter der Decke und sind nicht mehr im Modell)` : ''}` +
           `${b.ohneAnschluss ? `; ${b.ohneAnschluss} Straenge ohne Anschluss an die Oberflaeche blieben unberuehrt` : ''}` +
           `${b.alsDurchfahrt ? `; ${b.alsDurchfahrt} als Tunnel erfasste Wege sind zu flach fuer eine Decke und wurden als Durchfahrt auf Strassenniveau belassen` : ''}. ` +
           `${b.bruecken} Bruecken eingemessen, ${b.brueckenMitLichterHoehe} davon mit lichter Hoehe` +
