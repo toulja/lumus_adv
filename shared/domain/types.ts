@@ -196,6 +196,17 @@ export type FlaechenArt =
   | 'platz'
   | 'weg'
   | 'treppe'
+  /**
+   * GLEISZONE — das eingedeckte Band, in dem eine Rillenschiene liegt.
+   *
+   * Sie ist KEINE Zeichenhilfe, sondern ein Loch in der Fahrbahn: Beim Import
+   * wird der Korridor je Gleisachse aus den Bodenflaechen ausgeschnitten und
+   * als eigene Flaeche eingesetzt. Ohne diesen Schnitt laeuft die Fahrbahn
+   * ungeschnitten ueber das Gleis hinweg und verdeckt die Rille — nachgemessen
+   * am 09.08.2026 mit `scene.drillPick` (Fahrbahn vor Gleis) und am 10.08.2026
+   * an der Bildpunktmessung (Rille 0 Pixel breit).
+   */
+  | 'gleiszone'
   | 'gruen'
   | 'wald'
   | 'wasser'
@@ -212,6 +223,7 @@ export const FLAECHEN_ART_LABEL: Record<FlaechenArt, string> = {
   platz: 'Platz',
   weg: 'Weg',
   treppe: 'Treppe',
+  gleiszone: 'Gleiszone',
   gruen: 'Gruenflaeche',
   wald: 'Wald',
   wasser: 'Wasser',
@@ -220,6 +232,65 @@ export const FLAECHEN_ART_LABEL: Record<FlaechenArt, string> = {
   landwirtschaft: 'Landwirtschaft',
   sonstige: 'Sonstige Flaeche',
 };
+
+/**
+ * HOEHENBAND — Ober- UND Unterkante eines Bauwerks.
+ *
+ * DER BEFUND, DER DAZU GEFUEHRT HAT (Auftraggeber, 09.08.2026):
+ * „Tiefgarageneinfahrten werden nicht tief." Das Modell kannte bis zum
+ * 10.08.2026 nur einen Aufbau NACH OBEN (Konstruktionshoehen 0 bis 12 cm) und
+ * das gewachsene Gelaende. Kein Bauwerk hatte eine Unterkante: Tunnel wurden
+ * beim Import ausdruecklich verworfen (`if (tags.tunnel …) return null`),
+ * Bruecken auf Gelaendehoehe gemalt, und eine Rampe in eine Tiefgarage — in
+ * OpenStreetMap ein `highway=service` mit `tunnel`/`covered`/`layer=-1` — fiel
+ * damit ganz heraus.
+ *
+ * WAS HIER STEHT UND WAS NICHT: Die Felder `layer`, `bruecke`, `tunnel`,
+ * `ueberdeckt`, `osmLevel`, `inclineProzent` und `maxhoeheM` sind ROHDATEN aus
+ * OpenStreetMap — sie werden unveraendert uebernommen und sind damit Beleg.
+ * Alles darunter ist ABGELEITET (Hoehenebene, lichte Hoehe, Tiefe) und traegt
+ * darum `herkunft`. Wo eine Ableitung auf einer Annahme aus den Bauklassen
+ * beruht (Rampenneigung, Ueberbaudicke), steht dort `annahme`.
+ */
+export interface Hoehenband {
+  /** OSM `layer` — RELATIVE Lage an Kreuzungen, KEINE Hoehe. -5 bis 5. */
+  layer?: number;
+  /** OSM `bridge` (Wert unveraendert, z. B. „yes", „viaduct"). */
+  bruecke?: string;
+  /** OSM `tunnel` (z. B. „yes", „building_passage"). */
+  tunnel?: string;
+  /** OSM `covered` — ueberdeckt, aber nicht unterirdisch. */
+  ueberdeckt?: string;
+  /** OSM `level` — Geschoss; negativ bei Tiefgaragen. */
+  osmLevel?: number;
+  /** OSM `incline` in Prozent, positiv = in Wegrichtung bergauf. BELEG. */
+  inclineProzent?: number;
+  /** OSM `maxheight` in Metern — die zulaessige Durchfahrtshoehe. BELEG. */
+  maxhoeheM?: number;
+  /**
+   * Die HOEHENEBENE des Bauwerks, absolut in m ue. NHN:
+   *   h(E, N) = a * (E - e0) + b * (N - n0) + c
+   * Damit liegt eine Bruecke auf der Verbindung ihrer beiden Widerlager statt
+   * dem Gelaende zu folgen, und eine Rampe faellt gleichmaessig ab. Fehlt sie,
+   * folgt die Flaeche wie bisher dem Gelaende.
+   *
+   * BEI RAMPEN IST SIE EINE AUSGLEICHSEBENE durch die gemessenen Sohlenpunkte
+   * des STRANGS, nicht des einzelnen Polygonstuecks. Der Unterschied ist nicht
+   * theoretisch: Bis zum 10.08.2026 bekam der Citytunnel als acht Stuecke acht
+   * verschiedene Tiefen (1,05 m / 2,23 m / 2,80 m / 3,38 m …) und acht Portale.
+   * Gerechnet wird sie in server/geodata/hoehenband.ts, ausgewertet in
+   * shared/bau/hoehenlage.ts — von Import UND Darstellung.
+   */
+  hoehenEbene?: { a: number; b: number; c: number; e0: number; n0: number };
+  /** Dicke des Ueberbaus in Metern (Bruecken) — die Flaeche wird nach unten geschlossen. */
+  ueberbauDickeM?: number;
+  /** Gemessene lichte Hoehe unter dem Bauwerk in Metern (kleinster Wert). */
+  lichteHoeheM?: number;
+  /** Tiefe des tiefsten Punktes unter dem Gelaende (Rampen, Unterfuehrungen). */
+  tiefeM?: number;
+  /** Woher die abgeleiteten Werte stammen. */
+  herkunft: 'osm' | 'abgeleitet' | 'annahme';
+}
 
 export interface GelaendeFlaeche {
   id: string;
@@ -262,6 +333,22 @@ export interface GelaendeFlaeche {
    */
   wasserspiegelM?: number;
   /**
+   * Nur Gewaesser: die tiefste Stelle der SOHLE in m ue. NHN.
+   *
+   * Bis zum 10.08.2026 hatte kein Gewaesser eine Sohle — 9 von 14 Flaechen
+   * trugen einen Spiegel, keine einen Grund. Ein Bach lag damit AUF dem Ufer
+   * statt darin. Jetzt wird das Hoehenmodell innerhalb der Flaeche auf die
+   * Sohle abgesenkt und die Wasserflaeche als eigene, leicht durchscheinende
+   * Ebene auf dem Spiegel gezeichnet.
+   *
+   * DIE TIEFE IST EINE ANNAHME und keine Messung: Ein Laserscanner bekommt von
+   * Wasser kaum ein Echo, das DGM1 fuehrt innerhalb eines Gewaessers
+   * interpolierte Werte, und keine der genutzten Quellen fuehrt Wassertiefen.
+   * Der Wert stammt aus den Bauklassen und ist dort als `zu_pruefen`
+   * gekennzeichnet.
+   */
+  wassersohleM?: number;
+  /**
    * KONSTRUKTIONSHOEHE: Oberkante ueber der Bezugsflaeche des Strassenraums
    * (Fahrbahn = 0,00 m), in Metern. Beim Import aus der Bauklasse aufgeloest
    * (config/bauklassen/*.json) — NICHT im Programmtext festgelegt.
@@ -272,6 +359,22 @@ export interface GelaendeFlaeche {
    * unterschied sich von der Fahrbahn dadurch in der FARBE, nicht in der Hoehe.
    */
   konstruktionM?: number;
+  /**
+   * NUR TREPPEN: die gezaehlte Stufenzahl aus OpenStreetMap (`step_count`).
+   *
+   * Sie ist ein BELEG — jemand hat vor Ort gezaehlt — und geht darum jeder
+   * Ableitung aus der Hoehendifferenz vor. Sie ueberlebt die Vereinigung der
+   * Flaechen nur dort, wo sie eindeutig zuzuordnen ist: Verschmelzen zwei
+   * Treppen mit verschiedenen Zaehlungen zu einer Flaeche, bleibt das Feld
+   * leer, statt eine der beiden Zahlen zu behaupten.
+   */
+  stufenzahl?: number;
+  /**
+   * Ober- und Unterkante, wo das Bauwerk nicht auf dem Gelaende liegt:
+   * Bruecken, Rampen, Unterfuehrungen, Tiefgarageneinfahrten.
+   * Fehlt sie, liegt die Flaeche auf dem Gelaende — das ist der Normalfall.
+   */
+  lage?: Hoehenband;
 }
 
 /** Was an einer Hoehenstufe zwischen zwei Flaechen wirklich steht. */
@@ -376,6 +479,12 @@ export type LinienArt =
   | 'bordstein'
   | 'gelaender'
   | 'stadtmauer'
+  /**
+   * PORTAL — die Wand, in der eine Rampe oder Unterfuehrung verschwindet.
+   * Sie ist das, was eine Tiefgarageneinfahrt im Bild als solche kenntlich
+   * macht: eine Oeffnung mit Sturz, nicht ein Weg, der im Nichts endet.
+   */
+  | 'portal'
   /** Aufgemalte Fahrbahnmarkierung (Mittellinie, Leitlinie) — flach, kein Koerper. */
   | 'markierung';
 
@@ -387,6 +496,7 @@ export const LINIEN_ART_LABEL: Record<LinienArt, string> = {
   bordstein: 'Bordstein',
   gelaender: 'Gelaender',
   stadtmauer: 'Stadtmauer',
+  portal: 'Portal',
   markierung: 'Fahrbahnmarkierung',
 };
 
@@ -403,6 +513,33 @@ export interface GelaendeLinienObjekt {
   name?: string;
   /** Gleise: liegt es im Strassenraum (Rillenschiene) oder auf eigenem Bahnkoerper? */
   eigenerBahnkoerper?: boolean;
+  /** Ober- und Unterkante — bei Portalen die lichte Hoehe der Oeffnung. */
+  lage?: Hoehenband;
+}
+
+/**
+ * DATENLUECKE — eine Stelle, an der das Modell WENIGER weiss, als es soll.
+ *
+ * Sie ist der Gegenentwurf zum stillen Ausfall. Der Befund, der dazu gefuehrt
+ * hat: Beim Ausbau des Gebiets fehlten an den neuen Stellen die Baeume, weil
+ * der ortsgebundene Katasterauszug dort endet — und nichts hat es gemeldet.
+ * Ebenso war am 08.08.2026 ein Overpass-Abruf auf einen Altbestand
+ * zurueckgefallen (349 Baeume, 238 Barrieren, 117 Zebrastreifen weniger), ohne
+ * dass es im Protokoll auftauchte.
+ *
+ * Eine Datenluecke gehoert in BEIDES: ins Auftragsprotokoll des Imports und in
+ * die Oberflaeche. Sie ist keine Fehlermeldung — das Modell funktioniert —,
+ * sondern eine Angabe ueber seine Reichweite.
+ */
+export interface Datenluecke {
+  /** Elementart aus config/elementquellen.json (z. B. „baum"). */
+  elementart: string;
+  bezeichnung: string;
+  art: 'ungleiche_verteilung' | 'unter_erwartung' | 'kataster_deckt_nicht' | 'kein_kataster' | 'altbestand';
+  /** Klartext — er wird unveraendert angezeigt. */
+  text: string;
+  /** Mittelpunkte der betroffenen Zellen (EPSG:25832) fuer den Sprung im Plan. */
+  orte: Punkt[];
 }
 
 /**
@@ -489,6 +626,22 @@ export interface Gelaende {
    * gelten wuerden.
    */
   beschriftungen?: { pos: Punkt; text: string }[];
+  /**
+   * Die Stufenmasse, mit denen dieses Gelaende gebaut wurde (aus
+   * `config/bauklassen/*.json`).
+   *
+   * Sie stehen HIER und nicht nur im Server, damit der Browser die
+   * Treppenlaeufe mit GENAU denselben Eingaben rechnet wie der Import. Beide
+   * rufen dieselbe reine Funktion (`shared/bau/treppe.ts`) auf; damit kann es
+   * keine zweite Wahrheit ueber die Stufenzahl geben — die eine baut die
+   * Gelaender und das Protokoll, die andere die Koerper.
+   */
+  stufenmass?: { hoeheM: number; hoeheZulaessigMinM?: number; hoeheZulaessigMaxM?: number };
+  /**
+   * Wo das Modell weniger weiss, als es soll — gemessen, nicht vermutet
+   * (server/geodata/elementquellen.ts). Die Oberflaeche zeigt sie an.
+   */
+  datenluecken?: Datenluecke[];
   /** Flurstuecke aus ALKIS (Anzeige + Flaechenbezug). */
   flurstuecke: { id: string; kennzeichen: string; polygon: Ring; flaeche: number }[];
   quellennachweis: Quellennachweis[];

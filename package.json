@@ -19,7 +19,12 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test server/**/*.test.ts shared/**/*.test.ts",
     "ports:frei": "node scripts/ports-freigeben.ts",
-    "predev": "node scripts/ports-freigeben.ts"
+    "predev": "node scripts/ports-freigeben.ts",
+    "gelaende:gebiet": "node scripts/gelaende-gebiet.ts",
+    "gelaende:aufraeumen": "node scripts/gelaende-aufraeumen.ts",
+    "palette:pruefen": "node scripts/palette-pruefen.ts",
+    "palette:rechnen": "node scripts/palette-rechnen.ts",
+    "flaechen:nachbarschaft": "node scripts/flaechen-nachbarschaft.ts"
   },
   "dependencies": {
     "express": "^4.21.2",

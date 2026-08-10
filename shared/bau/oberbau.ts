@@ -47,20 +47,46 @@ const m = (wertM: number, bezeichnung: string, quelle: string): Mass => ({
 
 export const OBERBAU_MASSE = {
   // --- Rillenschiene ------------------------------------------------------
+  //
+  // BELEGT AM 10.08.2026 — zwei unabhaengige Herstellerangaben zum Profil
+  // 60R2 (frueher Ri60N) nach EN 14811 stimmen in allen Werten ueberein:
+  //   ArcelorMittal, Profilblatt 60R2 (Ri60N)
+  //     https://rails.arcelormittal.com/profiles/tram-rails/tram-grooved-rails/rail-60r2-ri60n/
+  //   Heinrich Krug GmbH & Co. KG, Masstabelle Rillenschienen
+  //     https://www.heinrich-krug.de/schienen-krug/rillenschienen/
+  //   Hoehe 180,00 mm · Kopf 113,00 mm · Fuss 180,00 mm ·
+  //   Fahrflaeche 55,83 mm · Rillenbreite 36,35 mm · 59,75 kg/m
+  // Das Schwesterprofil 59R2 ist bis auf die Rille gleich (42,35 mm).
+  // Damit sind Fahrkante und Rillenweite KEINE Annahmen mehr.
   rilleBreite: {
-    wertM: 0.04,
-    bezeichnung: 'Breite der Rille (Rillenweite)',
-    quelle: 'Wikipedia „Rillenschiene", abgerufen 09.08.2026: „die Rillenweite der Schienen betraegt etwa 40 mm" (Strassenbahn; Eisenbahn-Rillenschienen etwa 60 mm)',
+    wertM: 0.03635,
+    bezeichnung: 'Breite der Rille (Rillenweite), Profil 60R2 nach EN 14811',
+    quelle:
+      'ArcelorMittal Profilblatt 60R2 (Ri60N) und Masstabelle Heinrich Krug GmbH, beide abgerufen 10.08.2026: Rillenbreite 36,35 mm. ' +
+      'Das Schwesterprofil 59R2 fuehrt 42,35 mm; Wikipedia „Rillenschiene" nennt fuer Strassenbahnen „etwa 40 mm" und liegt damit zwischen beiden. ' +
+      'WELCHES Profil in Darmstadt liegt, ist nicht belegt — angesetzt ist das heute gebraeuchlichste.',
+    status: 'verifiziert' as const,
+  },
+  fahrkanteBreite: {
+    wertM: 0.05583,
+    bezeichnung: 'Breite der Fahrflaeche des Schienenkopfs, Profil 60R2',
+    quelle: 'ArcelorMittal Profilblatt 60R2 (Ri60N) und Masstabelle Heinrich Krug GmbH, abgerufen 10.08.2026: 55,83 mm.',
     status: 'verifiziert' as const,
   },
   /**
    * Breite der Gleiszone — des eingedeckten Bandes, in dem das Gleis liegt.
-   * Sie ist das groesste sichtbare Merkmal eines Strassenbahngleises.
+   * Sie ist das groesste sichtbare Merkmal eines Strassenbahngleises UND das
+   * Mass, mit dem der Korridor beim Import aus den Bodenflaechen geschnitten
+   * wird (server/geodata/gelaende.ts). Beides MUSS derselbe Wert sein, sonst
+   * bleibt ein Streifen Fahrbahn stehen oder es klafft eine Fuge.
    */
   eindeckungBreite: m(2.1, 'Breite der eingedeckten Gleiszone je Gleis', 'Annahme aus Spurweite plus beidseitigem Randstreifen — nicht belegt'),
   fugenBreite: m(0.06, 'Breite der Laengsfuge am Rand der Gleiszone', 'Annahme — nicht belegt'),
-  rilleTiefe: m(0.038, 'Tiefe der Rille unter der Fahrbahnoberkante', 'Regelmass Ph 37a — Annahme, nicht belegt'),
-  fahrkanteBreite: m(0.056, 'Breite des Schienenkopfs an der Fahrflaeche', 'Regelmass Ph 37a — Annahme, nicht belegt'),
+  rilleTiefe: m(
+    0.038,
+    'Tiefe der Rille unter der Fahrbahnoberkante',
+    'Annahme, nicht belegt. Die Profiltabellen der Hersteller fuehren keine Rillentiefe; die Technischen Regeln fuer die Spurfuehrung (TR Sp, BOStrab, Mai 2006) verlangen nur, dass Rillentiefe und Spurkranzhoehe aufeinander abgestimmt sind, und lagen nur als Bilddatei vor.',
+  ),
   schienenUeberstand: m(0.004, 'Ueberstand des Schienenkopfs ueber den Belag', 'Bauausfuehrung, veraenderlich — Annahme'),
 
   // --- Schotteroberbau ----------------------------------------------------
@@ -100,16 +126,52 @@ export const OBERBAU_FARBEN = {
    * vorgefertigten Gleisjochen (Wikipedia „Rillenschiene": Eindeckung als
    * Fahrbahnbelag, Beton, vorgefertigte Gleisjoche inklusive Strassenbelag).
    * Dieses Band ist rund 2 m breit und damit das GROESSTE Merkmal des Gleises —
-   * es liest sich noch aus 200 m, waehrend die 4-cm-Rille dort laengst unter
+   * es liest sich noch aus 200 m, waehrend die 3,6-cm-Rille dort laengst unter
    * einem Bildpunkt liegt. Ohne das Band sieht eine Gleisstrasse aus wie eine
    * Strasse, und genau das war der Befund des Auftraggebers.
+   *
+   * DERSELBE WERT WIE DIE FLAECHENKLASSE `gleiszone` (web/src/scene/palette.ts,
+   * Stufe 4, L* 54,73). Flaeche und Koerper sind dasselbe Bauteil und duerfen
+   * nicht zwei Farben haben; `pruefePalette()` prueft die Gleichheit und meldet
+   * jede Abweichung beim Laden. Vorher stand hier ein eigener, deutlich
+   * hellerer Ton (#c6c4c1, L* 79,2) — gegen die neue Fahrbahn (92,7) waeren das
+   * nur 13,5 L* gewesen, und ein Gleis soll sich staerker abheben als ein
+   * Gehweg. Jetzt sind es 37,9.
    */
-  eindeckung: '#c6c4c1',
+  eindeckung: '#728691',
   /** Laengsfuge zwischen Gleiszone und Fahrbahnasphalt. */
   fuge: '#a5a29e',
   gleisbett: '#7c7975',
   schwelle: '#57534e',
 };
+
+/**
+ * BREITE DER GLEISZONE je Gleis — EINE Wahrheit fuer zwei Verwender.
+ *
+ * Sie bestimmt zugleich:
+ *  - wie breit das Profil die Eindeckung zeichnet (`rillenGleisProfil`), und
+ *  - wie breit der Korridor ist, der beim Import aus den Bodenflaechen
+ *    geschnitten wird (`gleiszoneAusschneiden` in server/geodata/gelaende.ts).
+ * Zwei getrennte Zahlen waeren hier besonders teuer: eine zu schmale Zone
+ * liesse einen Streifen Fahrbahn ueber der Platte stehen, eine zu breite eine
+ * offene Fuge daneben.
+ */
+export function eindeckungBreiteM(spurweiteM: number): number {
+  return Math.max(OBERBAU_MASSE.eindeckungBreite.wertM, spurweiteM + 0.8);
+}
+
+/**
+ * BREITE DES BAHNKOERPERS je Gleis (Schotteroberbau) — Unterkante des
+ * Bettungstrapezes. Dieselbe Doppelrolle wie `eindeckungBreiteM`.
+ */
+export function bahnkoerperBreiteM(spurweiteM: number): number {
+  const halb =
+    spurweiteM / 2 +
+    OBERBAU_MASSE.schwelleUeberstand.wertM +
+    OBERBAU_MASSE.bettungSchulter.wertM +
+    OBERBAU_MASSE.bettungHoehe.wertM * OBERBAU_MASSE.bettungNeigung.wertM;
+  return halb * 2;
+}
 
 /**
  * Querschnitt eines Gleises mit RILLENSCHIENE.
@@ -141,45 +203,34 @@ export function rillenGleisProfil(spurweiteM: number, mindestZeichenbreiteM = 0)
   const rilleT = OBERBAU_MASSE.rilleTiefe.wertM;
   const ueber = OBERBAU_MASSE.schienenUeberstand.wertM;
 
-  // WARUM DAS PROFIL AUFLIEGT UND NICHT EINSCHNEIDET (Befund 09.08.2026):
-  // Die Rille ist eine VERTIEFUNG — 3,8 cm unter der Fahrbahnoberflaeche.
-  // Die Fahrbahn ist im Modell aber ein geschlossenes Polygon ohne Loch und
-  // verdeckt sie damit vollstaendig; sichtbar blieben 4 mm Schienenkopf, hell
-  // auf hell. Nachgemessen an einem Gleis in der Rheinstrasse: Fahrbahn
-  // 144,337 m, Schienenkopf 144,341 m, Rillensohle 144,299 m. Genau deshalb
-  // sah eine Gleisstrasse aus wie eine Strasse.
+  // DAS GLEIS LIEGT JETZT BUENDIG — der Zeichenversatz ist weg.
   //
-  // Bis die Fahrbahn beim Import um die Gleiszone ausgeschnitten wird, liegt
-  // das Gleis als AUFLAGE auf ihr: die Eindeckung 4 mm ueber der Fahrbahn,
-  // Rille und Fahrflaeche 4 mm darueber. Der Fehler betraegt damit einen
-  // knappen Zentimeter nach oben — er ist hier benannt und geht in keine
-  // Messung ein.
-  const bandHalb = Math.max(OBERBAU_MASSE.eindeckungBreite.wertM, spurweiteM + 0.8) / 2;
+  // VORGESCHICHTE (Befund 09.08.2026): Die Rille ist eine VERTIEFUNG, 3,8 cm
+  // unter der Fahrbahnoberflaeche. Die Fahrbahn war im Modell ein geschlossenes
+  // Polygon ohne Loch und verdeckte sie vollstaendig; `scene.drillPick`
+  // senkrecht auf die Gleisachse lieferte von vorn nach hinten Fahrbahn, dann
+  // Gleis, dann Gelaende. Sichtbar blieben 4 mm Schienenkopf, hell auf hell —
+  // eine Gleisstrasse sah aus wie eine Strasse.
+  //
+  // Als Notbehelf lag die Platte 4,5 cm ueber der Fahrbahn. Der Wert kam aus
+  // zwei Zwaengen (ueber dem Interpolationsrauschen zweier getrennt vernetzter
+  // Flaechen, ueber der Rillentiefe) und war ausdruecklich eine ZEICHENHOEHE,
+  // kein Bauteilmass — das Gleis stand damit als flache Rampe auf der Strasse.
+  //
+  // SEIT 10.08.2026 wird die Gleiszone beim Import aus den Bodenflaechen
+  // AUSGESCHNITTEN (server/geodata/gelaende.ts, `gleiszoneAusschneiden`). Die
+  // Fahrbahn hat dort ein Loch, die Platte fuellt es, und der Blick in die
+  // Rille trifft ihren dunklen Grund statt der Fahrbahn. Damit ist der Versatz
+  // ueberfluessig: `zPlatte` ist 0, die Oberkante der Eindeckung liegt genau
+  // auf der Bezugsflaeche des Strassenraums.
+  const bandHalb = eindeckungBreiteM(spurweiteM) / 2;
   void OBERBAU_MASSE.fugenBreite;
-  // WARUM 3 cm UND NICHT 4 mm (Befund 09.08.2026, am fertig gebauten Stand):
-  // Fahrbahnflaeche und Gleisband sind ZWEI unabhaengig vernetzte Flaechen.
-  // Beide bekommen ihre Hoehen nur an ihren eigenen Stuetzpunkten (alle 2 m)
-  // und werden dazwischen linear gespannt — auf gewoelbtem Gelaende laufen sie
-  // deshalb um mehrere Zentimeter auseinander. Ein Versatz von 4 mm ging darin
-  // unter: das Band lag streckenweise UNTER der Fahrbahn und war unsichtbar.
-  // 3 cm liegen sicher darueber und bleiben unter der Bordsteinhoehe (12 cm),
-  // stossen also nirgends durch eine Kante.
-  //
-  // Das ist eine ZEICHENHOEHE, kein Bauteilmass: In Wirklichkeit liegt die
-  // Eindeckung buendig in der Fahrbahn. Sobald die Fahrbahn beim Import um die
-  // Gleiszone ausgeschnitten wird, gehoert dieser Versatz auf null.
-  // ZEICHENHOEHE DER PLATTE: 4,5 cm ueber der Fahrbahn.
-  //
-  // Der Wert ergibt sich aus zwei Zwaengen, nicht aus dem Bauwerk:
-  //  - Er muss ueber dem Interpolationsrauschen zwischen zwei getrennt
-  //    vernetzten Flaechen liegen (bei 4 mm verschwand das Band streckenweise
-  //    unter der Fahrbahn, nachgemessen 09.08.2026).
-  //  - Er muss GROESSER sein als die Rillentiefe (3,8 cm), damit der
-  //    Rillengrund noch UEBER der Fahrbahnflaeche liegt. Sonst sieht man beim
-  //    Blick in die Rille nicht ihren dunklen Grund, sondern die Fahrbahn,
-  //    die ungeschnitten darunter durchlaeuft.
-  // Er bleibt unter der Bordsteinhoehe (12 cm), stoesst also durch keine Kante.
-  const zPlatte = 0.045;
+  const zPlatte = 0;
+  /**
+   * Dicke der Eindeckungsplatte. Sie fuellt den Trog, den der Schnitt in der
+   * Fahrbahn hinterlaesst; die Bauklasse `gleiszone` liegt mit -0,06 m genau
+   * 1 cm unter ihrer Unterkante, damit beide nicht koplanar liegen.
+   */
   const plattenDicke = 0.05;
 
   // DIE PLATTE MIT ZWEI ECHTEN VERTIEFUNGEN.
@@ -239,15 +290,32 @@ export function rillenGleisProfil(spurweiteM: number, mindestZeichenbreiteM = 0)
         ] as QuerPunkt[],
         farbe: OBERBAU_FARBEN.schiene,
       },
-      // Der Rillengrund. Er liegt im Schatten der eigenen Wandungen — das
-      // ist die dunkle Linie, an der man das Gleis erkennt.
+      // DIE RILLE. Sie ist das Merkmal, an dem man ein Gleis ueberhaupt
+      // erkennt: zwei parallele helle Striche gibt es im Stadtbild oefter,
+      // zwei helle Striche mit je einer schmalen dunklen Nut daneben nur beim
+      // Gleis.
+      //
+      // SIE FUELLT DIE NUT, statt nur ihren Grund zu belegen. Der erste Ansatz
+      // war ein 2 mm duennes Plaettchen auf dem Rillengrund — im Bild war es
+      // nicht zu sehen (Bildpunktmessung vom 10.08.2026 quer ueber die Achse
+      // bei 504 px/m: Fahrflaeche 5,6 cm, Rille 0). Zwei Flaechen, die 2 mm
+      // auseinanderliegen, entscheidet der Tiefenpuffer bei streifendem Blick
+      // nicht mehr zuverlaessig, und ohne den dunklen Grund ist die Nut nur
+      // eine Fuge in derselben Farbe.
+      //
+      // Der Koerper reicht jetzt vom Rillengrund bis 1 cm unter die
+      // Fahrbahnoberkante. Was man sieht, ist damit eine dunkle Nut in voller
+      // Rillenbreite — genau das, was man in Wirklichkeit sieht, wenn man in
+      // eine Rille schaut. Die MASSE der Rille (Breite 36,35 mm, Tiefe 3,8 cm)
+      // bleiben unveraendert; es ist die Fuellung, die sichtbar wird, nicht
+      // eine Verbreiterung.
       {
-        bezeichnung: `Rillengrund ${seitenName}`,
+        bezeichnung: `Rille ${seitenName}`,
         umriss: [
           [rVon, zPlatte - rilleT],
           [rBis, zPlatte - rilleT],
-          [rBis, zPlatte - rilleT + 0.002],
-          [rVon, zPlatte - rilleT + 0.002],
+          [rBis, zPlatte - 0.01],
+          [rVon, zPlatte - 0.01],
         ] as QuerPunkt[],
         farbe: OBERBAU_FARBEN.rille,
       },
@@ -267,12 +335,11 @@ export function schotterGleisProfil(spurweiteM: number): Profil {
   const halbSpur = spurweiteM / 2;
   const bettH = OBERBAU_MASSE.bettungHoehe.wertM;
   const schulter = OBERBAU_MASSE.bettungSchulter.wertM;
-  const neigung = OBERBAU_MASSE.bettungNeigung.wertM;
   const schwelleH = OBERBAU_MASSE.schwelleHoehe.wertM;
   const schwelleUe = OBERBAU_MASSE.schwelleUeberstand.wertM;
 
   const obenHalb = halbSpur + schwelleUe + schulter;
-  const untenHalb = obenHalb + bettH * neigung;
+  const untenHalb = bahnkoerperBreiteM(spurweiteM) / 2;
 
   const bettung: QuerPunkt[] = [
     [-untenHalb, 0],

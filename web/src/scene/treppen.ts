@@ -17,7 +17,7 @@
 import * as Cesium from 'cesium';
 import type { GelaendeFlaeche } from '@shared/domain/types';
 import { nachWgs } from '@shared/geo/proj';
-import { treppenlauf } from '@shared/bau/treppe';
+import { teileAnPodesten, treppenlauf } from '@shared/bau/treppe';
 import type { Hoehenlage } from './gelaende.ts';
 import { zerlegeFlaeche, type Punkt3D } from './stadt.ts';
 
@@ -33,10 +33,18 @@ const EINBINDUNG_M = 0.15;
 
 export interface TreppenBericht {
   flaechen: number;
+  /** Laufteile nach dem Schnitt an Podesten — mehr als `flaechen` bei L-Treppen. */
+  teile: number;
   laeufe: number;
   stufen: number;
   flach: number;
   hoechsterLaufM: number;
+  /** Laeufe, deren Stufenzahl aus OpenStreetMap gezaehlt ist. */
+  mitBeleg: number;
+  /** Kleinste und groesste gebaute Stufenhoehe — die Abnahmezahl. */
+  stufenHoeheMinM: number | null;
+  stufenHoeheMaxM: number | null;
+  befunde: string[];
 }
 
 class Sammler {
@@ -77,9 +85,20 @@ class Sammler {
 export function baueTreppen(
   flaechen: GelaendeFlaeche[] | undefined,
   hoehen: Hoehenlage,
-  stufenHoeheM = 0.17,
+  stufenmass: { hoeheM: number; hoeheZulaessigMinM?: number; hoeheZulaessigMaxM?: number } = { hoeheM: 0.17 },
 ): { prims: Cesium.Primitive[]; bericht: TreppenBericht } {
-  const bericht: TreppenBericht = { flaechen: 0, laeufe: 0, stufen: 0, flach: 0, hoechsterLaufM: 0 };
+  const bericht: TreppenBericht = {
+    flaechen: 0,
+    teile: 0,
+    laeufe: 0,
+    stufen: 0,
+    flach: 0,
+    hoechsterLaufM: 0,
+    mitBeleg: 0,
+    stufenHoeheMinM: null,
+    stufenHoeheMaxM: null,
+    befunde: [],
+  };
   const treppen = (flaechen ?? []).filter((f) => f.art === 'treppe' && f.polygon.length >= 3);
   bericht.flaechen = treppen.length;
   if (!treppen.length) return { prims: [], bericht };
@@ -87,34 +106,53 @@ export function baueTreppen(
   const s = new Sammler();
 
   for (const f of treppen) {
-    const lauf = treppenlauf(f.polygon, (e, n) => hoehen.bei(e, n), stufenHoeheM);
-    if (lauf.flach || !lauf.stufen.length) {
-      bericht.flach++;
-      continue;
-    }
-    bericht.laeufe++;
-    bericht.stufen += lauf.stufen.length;
-    if (lauf.steigungM > bericht.hoechsterLaufM) bericht.hoechsterLaufM = lauf.steigungM;
+    // AN PODESTEN TEILEN: Bei einer L-foermigen Treppe zeigt die
+    // Haupttraegheitsachse quer durch beide Laeufe, und die Stufen laegen
+    // schraeg zu beiden. Der Schnitt am Podest macht daraus zwei gerade Laeufe.
+    const teile = teileAnPodesten(f.polygon);
+    bericht.teile += teile.length;
+    for (const teil of teile) {
+      // Eine gezaehlte Stufenzahl gilt fuer den GANZEN Aufgang. Auf einen
+      // Teillauf angewandt waere sie falsch — dann lieber die Ableitung.
+      const beleg = teile.length === 1 ? f.stufenzahl : undefined;
+      const lauf = treppenlauf(teil, (e, n) => hoehen.bei(e, n), stufenmass, beleg);
+      for (const b of lauf.befunde) bericht.befunde.push(`${f.id}: ${b}`);
+      if (lauf.flach || !lauf.stufen.length) {
+        bericht.flach++;
+        continue;
+      }
+      bericht.laeufe++;
+      bericht.stufen += lauf.anzahl;
+      if (lauf.herkunft === 'step_count') bericht.mitBeleg++;
+      if (lauf.steigungM > bericht.hoechsterLaufM) bericht.hoechsterLaufM = lauf.steigungM;
+      if (bericht.stufenHoeheMinM === null || lauf.stufenHoeheM < bericht.stufenHoeheMinM) bericht.stufenHoeheMinM = lauf.stufenHoeheM;
+      if (bericht.stufenHoeheMaxM === null || lauf.stufenHoeheM > bericht.stufenHoeheMaxM) bericht.stufenHoeheMaxM = lauf.stufenHoeheM;
 
-    const fuss = lauf.untenM - EINBINDUNG_M;
-    for (const stufe of lauf.stufen) {
-      // Trittflaeche
-      s.flaeche(stufe.ring.map((p) => [p[0], p[1], stufe.obenM] as Punkt3D));
-      // Mantel bis zum Fuss des Laufs — der Stapel bildet die Setzstufen.
-      for (let i = 0, j = stufe.ring.length - 1; i < stufe.ring.length; j = i++) {
-        const a = stufe.ring[j];
-        const b = stufe.ring[i];
-        s.viereck(
-          [a[0], a[1], fuss],
-          [b[0], b[1], fuss],
-          [b[0], b[1], stufe.obenM],
-          [a[0], a[1], stufe.obenM],
-        );
+      const fuss = lauf.untenM - EINBINDUNG_M;
+      for (const stufe of lauf.stufen) {
+        // Jede Stufe besteht aus konvexen TEILEN (exakter Schnitt ueber die
+        // Dreieckszerlegung) — bei einem einfachen Umriss ist es genau einer.
+        for (const ring of stufe.teile) {
+          s.flaeche(ring.map((p) => [p[0], p[1], stufe.obenM] as Punkt3D));
+          // Mantel bis zum Fuss des Laufs — der Stapel bildet die Setzstufen.
+          for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            const a = ring[j];
+            const b = ring[i];
+            s.viereck(
+              [a[0], a[1], fuss],
+              [b[0], b[1], fuss],
+              [b[0], b[1], stufe.obenM],
+              [a[0], a[1], stufe.obenM],
+            );
+          }
+        }
       }
     }
   }
 
   bericht.hoechsterLaufM = +bericht.hoechsterLaufM.toFixed(2);
+  if (bericht.stufenHoeheMinM !== null) bericht.stufenHoeheMinM = +bericht.stufenHoeheMinM.toFixed(3);
+  if (bericht.stufenHoeheMaxM !== null) bericht.stufenHoeheMaxM = +bericht.stufenHoeheMaxM.toFixed(3);
   if (!s.indizes.length) return { prims: [], bericht };
 
   const positionen = new Float64Array(s.ecken);

@@ -163,6 +163,49 @@ export function EbenenPanel() {
         )}
       </section>
 
+      {/*
+        DATENLUECKEN — sie stehen VOR dem Quellennachweis, weil sie die
+        wichtigere Aussage sind: nicht, woher die Daten kommen, sondern WO SIE
+        FEHLEN. Der Befund, der dazu gefuehrt hat: Beim Ausbau des Gebiets
+        fehlten an den neuen Stellen die Baeume, weil der ortsgebundene
+        Katasterauszug dort endet — und nichts hat es gemeldet. Ein stiller
+        Ausfall ist damit ausgeschlossen.
+      */}
+      {gelaende?.datenluecken?.length ? (
+        <section className="pnl-abschnitt" aria-labelledby="eb-luecken">
+          <h2 className="pnl-titel" id="eb-luecken">
+            Datenlücken ({gelaende.datenluecken.length})
+          </h2>
+          <p className="pnl-hilfe">
+            Stellen, an denen das Modell weniger weiß, als es soll. Sie sind kein Fehler der Anwendung, sondern eine
+            Angabe über ihre Reichweite — beim Import gemessen, nicht vermutet.
+          </p>
+          <ul className="pnl-liste">
+            {gelaende.datenluecken.map((l, i) => (
+              <li key={`${l.elementart}-${l.art}-${i}`} className="pnl-eintrag">
+                <span className="pnl-eintrag__name">{l.bezeichnung}</span>
+                <dl className="pnl-quellennachweis">
+                  <dt>Art</dt>
+                  <dd>
+                    {l.art === 'kataster_deckt_nicht'
+                      ? 'Katasterauszug deckt das Gebiet nicht'
+                      : l.art === 'kein_kataster'
+                        ? 'Kein Katasterauszug vorhanden'
+                        : l.art === 'ungleiche_verteilung'
+                          ? 'Ungleiche Verteilung im Gebiet'
+                          : l.art === 'unter_erwartung'
+                            ? 'Unter der Abdeckungserwartung'
+                            : 'Zwischengespeicherter Stand benutzt'}
+                  </dd>
+                  <dt>Befund</dt>
+                  <dd>{l.text}</dd>
+                </dl>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section className="pnl-abschnitt" aria-labelledby="eb-quellen">
         <h2 className="pnl-titel" id="eb-quellen">
           Quellennachweis

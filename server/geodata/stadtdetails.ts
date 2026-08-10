@@ -626,6 +626,10 @@ const BARRIERE_HOEHE: Record<LinienArt, number> = {
   bordstein: 0.12,
   gelaender: 1.0,
   gleis: GLEIS_HOEHE_M,
+  // Portale entstehen NICHT hier, sondern beim Hoehenband
+  // (server/geodata/hoehenband.ts) — dort steht ihre lichte Hoehe. Der Wert
+  // hier ist nur der Rueckfall, falls jemand ein Portal aus OSM erzeugt.
+  portal: 2.2,
   // Markierungen sind Farbe auf der Fahrbahn — praktisch ohne Bauhoehe.
   markierung: 0.02,
 };
@@ -639,6 +643,7 @@ const BARRIERE_BREITE: Record<LinienArt, number> = {
   bordstein: 0.25,
   markierung: 0.12,
   gelaender: 0.08,
+  portal: 0.35,
   gleis: GLEIS_BREITE_STRASSE_M,
 };
 

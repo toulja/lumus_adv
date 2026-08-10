@@ -70,6 +70,11 @@ export const RANG: Record<FlaechenArt, number> = {
   gehweg: 30,
   radweg: 32,
   treppe: 34,
+  // Die Gleiszone wird beim Import aus den Bodenflaechen AUSGESCHNITTEN; sie
+  // liegt damit nie unter oder ueber einer anderen Klasse, sondern an deren
+  // Stelle. Ihr Rang steht trotzdem oben, weil sie in einem Rueckfallweg ohne
+  // Schnitt (Gelaende aus einem Altbestand) sichtbar bleiben muss.
+  gleiszone: 36,
 };
 
 /**

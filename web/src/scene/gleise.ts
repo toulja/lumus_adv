@@ -55,6 +55,8 @@ export interface GleisBericht {
   schotterM: number;
   schwellen: number;
   dreiecke: number;
+  /** Knoten, an denen die Bauart wechselt — dort liegt ein Uebergangsstueck. */
+  bauartWechsel: number;
 }
 
 class Sammler {
@@ -168,6 +170,7 @@ export function baueGleise(
     schotterM: 0,
     schwellen: 0,
     dreiecke: 0,
+    bauartWechsel: 0,
   };
   if (!gleise.length) return { prims: [], bericht };
 
@@ -184,6 +187,62 @@ export function baueGleise(
 
   const bezug = (e: number, n: number) => hoehen.bauOben(e, n);
 
+  // --- UEBERGANGSSTUECKE an den Bauartwechseln ------------------------------
+  //
+  // BEFUND (Uebergabe 4.2, „offen bleibt ausserdem"): An den Stellen, an denen
+  // die Bauart wechselt (Rillenschiene <-> Schotteroberbau), bricht der Strang.
+  // Der Grund ist der Aufbau selbst: Beide Bauarten werden GETRENNT vernetzt,
+  // damit ein Strang durchgehend dieselbe Bauart hat — genau deshalb endet der
+  // eine Strang dort, wo der andere beginnt, und zwischen zwei stumpf
+  // gestossenen Querschnitten klafft eine Fuge.
+  //
+  // DIE LOESUNG IST KEIN NEUES BAUTEIL, sondern eine Ueberlappung: Endet ein
+  // Strang an einem Knoten, an dem ein Strang der ANDEREN Bauart anfaengt,
+  // wird seine Achse dort um UEBERGANG_M verlaengert. Beide Profile laufen
+  // dann ein Stueck ineinander, und der Wechsel liest sich als Uebergang statt
+  // als Bruch. Das ist eine ZEICHENLOESUNG und ausdruecklich kein
+  // Bauwerksmass: In Wirklichkeit steht dort ein Uebergangsjoch mit eigener
+  // Konstruktion, und das braeuchte Daten, die keine der Quellen fuehrt.
+  const UEBERGANG_M = 2.0;
+  const wechselKnoten: Punkt[] = [];
+  {
+    const enden = new Map<string, Set<string>>();
+    const schluessel = (p: Punkt) => `${Math.round(p[0] * 10)}:${Math.round(p[1] * 10)}`;
+    for (const g of gleise) {
+      const bauart = g.eigenerBahnkoerper === false ? 'rille' : 'schotter';
+      for (const p of [g.achse[0], g.achse[g.achse.length - 1]]) {
+        const s = schluessel(p);
+        const menge = enden.get(s) ?? new Set<string>();
+        menge.add(bauart);
+        enden.set(s, menge);
+        if (menge.size > 1 && !wechselKnoten.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 0.2)) {
+          wechselKnoten.push([p[0], p[1]]);
+        }
+      }
+    }
+  }
+  bericht.bauartWechsel = wechselKnoten.length;
+
+  /** Verlaengert eine Achse an einem Ende, das auf einem Bauartwechsel liegt. */
+  const anWechselVerlaengern = (achse: Punkt[]): Punkt[] => {
+    if (!wechselKnoten.length || achse.length < 2) return achse;
+    const amWechsel = (p: Punkt) => wechselKnoten.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 0.2);
+    const out = [...achse];
+    if (amWechsel(out[0])) {
+      const a = out[0];
+      const b = out[1];
+      const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      out.unshift([a[0] - ((b[0] - a[0]) / l) * UEBERGANG_M, a[1] - ((b[1] - a[1]) / l) * UEBERGANG_M]);
+    }
+    if (amWechsel(out[out.length - 1])) {
+      const a = out[out.length - 1];
+      const b = out[out.length - 2];
+      const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      out.push([a[0] - ((b[0] - a[0]) / l) * UEBERGANG_M, a[1] - ((b[1] - a[1]) / l) * UEBERGANG_M]);
+    }
+    return out;
+  };
+
   for (const [k, liste] of gruppen) {
     const [bauart, spurText] = k.split('|');
     const spur = Number(spurText);
@@ -199,7 +258,7 @@ export function baueGleise(
       // Glaetten VOR dem Verdichten: die Ecken zwischen den vorhandenen
       // Stuetzpunkten werden abgeschnitten, danach wird auf Stationsabstand
       // aufgefuellt.
-      const achse = achseGlaetten(strang.punkte);
+      const achse = anWechselVerlaengern(achseGlaetten(strang.punkte));
       const l = laenge(achse);
       bericht.laengeM += l;
       if (bauart === 'rille') bericht.rillenschieneM += l;

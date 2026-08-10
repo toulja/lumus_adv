@@ -22,6 +22,7 @@
 
 import fs from 'node:fs';
 import type { BBox, GelaendePunktObjekt } from '../../shared/domain/types.ts';
+export type { BBox };
 import { cache } from '../lib/store.ts';
 
 /**
@@ -88,6 +89,48 @@ function ausDatei(bbox: BBox, datei: string, praefix: string): GelaendePunktObje
     });
   }
   return out;
+}
+
+/**
+ * DAS GEBIET DES AUSZUGS — die Angabe, die bisher fehlte.
+ *
+ * Ein Katasterauszug ist ein AUSSCHNITT, kein Vollbestand. Der Darmstaedter
+ * Auszug deckt das urspruengliche Pilotgebiet ab; als das Gebiet auf den
+ * Grossen Woog erweitert wurde, gab es dort keine Katasterbaeume mehr, und wo
+ * OpenStreetMap duenn ist, blieb die Flaeche leer — ohne eine einzige Meldung.
+ * Genau das war der Befund „an neuen Stellen fehlen Baeume".
+ *
+ * Das Gebiet wird nicht konfiguriert, sondern aus der Datei GEMESSEN (alle
+ * enthaltenen Punkte). Eine konfigurierte Angabe koennte veralten; die
+ * gemessene nicht.
+ */
+export function katasterGebiet(stadt = 'darmstadt'): BBox | null {
+  let minE = Infinity;
+  let minN = Infinity;
+  let maxE = -Infinity;
+  let maxN = -Infinity;
+  let punkte = 0;
+  for (const datei of [`${stadt}_stadtbaeume.json`, `${stadt}_topobaeume.json`]) {
+    const pfad = cache.pfad('baumkataster', datei);
+    if (!fs.existsSync(pfad)) continue;
+    let roh: KatasterZeile[];
+    try {
+      roh = JSON.parse(fs.readFileSync(pfad, 'utf8')) as KatasterZeile[];
+    } catch {
+      continue;
+    }
+    for (const zeile of roh) {
+      const e = zeile[0];
+      const n = zeile[1];
+      if (!Number.isFinite(e) || !Number.isFinite(n)) continue;
+      punkte++;
+      if (e < minE) minE = e;
+      if (e > maxE) maxE = e;
+      if (n < minN) minN = n;
+      if (n > maxN) maxN = n;
+    }
+  }
+  return punkte ? { minE, minN, maxE, maxN } : null;
 }
 
 /**

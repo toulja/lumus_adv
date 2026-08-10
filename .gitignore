@@ -7,6 +7,7 @@ dist/
 #   Konten     -> npm run seed
 #   Abnahme    -> npm run abnahme
 data/gelaende/
+data/gelaende-abgelegt/
 data/cache/
 data/projekte/
 data/abnahme/

@@ -27,6 +27,7 @@ import type {
   BBox,
   FlaechenArt,
   GelaendeFlaeche,
+  Hoehenband,
   Punkt,
   Quellennachweis,
   Ring,
@@ -189,20 +190,99 @@ function istEinbahn(tags: Record<string, string>): boolean {
   return tags.oneway === 'yes' || tags.oneway === '-1';
 }
 
+/** Liest eine Zahl aus einem OSM-Wert; `null`, wenn nichts Verwertbares drinsteht. */
+function ganzZahl(text: string | undefined): number | null {
+  if (text === undefined) return null;
+  const n = Number(String(text).trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Liest `incline` als PROZENT. OSM erlaubt „15 %", „10°", „up", „down"
+ * (Key:incline, abgerufen 10.08.2026: „As one moves forward on a way, a
+ * positive incline gets higher, and a negative incline gets lower.").
+ * `up`/`down` sind KEINE Zahl — sie liefern null, damit daraus keine
+ * erfundene Neigung wird; die Richtung allein reicht nicht.
+ */
+export function osmIncline(text: string | undefined): number | null {
+  const t = text?.trim().toLowerCase();
+  if (!t || t === 'up' || t === 'down' || t === 'yes' || t === 'steep') return null;
+  const grad = /^(-?\d+(?:[.,]\d+)?)\s*°$/.exec(t);
+  if (grad) {
+    const g = Number(grad[1].replace(',', '.'));
+    return Number.isFinite(g) ? Math.tan((g * Math.PI) / 180) * 100 : null;
+  }
+  const proz = /^(-?\d+(?:[.,]\d+)?)\s*%?$/.exec(t);
+  if (proz) {
+    const p = Number(proz[1].replace(',', '.'));
+    return Number.isFinite(p) && Math.abs(p) <= 100 ? p : null;
+  }
+  return null;
+}
+
+/**
+ * Liest das HOEHENBAND eines OSM-Objekts — die Rohdaten, unveraendert.
+ *
+ * `layer` sagt ausdruecklich NICHTS ueber die Hoehe: „Layer provides
+ * absolutely no information about relative or absolute height difference of
+ * objects which do not immediately cross or overlap." (OSM-Wiki Key:layer,
+ * abgerufen 10.08.2026). Es sagt nur, WAS UEBER WAS liegt. Die Hoehen werden
+ * darum nicht aus `layer` gerechnet, sondern aus der Geometrie abgeleitet
+ * (server/geodata/hoehenband.ts) — `layer` entscheidet nur die Richtung.
+ */
+export function osmLage(tags: Record<string, string>): Hoehenband | undefined {
+  const layer = ganzZahl(tags.layer);
+  const bruecke = tags.bridge && tags.bridge !== 'no' ? tags.bridge.trim() : undefined;
+  const tunnel = tags.tunnel && tags.tunnel !== 'no' ? tags.tunnel.trim() : undefined;
+  const ueberdeckt = tags.covered && tags.covered !== 'no' ? tags.covered.trim() : undefined;
+  const osmLevel = ganzZahl(tags.level);
+  const inclineProzent = osmIncline(tags.incline);
+  const maxhoeheM = osmBreite(tags['maxheight:physical'] ?? tags.maxheight);
+  if (
+    layer === null &&
+    !bruecke &&
+    !tunnel &&
+    !ueberdeckt &&
+    osmLevel === null &&
+    inclineProzent === null &&
+    maxhoeheM === null
+  ) {
+    return undefined;
+  }
+  return {
+    ...(layer !== null ? { layer } : {}),
+    ...(bruecke ? { bruecke } : {}),
+    ...(tunnel ? { tunnel } : {}),
+    ...(ueberdeckt ? { ueberdeckt } : {}),
+    ...(osmLevel !== null ? { osmLevel } : {}),
+    ...(inclineProzent !== null ? { inclineProzent } : {}),
+    ...(maxhoeheM !== null ? { maxhoeheM } : {}),
+    herkunft: 'osm',
+  };
+}
+
 /**
  * Klassifiziert einen OSM-Weg.
  * Rueckgabe null bedeutet: nicht zeichnen (unbekannte Klasse, Bauplanung,
- * Gebaeudeinnenweg oder TUNNEL — der liegt unter der Oberflaeche).
+ * Gebaeudeinnenweg).
  * Bruecken erhalten rang + 10, damit sie ueber dem Boden liegen.
+ *
+ * TUNNEL WERDEN SEIT 10.08.2026 NICHT MEHR VERWORFEN. Vorher stand hier
+ * `if (tags.tunnel …) return null` — und genau das war der Grund, warum eine
+ * Tiefgarageneinfahrt nicht tief wurde: Sie ist in OpenStreetMap ein
+ * `highway=service` mit `tunnel`/`covered`/`layer=-1` und fiel damit ganz
+ * heraus. Jetzt kommt sie mit, traegt ihr Hoehenband (`lage`) und bekommt im
+ * zweiten Schritt eine Tiefe (server/geodata/hoehenband.ts).
+ *
+ * AUSNAHME, die bleibt: ein `tunnel=building_passage` ist eine Durchfahrt
+ * DURCH ein Haus auf Strassenniveau — dort gibt es nichts abzusenken.
  */
 export function osmArt(
   tags: Record<string, string>,
-): { art: FlaechenArt; breiteM: number; rang: number } | null {
+): { art: FlaechenArt; breiteM: number; rang: number; lage?: Hoehenband } | null {
   const roh = (tags.highway ?? tags['area:highway'] ?? '').trim().toLowerCase();
   if (!roh) return null;
   if (NICHT_ZEICHNEN.has(roh)) return null;
-  // Tunnel liegen unter der Oberflaeche und gehoeren nicht in die Bodenzeichnung.
-  if (tags.tunnel && tags.tunnel !== 'no') return null;
 
   const istLink = roh.endsWith('_link');
   const basis = istLink ? roh.slice(0, -'_link'.length) : roh;
@@ -248,6 +328,7 @@ export function osmArt(
     art,
     breiteM,
     rang: OSM_RANG[art] + (brueckeAktiv ? BRUECKEN_ZUSCHLAG : 0),
+    lage: osmLage(tags),
   };
 }
 
@@ -410,6 +491,19 @@ function ausAltbestand(art: string, bbox: BBox): { elemente: OsmElement[]; datei
 export const altbestandMeldungen: string[] = [];
 
 /**
+ * ABRUFFEHLER — Teilabfragen, die GAR NICHTS geliefert haben.
+ *
+ * Der Unterschied zu `altbestandMeldungen` ist der Ausgang: Dort gab es einen
+ * zwischengespeicherten Stand, hier gibt es nichts. Beim Import ueber den
+ * Grossen Woog am 10.08.2026 fielen so die Wege und die Strassenmoebel
+ * vollstaendig aus (Overpass HTTP 504 und 429) — sichtbar nur in der
+ * Serverkonsole, nicht im Auftragsprotokoll. Genau das ist der stille Ausfall,
+ * den dieses Projekt nicht haben will: Das Ergebnis sah aus wie ein Gebiet
+ * ohne Strassenmoebel, statt wie ein Gebiet ohne Daten.
+ */
+export const abrufFehler: string[] = [];
+
+/**
  * Eine Overpass-Abfrage mit Warteschlange, Dateicache und Wiederholversuch.
  * Exportiert, damit weitere Module (stadtdetails.ts) DIESELBE Mechanik nutzen
  * statt eine zweite, konkurrierende Abfrage-Schlange aufzumachen — Overpass
@@ -465,7 +559,10 @@ export async function overpass(
     // Abruf gescheitert: lieber ein veralteter Stand MIT Hinweis als eine
     // stille Luecke (Begruendung bei ausAltbestand).
     const alt = ausAltbestand(art, bbox);
-    if (!alt) throw fehler;
+    if (!alt) {
+      abrufFehler.push(`${art}: ${(fehler as Error).message} — es gibt auch keinen zwischengespeicherten Stand, diese Objekte FEHLEN vollstaendig.`);
+      throw fehler;
+    }
     const meldung =
       `${art}: Abruf gescheitert (${(fehler as Error).message.slice(0, 90)}) — ` +
       `es gilt der zwischengespeicherte Stand vom ${alt.stand ? new Date(alt.stand).toLocaleString('de-DE') : 'unbekannt'} ` +
@@ -595,6 +692,7 @@ function alsGelaendeFlaechen(
   rang: number,
   bezeichnung: string,
   belag?: string,
+  lage?: Hoehenband,
 ): GelaendeFlaeche[] {
   const out: GelaendeFlaeche[] = [];
   for (const poly of polygone) {
@@ -611,6 +709,7 @@ function alsGelaendeFlaechen(
       bezeichnung,
       rang,
       belag,
+      ...(lage ? { lage } : {}),
     });
   }
   return out;
@@ -669,7 +768,25 @@ export async function osmWegflaechen(
       k.rang,
       bezeichnungVon(tags, tags.highway ?? ''),
       belagVon(tags),
+      k.lage,
     );
+    // `step_count` ist eine ZAEHLUNG vor Ort und damit ein Beleg. Sie wird hier
+    // an die Rohflaeche geheftet; ob sie die Vereinigung ueberlebt, entscheidet
+    // sich spaeter (server/geodata/gelaende.ts, stufenzahlenUebertragen) —
+    // verschmelzen zwei Treppen mit verschiedenen Zaehlungen, bleibt das Feld
+    // leer, statt eine der beiden zu behaupten.
+    if (k.art === 'treppe' && flaechen.length) {
+      const anzahl = zahlAus(tags.step_count);
+      if (anzahl !== null && anzahl >= 1 && anzahl <= 500) {
+        for (const f of flaechen) f.stufenzahl = Math.round(anzahl);
+      }
+    }
+    // Die ACHSE gehoert zum Hoehenband: eine Rampe faellt ENTLANG ihrer Achse,
+    // und ohne sie waere spaeter nicht bestimmbar, wo oben und wo unten ist.
+    if (k.lage && flaechen.length && !alsFlaeche) {
+      const achsen = abschnitteImGebiet(linie, ziel).filter((t) => t.length >= 2);
+      if (achsen.length) flaechen[0].achsen = achsen;
+    }
 
     // Fahrbahnen tragen ihre Achse und die getaggten Fahrdaten mit — die
     // Grundlage fuer Leitlinien und Spurtrennstriche in der Darstellung.

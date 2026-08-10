@@ -211,8 +211,119 @@ Pro Land neu zu klären sind mindestens: WMS-/WFS-Endpunkte, das native CRS (258
 
 ---
 
+---
+
+## Normen und Regelwerke der Bauteilmaße (Stand 10.08.2026)
+
+Diese Werte stehen **als Daten** in `config/bauklassen/de-strassenraum-2026.2.json`
+und `config/elementquellen.json`, nicht im Programmtext. Jeder trägt dort eine
+`verifikation` mit `status`, `geprueftAm` und `beleg`.
+
+**Alle hier genannten Normen sind kostenpflichtig und lagen nicht im Volltext
+vor.** Die Werte stammen aus übereinstimmenden Sekundärquellen; sie tragen
+darum durchweg `verifikation.status = "zu_pruefen"`. Wer sie belastbar braucht,
+muss den amtlichen Text beschaffen — das ist ausdrücklich **nicht** erledigt.
+
+| Regelwerk | Wofür im Modell | Werte | Status |
+|---|---|---|---|
+| **EN 14811** (Rillenschienen) | Rillenbreite und Fahrkantenbreite der im Pflaster liegenden Schiene | Rille **36,35 mm**, Fahrkante **55,83 mm** (Profil 60R2) | verifiziert gegen Profiltabellen mehrerer Walzwerke |
+| **DIN 18065** (Gebäudetreppen) | zulässiges Stufenmaß, an dem eine Ableitung scheitern darf | Steigung **0,12–0,21 m**, Auftritt **0,26–0,37 m**, Schrittmaß 0,59–0,65 m | zu prüfen (Sekundärquellen) |
+| **DIN 18040-3** (Barrierefreiheit, öffentlicher Verkehrsraum) | Geländer an Treppen, beidseitig | Höhe 0,90 m | zu prüfen (Sekundärquellen) |
+| **DIN 14090** (Flächen für die Feuerwehr) | lichte Höhe und Breite, die unter einem Bauwerk frei bleiben muss | lichte Höhe **3,50 m**, Breite 3,00 m (3,50 m zwischen Bauteilen), Bewegungsfläche 7 × 12 m | zu prüfen (Sekundärquellen: Merkblatt Berliner Feuerwehr, Landkreis Wittmund, baunetzwissen) |
+| **GaV Hessen § 4** (Garagenverordnung, in Kraft seit 22.05.2024) | Rampenneigung einer Tiefgarageneinfahrt | höchstens **15 %**; vor Rampen über 10 % eine mindestens 3 m lange Fläche mit höchstens 5 % | Wortlaut aus Sekundärquellen (haufe.de, bfb-barrierefrei-bauen.de); **die im Modell angesetzten 12 % sind eine Annahme und durch nichts belegt** |
+| **GaV Hessen** (lichte Höhe) | Sohle einer Tiefgarage unter der Straße | lichte Höhe **2,20 m** (2,05 m unter Unterzügen) — vorgeschrieben allerdings nur für die Erschließungsbereiche **barrierefreier** Stellplätze | zu prüfen; die Verwendung als untere Schranke für die Geschosshöhe geht über den Wortlaut hinaus, die Geschosshöhe 2,90 m ist eine reine Annahme |
+| **RE-ING / ARS** (Brückendurchfahrtshöhe) | Regellichthöhe über Straßen | **4,50 m**, Neubau 4,70 m | zu prüfen (Sekundärquellen); amtlicher Text lag nicht vor |
+
+### OpenStreetMap — welches Merkmal was aussagt
+
+Die drei Abgrenzungen, an denen das Höhenband im ersten Lauf gescheitert ist
+(Belege abgerufen 10.08.2026):
+
+- **Key:layer** — „Layer provides absolutely no information about relative or
+  absolute height difference." Ein `layer=-1` sagt nur, *was über was* liegt.
+  <https://wiki.openstreetmap.org/wiki/Key:layer>
+- **Key:covered** — überdeckt, nicht unterirdisch: „covered=yes … usually open
+  at least on one side". Eine Arkade ist ein Dach über einem Gehweg.
+  <https://wiki.openstreetmap.org/wiki/Key:covered>
+- **Key:tunnel**, Wert `building_passage` — eine Durchfahrt **durch** ein Haus
+  auf Straßenniveau. <https://wiki.openstreetmap.org/wiki/Key:tunnel>
+
+Belegwerte, die das Modell **übernimmt statt abzuleiten**: `step_count`,
+`incline`, `maxheight`, `level`, `gauge`, `embedded`, `surface`.
+
+### Hydro-Flattening — warum das DGM im Wasser nichts misst
+
+Ein Laserscanner bekommt von einer Wasseroberfläche kaum ein Echo zurück; was
+ein DGM innerhalb eines Sees führt, ist interpoliert. Im Großen Woog schwankte
+es um **1,83 m** und stieg stellenweise **1,1 m über das Ufer** (nachgeprüft am
+Luftbild, 09.08.2026). Die Bezeichnung für die übliche Nachbearbeitung lautet
+*hydro-flattening*; sie ist in den USGS-LiDAR-Basisspezifikationen definiert und
+in den deutschen DGM1-Produkten **nicht durchgängig** angewandt.
+
+### DGM1 ist ein Geländemodell — Brücken stehen darin
+
+Nachgemessen im Pilotgebiet (10.08.2026): Bei **allen 11** Brücken lag die
+Geländehöhe darunter exakt auf der Verbindungslinie der Widerlager. Ein
+Bauwerk, das im Höhenmodell als Boden steht, kann nichts überspannen — deshalb
+gibt das Modell dort **keine** lichte Höhe aus, sondern meldet eine Datenlücke.
+Belastbar wäre nur OSM `maxheight` oder ein Höhenmodell mit
+Bauwerksfreistellung (bDOM/DOM-Differenz).
+
+---
+
+## Elementquellen — Quellenketten als Daten (`config/elementquellen.json`)
+
+Bisher stand in jedem Importmodul fest verdrahtet, woher ein Baum, eine Laterne
+oder eine Bank kommt. Damit war weder prüfbar, ob eine bessere Quelle übergangen
+wurde, noch ob die gelieferte Menge überhaupt plausibel ist.
+
+Jetzt führt `config/elementquellen.json` für **10 Elementarten** je eine
+**geordnete Kette** — Kataster vor OpenStreetMap vor Klassenannahme — mit der
+Güte je Stufe (`gemessen` / `erfasst` / `annahme`). Der Loader weist eine
+ungeordnete Kette und eine fehlende `verifikation` beim Start **zurück**; eine
+neue Stadt braucht einen Eintrag in dieser Datei und **keinen Programmtext**.
+
+### Ortsgebundene Auszüge sagen ihr Gebiet an
+
+Der eigentliche Fehler beim Ausbau auf den Großen Woog: Ein Baumkataster-Auszug
+deckt einen **Ausschnitt** ab, nicht die Stadt. Lag das Zielgebiet daneben,
+lieferte der Import still weniger. Jeder Katastereintrag trägt darum jetzt ein
+`gebiet` — bei Dateiauszügen `"aus_datei"`, dann wird es beim Laden aus den
+enthaltenen Punkten bestimmt und mit dem Zielgebiet verglichen.
+
+Hinterlegt (Stand 10.08.2026): **Darmstadt** (Stadtbäume und Topobäume über
+`3d.darmstadt.de`, PlexMap/Cesium-3D-Tiles), **Frankfurt am Main**
+(Grünflächenamt), **Offenbach**. Recherchiert und als Kandidaten notiert, aber
+noch nicht angebunden: Köln, Bonn, Düsseldorf, Münster, Leipzig, Dresden,
+Hamburg, Berlin, München, Stuttgart, Karlsruhe, Mannheim, Wiesbaden, Kassel.
+
+### Abdeckungsprüfung — zwei Fragen, zwei Antworten
+
+1. **Relativ**: Gibt es 250-m-Zellen, die weniger als 25 % der sonst üblichen
+   Dichte haben? Das ist der Fingerabdruck eines ortsgebundenen Auszugs, der
+   nicht das ganze Gebiet abdeckt.
+2. **Absolut**: Liegt die mittlere Dichte unter der Erwartung? Die Erwartung ist
+   eine **Annahme** (`verifikation.status = "zu_pruefen"`) und keine Norm; sie
+   sagt nur, dass jemand hinsehen sollte.
+
+Beides steht in der Ebenen-Anzeige als **Datenlücke** über dem
+Quellennachweis — dort, wo es jemand sieht, bevor er den Plan weitergibt. Im
+Pilotgebiet meldet der Import z. B.: „Baum: 1 von 17 Zellen (250 m) haben
+weniger als 25 % der üblichen Dichte — betroffen sind 9,4 ha Bezugsfläche.
+Üblich sind 105,6 Baum/ha, dort sind es 9,3."
+
+### Flächenangabe für ortsgebundene Auszüge
+
+Ein Auszug, der 40 % des Gebiets abdeckt, ist keine Fehlmenge, sondern ein
+Auszug — solange **dabeisteht**, welche Fläche er abdeckt. Genau diese Angabe
+macht `extraktGebiet()`, und sie steht im Quellennachweis.
+
+
+---
+
 ## Änderungsprotokoll
 
 | Datum | Was |
 |---|---|
+| 10.08.2026 | Normen der Bauteilmaße (EN 14811, DIN 18065, DIN 18040-3, DIN 14090, GaV Hessen, RE-ING) als Daten mit Verifikationsstatus erfasst — **alle kostenpflichtig, keiner im Volltext geprüft**. OSM-Schlüssel `layer` / `covered` / `tunnel` belegt abgegrenzt. Quellenketten für 10 Elementarten nach `config/elementquellen.json` ausgelagert, Baumkataster Darmstadt/Frankfurt/Offenbach mit Gebietsangabe. Befund: DGM1 führt Brückenbauwerke als Boden — 0 von 11 Brücken mit messbarer lichter Höhe. |
 | 07.08.2026 | Erstfassung. Verifiziert: beide HVBG-WMS (GC), DOP20-GetMap, ALKIS-vereinfacht-WFS (GC), LoD2-Downloadlink (Range-GET), basemap.de-WMS (GC). Neu entdeckt und verifiziert: **amtlicher HVBG-Suchdienst** `ogc-free-data.ows` (ersetzt Nominatim). Negativbefund DGM1 bestätigt und um MetaVer-/Downloadcenter-Prüfung erweitert. Korrekturen: basemap.de ist primär **CC BY 4.0** (nicht dl-de/by-2-0); Hessen hat **keine** Versammlungsstättenverordnung, sondern die **H-VStättR**. |

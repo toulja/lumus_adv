@@ -16,7 +16,8 @@
 
 import * as Cesium from 'cesium';
 import type { FlaechenArt, Gelaende, GelaendeFlaeche, GelaendeLinienObjekt, Ring } from '@shared/domain/types';
-import { nachWgs } from '@shared/geo/proj';
+import { nachUtm, nachWgs } from '@shared/geo/proj';
+import { hoeheImHoehenband } from '@shared/bau/hoehenlage';
 import type { Hoehenlage } from './gelaende.ts';
 import { verdichteRing } from './gelaende.ts';
 import {
@@ -36,12 +37,26 @@ import {
 // Dokumentation und Bild auseinanderliefen.
 // ---------------------------------------------------------------------------
 
-// Die Selbstpruefung laeuft einmal beim Laden: reisst eine spaetere
-// Farbaenderung einen der belegten Mindestabstaende, steht es in der Konsole
-// statt still im Bild.
+// Die Selbstpruefung laeuft einmal BEIM LADEN. Sie prueft die Palette gegen
+// den GEMESSENEN Nachbarschaftsgraphen der Flaechenklassen (palette.ts,
+// NACHBARSCHAFT_M) — reisst eine spaetere Farbaenderung einen der Abstaende,
+// steht es in der Konsole, statt still im Bild zu verschwinden.
+//
+// Bewusst console.error und nicht console.warn: Eine gerissene Lesbarkeits-
+// regel ist kein Schoenheitsfehler, sondern die Rueckkehr genau des Zustands,
+// den der Auftraggeber beanstandet hat („Fleckenteppich aus Weiss, Creme und
+// Grau"). Jeder Befund steht einzeln da, damit man ihn abarbeiten kann.
 {
   const selbst = pruefePalette();
-  if (!selbst.ok) console.warn('[Palette] Selbstpruefung fehlgeschlagen:', selbst.befunde);
+  if (!selbst.ok) {
+    console.error(
+      `[Palette] Selbstpruefung FEHLGESCHLAGEN — ${selbst.befunde.length} Befund(e). ` +
+        `Die Basiskarte verletzt eine Lesbarkeitsregel (docs/KARTENDESIGN.md, palette.ts).`,
+    );
+    for (const b of selbst.befunde) console.error(`[Palette]   • ${b}`);
+  } else {
+    console.info('[Palette] Selbstpruefung bestanden (Deckel L* 93, Nachbarschaft DL* >= 9, Konturen, WCAG 1.4.11).');
+  }
 }
 
 /** Fuellfarben je Flaechenart — abgeleitet aus palette.FLAECHEN_STIL. */
@@ -688,6 +703,212 @@ export function baueStadt(gelaende: Gelaende): { prims: Cesium.Primitive[]; mitD
 // ---------------------------------------------------------------------------
 
 /**
+ * MASCHENWEITE, mit der eine Bodenflaeche INNEN unterteilt wird — 2 m,
+ * dieselbe wie bei der Randverdichtung (`verdichteRing`).
+ *
+ * WAS DIESE ZAHL KOSTET, gemessen statt geschaetzt (20.000 Stichproben ueber
+ * das Pilotgebiet, 10.08.2026). Zwischen zwei Stuetzpunkten laeuft die Flaeche
+ * als SEHNE unter der Gelaendekuppe hindurch; die Tabelle zeigt, wie weit das
+ * Gelaende dabei ueber die Flaeche steigt:
+ *
+ *      Masche    ueber 2 cm     99 %-Wert     groesster Wert
+ *        2 m       13,4 %        19,0 cm         2,00 m
+ *        1 m        3,6 %         5,8 cm         0,69 m
+ *      0,5 m        0,8 %         1,8 cm         0,26 m
+ *
+ * Der Fehler faellt mit dem QUADRAT der Maschenweite. Der Schritt auf 1 m —
+ * die Zellweite des Hoehenmodells und damit die feinste Masche, die noch eine
+ * MESSUNG abfragt — wurde ausprobiert und VERWORFEN, weil er das Gegenteil
+ * bewirkt: Bei 1 m verschwand in der Fussgaengeransicht die ganze Gruenflaeche
+ * unter der Gelaendeplatte; das Bild war flaechig braun statt gruen (Abzug
+ * `44-treppe-1m.png` gegen `44-treppe-2m.png`, gleiche Kamera, 10.08.2026).
+ *
+ * DER GRUND LIEGT IM RUECKFALLWEG: Grosse Flaechen — der groesste Gehweg des
+ * Pilotgebiets misst 233 x 370 m — scheitern bei 1 m an der Unterteilung und
+ * fallen auf `perPositionHeight` zurueck. Der aber unterteilt das Innere GAR
+ * NICHT; die Flaeche haengt dann ueber ihre ganze Breite durch und liegt unter
+ * dem Gelaende. Eine feinere Masche macht die kleinen Flaechen also besser und
+ * die grossen schlagartig unbrauchbar. Wer das aufloesen will, muss die Masche
+ * je Flaeche aus ihrer GROESSE bestimmen — nicht die Konstante drehen. Die
+ * Bildzeit war uebrigens unauffaellig (2,9 ms); es ist keine Frage der
+ * Rechenzeit.
+ *
+ * In Bogenmass, weil Cesiums `granularity` so gemessen wird: 2 m auf dem
+ * Erdumfang von 40.030 km sind 2 / 6.371.000 rad.
+ */
+const FLAECHEN_MASCHE_RAD = 2 / 6_371_000;
+
+/**
+ * Baut die Geometrie EINER Bodenflaeche — und zwar dem Gelaende folgend, auch
+ * IM INNEREN.
+ *
+ * DER FEHLER, DEN DAS BEHEBT (gemessen 10.08.2026, Rheinstrasse aus
+ * Fussgaengerhoehe): `scene.drillPick` lieferte mitten auf der Fahrbahn nur
+ * `gelaende:p8` — die Fahrbahnflaeche war im Datenbestand vorhanden
+ * (`osm_fahrbahn_118` enthaelt den Punkt), wurde aber unter dem Gelaende
+ * gezeichnet. Sichtbar als breites Band der Gelaendeplatte mitten in der
+ * Strasse.
+ *
+ * URSACHE: `PolygonGeometry` mit `perPositionHeight: true` benutzt AUSSCHLIESS-
+ * LICH die uebergebenen Ringpunkte und unterteilt das Innere ausdruecklich
+ * nicht. Der Rand wird von `verdichteRing` alle 2 m gestuetzt — das Innere gar
+ * nicht. Ein Dreieck der Triangulierung kann dadurch von einem Bordstein zum
+ * gegenueberliegenden und dabei 50 m weit reichen; ueber einer gewoelbten
+ * Fahrbahn oder einer Steigung laeuft es als SEHNE unter dem Gelaende durch.
+ * Genau dieselbe Ursache wie bei den Raendern, nur eine Ebene tiefer: dort war
+ * sie 2026-08-08 behoben worden, im Inneren blieb sie stehen.
+ *
+ * DIE BEHEBUNG: Cesium unterteilt das Innere sehr wohl — aber nur, wenn die
+ * Punkte NICHT ihre eigene Hoehe mitbringen (`perPositionHeight: false`), denn
+ * dann laeuft die Unterteilung ueber `granularity`. Also wird die Flaeche flach
+ * trianguliert und JEDER entstandene Eckpunkt danach auf seine Gelaendehoehe
+ * gehoben. Ergebnis ist ein Netz mit 2-m-Maschen, das dem Gelaende ueberall
+ * folgt — innen wie aussen.
+ *
+ * Der Rueckfall auf den alten Weg bleibt: schlaegt die Unterteilung fehl
+ * (entartete Ringe), wird wie bisher mit `perPositionHeight` gebaut. Lieber
+ * eine Flaeche mit Durchhang als keine.
+ */
+function flaechengeometrie(
+  hierarchie: Cesium.PolygonHierarchy,
+  hoeheAn: (e: number, n: number) => number,
+  versatzM: number,
+): Cesium.Geometry | undefined {
+  const perPosition = () =>
+    Cesium.PolygonGeometry.createGeometry(
+      new Cesium.PolygonGeometry({
+        polygonHierarchy: hierarchie,
+        perPositionHeight: true,
+        vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
+      }),
+    );
+  let geo: Cesium.Geometry | undefined;
+  try {
+    geo = Cesium.PolygonGeometry.createGeometry(
+      new Cesium.PolygonGeometry({
+        polygonHierarchy: hierarchie,
+        perPositionHeight: false,
+        height: 0,
+        granularity: FLAECHEN_MASCHE_RAD,
+        vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
+      }),
+    );
+  } catch {
+    return perPosition();
+  }
+  if (!geo?.attributes?.position) return perPosition();
+
+  // Jeden Eckpunkt auf seine Gelaendehoehe heben. Der Umweg ueber
+  // Kartographie und UTM ist noetig, weil die Unterteilung NEUE Punkte
+  // erzeugt, deren Lage vorher niemand kennt.
+  const werte = geo.attributes.position.values as Float64Array;
+  const c = new Cesium.Cartesian3();
+  for (let i = 0; i < werte.length; i += 3) {
+    c.x = werte[i];
+    c.y = werte[i + 1];
+    c.z = werte[i + 2];
+    const carto = Cesium.Cartographic.fromCartesian(c);
+    const lon = Cesium.Math.toDegrees(carto.longitude);
+    const lat = Cesium.Math.toDegrees(carto.latitude);
+    const [e, n] = nachUtm([lon, lat]);
+    const w = Cesium.Cartesian3.fromDegrees(lon, lat, hoeheAn(e, n) + versatzM);
+    werte[i] = w.x;
+    werte[i + 1] = w.y;
+    werte[i + 2] = w.z;
+  }
+  geo.boundingSphere = Cesium.BoundingSphere.fromVertices(Array.from(werte));
+  return geo;
+}
+
+/**
+ * BRUECKENKOERPER — der Ueberbau unter der Fahrbahn und seine Widerlager.
+ *
+ * Die Fahrbahn einer Bruecke wird von `baueBodenzeichnung` bereits auf ihrer
+ * Hoehenebene gezeichnet (also zwischen den Widerlagern gespannt statt dem
+ * Gelaende folgend). Was fehlt, ist der KOERPER darunter: ohne ihn schwebt
+ * eine Flaeche in der Luft, und die lichte Hoehe waere eine Zahl ohne Bild.
+ *
+ * Gebaut wird der Mantel vom Deck bis zur Unterkante (Deck minus
+ * Ueberbaudicke) plus die Unterseite. Wo der Ueberbau auf das Gelaende trifft,
+ * entsteht dadurch von allein das Widerlager: der Mantel laeuft dort in den
+ * Boden. Das ist keine Konstruktion, sondern eine Folge — und genau darum
+ * stimmt es auch an schiefen Widerlagern.
+ */
+export function baueBrueckenkoerper(
+  flaechen: GelaendeFlaeche[] | undefined,
+  hoehen: Hoehenlage,
+): { prims: Cesium.Primitive[]; bericht: { bruecken: number; kleinsteLichteHoeheM: number | null } } {
+  const bericht = { bruecken: 0, kleinsteLichteHoeheM: null as number | null };
+  const ecken: number[] = [];
+  const indizes: number[] = [];
+  const farbe = Cesium.Color.fromCssColorString(GEBAEUDE_STIL.wand);
+
+  const punkt = (e: number, n: number, h: number) => {
+    const [lon, lat] = nachWgs([e, n]);
+    const c = Cesium.Cartesian3.fromDegrees(lon, lat, h);
+    ecken.push(c.x, c.y, c.z);
+    return ecken.length / 3 - 1;
+  };
+
+  for (const f of flaechen ?? []) {
+    const eb = f.lage?.hoehenEbene;
+    const dicke = f.lage?.ueberbauDickeM;
+    if (!f.lage?.bruecke || !eb || !dicke || f.polygon.length < 3) continue;
+    bericht.bruecken++;
+    if (f.lage.lichteHoeheM !== undefined) {
+      if (bericht.kleinsteLichteHoeheM === null || f.lage.lichteHoeheM < bericht.kleinsteLichteHoeheM) {
+        bericht.kleinsteLichteHoeheM = f.lage.lichteHoeheM;
+      }
+    }
+    const deck = (e: number, n: number) => eb.a * (e - eb.e0) + eb.b * (n - eb.n0) + eb.c;
+    const ring = verdichteRing(f.polygon);
+    // Mantel
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const a = ring[j];
+      const b = ring[i];
+      const ao = punkt(a[0], a[1], deck(a[0], a[1]));
+      const bo = punkt(b[0], b[1], deck(b[0], b[1]));
+      const bu = punkt(b[0], b[1], deck(b[0], b[1]) - dicke);
+      const au = punkt(a[0], a[1], deck(a[0], a[1]) - dicke);
+      indizes.push(ao, bo, bu, ao, bu, au);
+    }
+    // Unterseite — sie ist es, an der die lichte Hoehe gemessen wird.
+    const unten = ring.map((p) => punkt(p[0], p[1], deck(p[0], p[1]) - dicke));
+    const dreiecke = zerlege(ring.map((p) => [p[0], p[1], 0] as P3));
+    for (const [x, y, z] of dreiecke) indizes.push(unten[x], unten[z], unten[y]);
+  }
+
+  if (!indizes.length) return { prims: [], bericht };
+  const positionen = new Float64Array(ecken);
+  const attribute = new Cesium.GeometryAttributes();
+  attribute.position = new Cesium.GeometryAttribute({
+    componentDatatype: Cesium.ComponentDatatype.DOUBLE,
+    componentsPerAttribute: 3,
+    values: positionen,
+  });
+  const geo = Cesium.GeometryPipeline.computeNormal(
+    new Cesium.Geometry({
+      attributes: attribute,
+      indices: new Uint32Array(indizes),
+      primitiveType: Cesium.PrimitiveType.TRIANGLES,
+      boundingSphere: Cesium.BoundingSphere.fromVertices(Array.from(positionen)),
+    }),
+  );
+  const prim = new Cesium.Primitive({
+    geometryInstances: new Cesium.GeometryInstance({
+      geometry: geo,
+      id: 'bruecke',
+      attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(farbe) },
+    }),
+    // BELEUCHTET: Erst Licht und Schatten machen aus der Platte ein Bauwerk —
+    // und der Schatten unter der Bruecke ist das, was die lichte Hoehe zeigt.
+    appearance: new Cesium.PerInstanceColorAppearance({ translucent: false, closed: false, flat: false }),
+    asynchronous: false,
+  });
+  return { prims: [prim], bericht };
+}
+
+/**
  * Legt die Nutzungsflaechen als duenne, dem Gelaende folgende Schichten auf.
  * Der Rang bestimmt die Reihenfolge UND einen winzigen Hoehenversatz — ohne ihn
  * flackern uebereinanderliegende Flaechen (Gehweg auf Strassenverkehrsflaeche).
@@ -713,6 +934,13 @@ export function baueBodenzeichnung(
   // zufuellen; die Platte deckte dann die ganze Stadt zu.
   const fuellungen: Cesium.GeometryInstance[] = [];
   const konturen: Cesium.GeometryInstance[] = [];
+  // WASSER WIRD GETRENNT GESAMMELT — es ist die einzige Flaechenklasse, die
+  // DURCHSCHEINEND gezeichnet wird. Erst dadurch sieht man die Sohle darunter,
+  // und erst dadurch ist ein Gewaesser im Bild ein Gewaesser und keine
+  // eingefaerbte Platte. Vorher hatte keine der 14 Wasserflaechen eine Sohle;
+  // seit dem 10.08.2026 senkt der Import das Hoehenmodell darunter ab
+  // (server/geodata/gelaende.ts, wasserEinebnen).
+  const wasserflaechen: Cesium.GeometryInstance[] = [];
 
   for (const f of sortiert) {
     if (f.polygon.length < 3) continue;
@@ -758,8 +986,18 @@ export function baueBodenzeichnung(
     // Oberflaeche ihre Hoehen von den UFERPUNKTEN, und zwischen zwei
     // verschieden hohen Ufern haengt die Flaeche durch — im Grossen Woog um bis
     // zu 20 cm, worauf der eingeebnete Seegrund als heller Zacken durchstach.
-    const hoeheAn =
-      f.wasserspiegelM != null ? () => f.wasserspiegelM as number : (e: number, n: number) => hoehen.bei(e, n);
+    // HOEHENBAND VOR GELAENDE: Traegt die Flaeche eine Hoehenebene, liegt sie
+    // NICHT auf dem Gelaende — eine Bruecke spannt zwischen ihren Widerlagern,
+    // eine Rampe faellt gleichmaessig vom Portal weg. Ohne diesen Zweig folgte
+    // die Bruecke dem Gelaende und waere ein Weg (server/geodata/hoehenband.ts).
+    // Die Formel steht in shared/bau/hoehenlage.ts — dieselbe, aus der der
+    // Import die Sohle gerechnet hat. Zwei Formeln waeren zwei Wahrheiten.
+    const hatBand = f.lage ? hoeheImHoehenband(f.lage, f.polygon[0][0], f.polygon[0][1]) !== null : false;
+    const hoeheAn = hatBand
+      ? (e: number, n: number) => hoeheImHoehenband(f.lage, e, n) as number
+      : f.wasserspiegelM != null
+        ? () => f.wasserspiegelM as number
+        : (e: number, n: number) => hoehen.bei(e, n);
 
     // VERDICHTEN vor dem Drapieren: ohne Zwischenpunkte laeuft eine lange
     // Flaechenkante als Sehne unter der Gelaendekuppe hindurch und der Boden
@@ -775,17 +1013,16 @@ export function baueBodenzeichnung(
         nachWelt(f.polygon),
         (f.loecher ?? []).filter((l) => l.length >= 3).map((l) => new Cesium.PolygonHierarchy(nachWelt(l))),
       );
-      fuellungen.push(
-        new Cesium.GeometryInstance({
-          geometry: new Cesium.PolygonGeometry({
-            polygonHierarchy: hierarchie,
-            perPositionHeight: true,
-            vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
-          }),
+      const geometrie = flaechengeometrie(hierarchie, hoeheAn, versatz);
+      if (geometrie) {
+        const instanz = new Cesium.GeometryInstance({
+          geometry: geometrie,
           id: `boden:${f.art}:${f.id}`,
-          attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(farbe) },
-        }),
-      );
+          attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(f.art === 'wasser' ? farbe.withAlpha(0.72) : farbe) },
+        });
+        if (f.art === 'wasser') wasserflaechen.push(instanz);
+        else fuellungen.push(instanz);
+      }
     } catch {
       /* entartete Flaeche ueberspringen, statt die ganze Ebene zu verlieren */
     }
@@ -844,6 +1081,18 @@ export function baueBodenzeichnung(
       new Cesium.Primitive({
         geometryInstances: konturen.slice(i, i + 3000),
         appearance: new Cesium.PolylineColorAppearance({ translucent: false }),
+        asynchronous: false,
+      }),
+    );
+  }
+  // Die Wasseroberflaeche ZULETZT und DURCHSCHEINEND — sonst verdeckt sie die
+  // Sohle, die der Import unter ihr eingeschnitten hat, und das Gewaesser
+  // waere wieder eine Platte.
+  if (wasserflaechen.length) {
+    prims.push(
+      new Cesium.Primitive({
+        geometryInstances: wasserflaechen,
+        appearance: new Cesium.PerInstanceColorAppearance({ translucent: true, closed: false, flat: true }),
         asynchronous: false,
       }),
     );

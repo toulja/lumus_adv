@@ -1,0 +1,208 @@
+{
+  "id": "de-strassenraum",
+  "version": "2026.2",
+  "stand": "2026-08-10",
+  "bezeichnung": "Konstruktionshoehen des Strassenraums",
+  "geltungsbereich": "Deutschland, innerorts",
+
+  "hinweis": "Diese Datei sagt, WIE HOCH etwas gebaut ist — nicht, wie es aussieht. Sie ist der Grund, warum ein Gehweg im Modell ueber der Fahrbahn liegt und dazwischen ein Bordstein entsteht, statt beide als gleich hohe Farbflaechen aneinanderstossen zu lassen. Bezugsflaeche ist die FAHRBAHN mit 0,00 m; alle anderen Werte sind Hoehen ueber ihr (negative Werte liegen darunter). Ueber dem gewachsenen Gelaende (DGM1) liegt der ganze Aufbau an der Bezugsflaeche auf.",
+
+  "haftungshinweis": "Die Werte sind Regelmasse des Strassenbaus und dienen der Planungsunterstuetzung. Sie ersetzen keine Vermessung des Bestandes. Wo ein Wert nicht durch eine Fundstelle belegt ist, traegt er verifikation.status = 'zu_pruefen' und wird in der Oberflaeche als Annahme gekennzeichnet.",
+
+  "aenderungen": [
+    { "version": "2026.2", "am": "2026-08-10", "was": "Neue Klasse 'gleiszone' (das eingedeckte Band der Rillenschiene, beim Import aus den Bodenflaechen ausgeschnitten). Treppenmasse um die Grenzwerte der DIN 18065 und die Handlaufangaben der DIN 18040-3 ergaenzt. Neuer Abschnitt 'vertikal' fuer Rampen, Unterfuehrungen und Bruecken (Hoehenband). Wasser um die Herkunft der Sohle ergaenzt." },
+    { "version": "2026.1", "am": "2026-08-09", "was": "Erstfassung: Konstruktionshoehen und Kantenregel." }
+  ],
+
+  "quellen": [
+    { "kuerzel": "RASt 06", "titel": "Richtlinien fuer die Anlage von Stadtstrassen", "fassung": "Ausgabe 2006, FGSV 242", "hinweis": "Regelwerk fuer Querschnitte, Bordhoehen und Nebenanlagen innerorts. NICHT frei verfuegbar (FGSV-Verlag) — Werte hier sind bis zur Einsichtnahme Annahmen." },
+    { "kuerzel": "BOStrab", "titel": "Verordnung ueber den Bau und Betrieb der Strassenbahnen", "fassung": "zuletzt geaendert 2016", "url": "https://www.gesetze-im-internet.de/bostrab_1987/" },
+    { "kuerzel": "TR Sp", "titel": "Technische Regeln fuer die Spurfuehrung von Schienenbahnen nach BOStrab", "fassung": "Mai 2006", "url": "https://rsv.gmbh/wp-content/uploads/2018/11/Technische-Regeln-Spurfu%CC%88hrung-TR-Sp-Mai-2006.pdf", "hinweis": "Regelt das Zusammenspiel von Rillenweite, Rillentiefe und Spurkranz. Am 10.08.2026 abgerufen; die Zahlenwerte liegen in einer Bilddatei vor und konnten nicht maschinell gelesen werden." },
+    { "kuerzel": "EN 14811", "titel": "Bahnanwendungen — Oberbau — Rillenschienen und zugehoerige Konstruktionsprofile", "hinweis": "Definiert die Rillenschienenprofile (59R2, 60R1, 60R2 …). Kostenpflichtig; die Profilmasse stammen aus zwei unabhaengigen Herstellerangaben, siehe shared/bau/oberbau.ts." },
+    { "kuerzel": "DIN 18065", "titel": "Gebaeudetreppen — Begriffe, Messregeln, Hauptmasse", "fassung": "2020-08", "hinweis": "Kostenpflichtig. Die Grenzwerte unten stammen aus uebereinstimmenden Sekundaerquellen (Treppenmeister, sanier.de, treppauf.de, abgerufen 10.08.2026) und sind darum zu_pruefen." },
+    { "kuerzel": "DIN 18040-3", "titel": "Barrierefreies Bauen — Oeffentlicher Verkehrs- und Freiraum", "fassung": "2014-12", "url": "https://nullbarriere.de/din18040-3-rampe-aufzug-treppe.htm", "hinweis": "Bordhoehen an Querungsstellen, Handlaeufe, Rampenneigungen." },
+    { "kuerzel": "GaV HE", "titel": "Verordnung ueber den Bau und Betrieb von Garagen und Stellplaetzen (Garagenverordnung)", "fassung": "Hessen, in Kraft seit 22.05.2024", "url": "https://www.bfb-barrierefrei-bauen.de/gav-hessen", "hinweis": "Massgeblich fuer Rampenneigung und lichte Hoehen von Tiefgaragen." },
+    { "kuerzel": "DIN 14090", "titel": "Flaechen fuer die Feuerwehr auf Grundstuecken", "fassung": "2024-02", "hinweis": "Kostenpflichtig; Werte aus Sekundaerquellen (Berliner Feuerwehr, Landkreis Wittmund, baunetzwissen), abgerufen 10.08.2026." },
+    { "kuerzel": "EBO", "titel": "Eisenbahn-Bau- und Betriebsordnung", "url": "https://www.gesetze-im-internet.de/ebo/" }
+  ],
+
+  "bezugsflaeche": "fahrbahn",
+
+  "klassen": [
+    {
+      "id": "fahrbahn",
+      "bezeichnung": "Fahrbahn",
+      "fuerFlaechenArt": ["fahrbahn"],
+      "oberkanteM": 0.0,
+      "begruendung": "Bezugsflaeche. Alle uebrigen Hoehen sind Hoehen ueber der Fahrbahnoberkante.",
+      "verifikation": { "status": "verifiziert", "geprueftAm": "2026-08-09", "beleg": "Festlegung dieses Modells, keine Rechtsnorm." }
+    },
+    {
+      "id": "gehweg",
+      "bezeichnung": "Gehweg",
+      "fuerFlaechenArt": ["gehweg"],
+      "oberkanteM": 0.12,
+      "begruendung": "Regelbordhoehe innerorts. Der Wert traegt die gesamte Kantenbildung: erst er macht aus zwei Farbflaechen eine Strasse mit Rand.",
+      "quelle": { "kuerzel": "RASt 06", "abschnitt": "Bordausbildung" },
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-09", "beleg": "Annahme, nicht belegt — RASt 06 liegt nicht vor. Uebliche Regelbordhoehe 0,10-0,15 m; hier 0,12 m als Mittelwert angesetzt." }
+    },
+    {
+      "id": "radweg",
+      "bezeichnung": "Radweg",
+      "fuerFlaechenArt": ["radweg"],
+      "oberkanteM": 0.06,
+      "begruendung": "Zwischen Fahrbahn und Gehweg gefuehrter Radweg liegt haeufig auf halber Bordhoehe (Sicherheitstrennstreifen mit Schraegbord).",
+      "quelle": { "kuerzel": "RASt 06", "abschnitt": "Radverkehrsanlagen" },
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-09", "beleg": "Annahme. OSM fuehrt die Fuehrungsform nicht durchgaengig; ohne sie ist der Wert nicht bestimmbar." }
+    },
+    {
+      "id": "platz",
+      "bezeichnung": "Platz / Fussgaengerzone",
+      "fuerFlaechenArt": ["platz", "fussgaengerzone"],
+      "oberkanteM": 0.12,
+      "begruendung": "Plaetze in Fussgaengerbereichen sind ueberwiegend niveaugleich mit dem Gehwegniveau ausgebaut.",
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-09", "beleg": "Annahme. Viele Plaetze sind tatsaechlich niveaugleich mit der Fahrbahn ausgebaut (shared space) — das ist ohne oertliche Kenntnis nicht zu unterscheiden." }
+    },
+    {
+      "id": "weg",
+      "bezeichnung": "Weg / Pfad",
+      "fuerFlaechenArt": ["weg"],
+      "oberkanteM": 0.06,
+      "begruendung": "Wassergebundene Wege in Gruenanlagen liegen leicht ueber dem angrenzenden Gelaende (Aufbau ueber Frostschutzschicht).",
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-09", "beleg": "Annahme." }
+    },
+    {
+      "id": "gleiszone",
+      "bezeichnung": "Gleiszone (eingedecktes Band der Rillenschiene)",
+      "fuerFlaechenArt": ["gleiszone"],
+      "oberkanteM": -0.06,
+      "begruendung": "Das Gleis liegt nicht AUF der Fahrbahn, sondern IN ihr. Beim Import wird der Korridor je Gleisachse aus den Bodenflaechen ausgeschnitten; diese Flaeche ist der Trog, den die Eindeckung fuellt. Der Wert ist die Unterkante der Eindeckungsplatte (0,05 m dick) plus 0,01 m Fuge — er sorgt dafuer, dass Trog und Platte NICHT koplanar liegen. Ohne den Schnitt laeuft die Fahrbahn ungeschnitten ueber das Gleis und verdeckt die Rille; das war der Befund vom 09.08.2026 (drillPick liefert die Fahrbahn vor dem Gleis) und vom 10.08.2026 (Rille 0 Bildpunkte breit).",
+      "quelle": { "kuerzel": "BOStrab" },
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-10", "beleg": "Annahme. Die Tiefe folgt aus der Dicke der Eindeckungsplatte in shared/bau/oberbau.ts, nicht aus einem Regelwerk. Sie ist eine Konstruktionsangabe des Modells und geht in keine Messung ein — sichtbar ist immer die Platte darueber." }
+    },
+    {
+      "id": "gruen",
+      "bezeichnung": "Gruenflaeche",
+      "fuerFlaechenArt": ["gruen", "wald", "landwirtschaft"],
+      "oberkanteM": 0.0,
+      "begruendung": "Gruenflaechen sind das gewachsene Gelaende — sie bekommen keinen Aufbau. Wo eine Rasenflaeche an einen Gehweg stoesst, entsteht die Kante durch dessen Bordhoehe, nicht durch die Wiese.",
+      "verifikation": { "status": "verifiziert", "geprueftAm": "2026-08-09", "beleg": "Folgt aus der Definition des Gelaendemodells (DGM = gewachsener Boden)." }
+    },
+    {
+      "id": "bahnsteig_tram",
+      "bezeichnung": "Bahnsteig Strassenbahn (Kap)",
+      "fuerFlaechenArt": [],
+      "oberkanteM": 0.24,
+      "begruendung": "Haltestellenkap fuer niederflurige Strassenbahnen. Der Wert ist zugleich die Einstiegshoehe und damit fuer die Barrierefreiheitspruefung erheblich.",
+      "quelle": { "kuerzel": "BOStrab", "abschnitt": "§ 31 Bahnsteige" },
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-09", "beleg": "Annahme. BOStrab nennt keine feste Hoehe, sondern verlangt Abstimmung auf die Fahrzeuge; in Darmstadt sind 0,24 m ueblich — oertlich zu pruefen." }
+    },
+    {
+      "id": "treppe",
+      "bezeichnung": "Treppenlauf",
+      "fuerFlaechenArt": ["treppe"],
+      "oberkanteM": null,
+      "stufe": {
+        "hoeheM": 0.17,
+        "auftrittM": 0.29,
+        "hoeheRegelMinM": 0.14,
+        "hoeheRegelMaxM": 0.19,
+        "auftrittRegelMinM": 0.26,
+        "auftrittRegelMaxM": 0.37,
+        "schrittmassMinM": 0.59,
+        "schrittmassMaxM": 0.65,
+        "hoeheZulaessigMinM": 0.12,
+        "hoeheZulaessigMaxM": 0.21
+      },
+      "gelaender": { "hoeheMinM": 0.85, "hoeheMaxM": 0.95, "durchmesserMinM": 0.035, "durchmesserMaxM": 0.04, "beidseitig": true },
+      "begruendung": "Eine Treppe hat keine EINE Hoehe — sie verbindet zwei. Sie wird darum als Lauf aus Stufen zwischen den Hoehen ihrer beiden Enden gebaut. Ohne dieses Feld sind die Treppenflaechen des Pilotgebiets ebene Farbflaechen, ueber die eine Fluchtwegrechnung ungehindert hinweglaeuft. Die REGEL-Grenzen (14-19 cm Steigung, 26-37 cm Auftritt, Schrittmass 2s+a = 59-65 cm) gelten fuer Gebaeudetreppen und oeffentliche Bereiche; die ZULAESSIG-Grenzen (12-21 cm) sind die weitere Spanne, innerhalb derer ein aus dem Gelaendemodell abgeleiteter Lauf noch als plausibel gilt — Aussentreppen weichen von den Gebaeudemassen ab.",
+      "quelle": { "kuerzel": "DIN 18065", "abschnitt": "Hauptmasse, Schrittmassregel" },
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-10", "beleg": "Grenzwerte aus uebereinstimmenden Sekundaerquellen zur DIN 18065:2020-08 (Treppenmeister, sanier.de, treppauf.de, abgerufen 10.08.2026); die Norm selbst ist kostenpflichtig und lag nicht vor. Handlaufangaben aus DIN 18040-3 (nullbarriere.de, abgerufen 10.08.2026): Hoehe 0,85-0,95 m, Durchmesser 0,035-0,04 m, beidseitig. Die tatsaechlichen Stufenmasse der einzelnen Treppe sind oertlich zu vermessen; wo OpenStreetMap `step_count` fuehrt, gilt DIESER Wert und nicht die Annahme." }
+    },
+    {
+      "id": "wasser",
+      "bezeichnung": "Wasserflaeche",
+      "fuerFlaechenArt": ["wasser"],
+      "oberkanteM": null,
+      "wasser": { "spiegelUeberGelaendeM": -0.15, "sohleUnterSpiegelM": 0.8, "sohleUnterSpiegelWasserlaufM": 0.4, "mindestUferabstandM": 0.5 },
+      "begruendung": "Wasser hat einen Spiegel UND eine Sohle. Als flache Platte auf Gelaendehoehe gezeichnet, liegt ein Bach auf dem Ufer statt darin. Der Spiegel wird beim Import aus den Uferhoehen bestimmt (Hydro-Flattening, server/geodata/gelaende.ts); die SOHLE ist dagegen von keiner der genutzten Quellen belegt — das DGM1 misst innerhalb eines Gewaessers nichts, weil der Laserscanner von Wasser kaum ein Echo bekommt. Sie ist darum eine Annahme, und zwar eine ausgewiesene: 0,80 m unter dem Spiegel bei ruhendem Gewaesser, 0,40 m bei einem Wasserlauf. Zum Ufer hin laeuft die Sohle auf den Spiegel aus, damit kein senkrechter Absturz an der Uferlinie entsteht.",
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-10", "beleg": "Annahme, nicht belegt. Wasserstaende und Sohltiefen sind veraenderlich und werden von keiner genutzten Quelle gefuehrt. Fuer eine Aussage ueber Wassertiefen braucht es eine Gewaesservermessung." }
+    },
+    {
+      "id": "bahn",
+      "bezeichnung": "Bahnflaeche",
+      "fuerFlaechenArt": ["bahn"],
+      "oberkanteM": 0.0,
+      "begruendung": "Die Bahnflaeche selbst ist Gelaende; ihre Hoehenlage entsteht durch den Oberbau (Schotterbett bzw. Rillenschiene), nicht durch die Flaeche.",
+      "verifikation": { "status": "verifiziert", "geprueftAm": "2026-08-09", "beleg": "Folgt aus der Trennung von Flaeche und Bauwerk in diesem Modell." }
+    },
+    {
+      "id": "bebauung",
+      "bezeichnung": "Bebaute Flaeche",
+      "fuerFlaechenArt": ["bebauung", "sonstige"],
+      "oberkanteM": 0.0,
+      "begruendung": "Hinterhoefe und Baufelder werden nicht vermessen — sie bleiben auf Gelaendehoehe.",
+      "verifikation": { "status": "verifiziert", "geprueftAm": "2026-08-09", "beleg": "Bewusster Verzicht auf eine Annahme." }
+    }
+  ],
+
+  "kantenregel": {
+    "hinweis": "Aus dem Hoehenunterschied zweier ANEINANDERGRENZENDER Flaechen ergibt sich, WAS an ihrer gemeinsamen Kante steht. Die Kante ist damit ein Ergebnis der Konstruktionshoehen und keine eigene Eingabe — deshalb bekommt jede Strassenkante im Gebiet ihren Bordstein und nicht nur die 16, die OpenStreetMap zufaellig fuehrt.",
+    "stufen": [
+      { "bisM": 0.03, "bauart": "fuge", "bezeichnung": "Fuge / Rinne", "begruendung": "Unter 3 cm ist kein Koerper zu sehen, nur ein Materialwechsel." },
+      { "bisM": 0.3, "bauart": "bordstein", "bezeichnung": "Bordstein", "anlaufM": 0.02, "begruendung": "Regelfall im Strassenraum." },
+      { "bisM": 3.0, "bauart": "boeschung_oder_mauer", "bezeichnung": "Boeschung oder Stuetzmauer", "boeschungMaxNeigung": 0.6, "begruendung": "Passt die Regelneigung (1:1,5) zwischen die beiden Flaechen, wird geboescht, sonst gemauert." },
+      { "bisM": null, "bauart": "bauwerk", "bezeichnung": "Bauwerk", "begruendung": "Ueber 3 m ist es ein Bauwerk mit eigener Konstruktion. Es wird NICHT erfunden — hier endet, was sich aus Hoehen ableiten laesst." }
+    ]
+  },
+
+  "vertikal": {
+    "hinweis": "DAS HOEHENBAND. Bis zum 10.08.2026 kannte das Modell nur einen Aufbau NACH OBEN (0 bis 12 cm) und das gewachsene Gelaende; kein Bauwerk hatte eine Unterkante. Tunnel wurden beim Import ausdruecklich verworfen, Bruecken auf Gelaendehoehe gemalt, und eine Tiefgarageneinfahrt wurde nicht tief. Die Werte hier sagen, wie tief eine Rampe faellt, wie hoch eine Bruecke liegt und welche lichte Hoehe darunter zu erwarten ist, WENN die Quelle nichts anderes sagt. Steht in OpenStreetMap ein `incline`, ein `maxheight` oder ein `level`, gilt IMMER die Quelle — diese Werte greifen nur ersatzweise und werden dann als Annahme gekennzeichnet.",
+
+    "rampe": {
+      "maxNeigungProzent": 15,
+      "annahmeNeigungProzent": 12,
+      "vorflaecheLaengeM": 3.0,
+      "vorflaecheMaxNeigungProzent": 5,
+      "fahrbahnBreiteMinM": 2.75,
+      "fahrbahnBreiteGewendeltMinM": 3.5,
+      "begruendung": "Rampen zu Tiefgaragen. Die Neigung begrenzt, wie tief eine Rampe auf ihrer bekannten Laenge kommt — ohne sie waere die Tiefe geraten. Angesetzt wird die ANNAHME von 12 %, nicht das Hoechstmass: eine Rampe wird selten am Grenzwert gebaut. Wo OSM `incline` fuehrt, ist das ein Beleg und geht vor.",
+      "quelle": { "kuerzel": "GaV HE", "abschnitt": "§ 4 Rampen" },
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-10", "beleg": "Woertlich aus der Hessischen Garagenverordnung (in Kraft seit 22.05.2024), zitiert nach haufe.de und bfb-barrierefrei-bauen.de (abgerufen 10.08.2026): »Rampen von Mittel- und Grossgaragen duerfen nicht mehr als 15 Prozent geneigt sein.« und »Zwischen einer Rampe mit mehr als 10 Prozent Neigung und der oeffentlichen Verkehrsflaeche muss eine mindestens 3 m lange Flaeche liegen, deren Neigung hoechstens 5 Prozent betraegt.« Der amtliche Volltext (GVBl) lag nicht vor; die Annahme von 12 % ist nicht belegt." }
+    },
+
+    "tiefgarage": {
+      "lichteHoeheM": 2.2,
+      "lichteHoeheUnterUnterzugM": 2.05,
+      "geschosshoeheM": 2.9,
+      "begruendung": "Wie tief die Sohle unter der Strasse liegt, wenn weder `level` noch eine Rampenlaenge etwas anderes hergibt.",
+      "quelle": { "kuerzel": "GaV HE", "abschnitt": "lichte Hoehe" },
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-10", "beleg": "Die lichten Hoehen 2,20 m bzw. 2,05 m unter Deckenunterzuegen sind in der GaV Hessen fuer die ERSCHLIESSUNGSBEREICHE BARRIEREFREIER Stellplaetze vorgeschrieben (bfb-barrierefrei-bauen.de, abgerufen 10.08.2026) — sie sind hier als untere Schranke fuer die Geschosshoehe benutzt, was ueber den Wortlaut hinausgeht. Die Geschosshoehe von 2,90 m ist eine reine Annahme." }
+    },
+
+    "unterfuehrung": {
+      "lichteHoeheFussgaengerM": 2.5,
+      "lichteHoeheStrasseM": 4.5,
+      "begruendung": "Portal und Sohle einer Unterfuehrung, wo OSM keine `maxheight` fuehrt.",
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-10", "beleg": "Annahme in Anlehnung an die Regellichthoehe von Strassenbruecken (4,50 m); fuer Fussgaengerunterfuehrungen gibt es keine belegte Regelhoehe." }
+    },
+
+    "bruecke": {
+      "lichteHoeheUeberStrasseM": 4.5,
+      "lichteHoeheNeubauM": 4.7,
+      "ueberbauDickeM": 1.2,
+      "begruendung": "Ein Bruecken-Ueberbau hat eine Dicke; darunter bleibt die lichte Hoehe. Genau daraus kann die Regelpruefung spaeter die lichte Hoehe einer Feuerwehrzufahrt MESSEN, statt sie in ein Eingabefeld zu schreiben.",
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-10", "beleg": "Die 4,50 m als Regelmass und 4,70 m fuer Neubauten stammen aus Sekundaerquellen zu den Allgemeinen Rundschreiben Strassenbau und zur RE-ING (dewiki/Wikipedia »Brueckendurchfahrtshoehe«, abgerufen 10.08.2026); der amtliche Text lag nicht vor. Die Ueberbaudicke von 1,20 m ist eine reine Annahme — sie haengt von Stuetzweite und Bauart ab." }
+    },
+
+    "feuerwehr": {
+      "lichteHoeheM": 3.5,
+      "breiteM": 3.0,
+      "breiteZwischenBauteilenM": 3.5,
+      "bewegungsflaecheM": [7, 12],
+      "begruendung": "Massgeblich fuer die Frage, ob eine Feuerwehrzufahrt unter einem Bauwerk hindurchpasst. Sobald Bruecken und Unterfuehrungen ein Hoehenband tragen, laesst sich das aus dem Modell beantworten.",
+      "quelle": { "kuerzel": "DIN 14090" },
+      "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-10", "beleg": "Werte aus uebereinstimmenden Sekundaerquellen zur DIN 14090:2024-02 (Merkblatt Berliner Feuerwehr, Landkreis Wittmund, baunetzwissen; abgerufen 10.08.2026). Die Norm ist kostenpflichtig und lag nicht vor. Sie kennt Sonderfaelle (Kurvenradien, Wendehaemmer, Tragfaehigkeit), die hier nicht erfasst sind." }
+    }
+  }
+}

@@ -15,16 +15,21 @@ import { nachUtm, nachWgs } from '@shared/geo/proj';
 import { Hoehenraster } from '@shared/geo/raster';
 import { Gelaendeoberflaeche, netzAusRaster } from '@shared/geo/gelaendenetz';
 import { Bauhoehe } from '@shared/geo/bauhoehe';
+import { GRUNDTON as PALETTE_GRUNDTON } from './palette.ts';
 
 /**
  * Grundton der Gelaendeplatte.
  *
  * Sie liegt unter allem und wird ueberall dort sichtbar, wo keine
- * Nutzungsflaeche kartiert ist — Hinterhoefe, Baulücken, Boeschungen. Ein
- * dunkler Ton reisst dort Loecher in die Karte; darum liegt sie auf dem
- * Grundton der Bebauungsflaechen, leicht abgesetzt.
+ * Nutzungsflaeche kartiert ist — Hinterhoefe, Baulücken, Boeschungen.
+ *
+ * DER WERT STEHT NICHT MEHR HIER (10.08.2026). Bis dahin trug diese Konstante
+ * einen eigenen Hexwert (#e7e4e0) und war damit von der Palette abgekoppelt:
+ * eine zweite Wahrheit fuer dieselbe Frage. Jetzt kommt sie aus palette.ts,
+ * wo sie mitgeprueft wird — der Ton der Bauflaeche, weil „unbenannter Boden"
+ * und „Baufeld" im Bild dasselbe aussagen.
  */
-export const GRUNDPLATTE = '#e7e4e0';
+export const GRUNDPLATTE = PALETTE_GRUNDTON;
 
 /**
  * Schnelles Nachschlagen der Gelaendehoehe an beliebiger Stelle.
@@ -215,6 +220,41 @@ export async function ladeHoehenraster(gelaendeId: string): Promise<Hoehenraster
   }
 }
 
+/**
+ * WIE TIEF DIE GELAENDEPLATTE GEZEICHNET WIRD — und warum ueberhaupt.
+ *
+ * BEFUND 10.08.2026, an der Rheinstrasse aus Fussgaengerhoehe gemessen:
+ * `scene.drillPick` lieferte als ERSTEN Treffer `gelaende:p8` und erst danach
+ * `boden:fahrbahn:osm_fahrbahn_118`. Die Fahrbahn war also da — das GELAENDE
+ * lag davor. Sichtbar wurde das als breites Band der Gelaendeplatte mitten in
+ * der Strasse.
+ *
+ * URSACHE: Die Fahrbahn ist die Bezugsflaeche des Strassenraums, ihre
+ * Konstruktionshoehe ist definitionsgemaess 0,00 m. Sie liegt damit EXAKT auf
+ * dem Gelaendenetz. Zwei koplanare Flaechen entscheidet der Tiefenpuffer, und
+ * bei streifendem Blick entscheidet er falsch — flaechenweise. Solange die
+ * Bodenzeichnung noch ihren Millimeter-Stapel hatte (2 mm je Rang, mindestens
+ * 2 cm), gab es diesen Fall nicht; mit echten Konstruktionshoehen ist er
+ * entstanden und blieb unsichtbar, weil die Gelaendeplatte bis zum 10.08.2026
+ * denselben hellen Ton trug wie die Flaechen darauf.
+ *
+ * DIE LOESUNG IST KEIN NEUER STAPEL. Die Bodenzeichnung behaelt ihre echten
+ * Hoehen; abgesenkt wird die GELAENDEPLATTE, und zwar um genau den Wert, um
+ * den das vereinfachte Netz vom Raster abweichen darf (`netzToleranzM` aus dem
+ * Hoehenmodell — eine Angabe der DATEN, keine Zahl aus dem Programmtext).
+ * Danach kann das Netz die Bezugsflaeche nicht mehr ueberragen.
+ *
+ * WAS DAS FUER „eine Wahrheit je Frage" HEISST: Gerechnet wird unveraendert.
+ * `Hoehenlage.bei()` fragt weiter die Oberflaeche aus denselben Dreiecken;
+ * kein Mass, kein Bordstein, kein Baum und keine Regelpruefung verschiebt sich.
+ * Abgesenkt wird ausschliesslich die ZEICHNUNG der Platte, und sichtbar ist
+ * sie nur dort, wo gar keine Nutzungsflaeche kartiert ist. Der Unterschied
+ * betraegt 2 cm und liegt unter jeder Aussage, die dieses Modell trifft.
+ */
+export function zeichenAbsenkung(gelaende: Gelaende): number {
+  return gelaende.hoehenmodell?.netzToleranzM ?? 0.02;
+}
+
 export interface GelaendeAufbau {
   /** Je Kachel ein Netz, in derselben Reihenfolge wie `gelaende.patches`. */
   netze: { patch: GelaendePatch; netz: ReturnType<typeof netzAusRaster> }[];
@@ -260,13 +300,18 @@ export function gelaendeAufbauen(gelaende: Gelaende, raster: Hoehenraster): Gela
  */
 export function baueGelaendeAusNetz(gelaende: Gelaende, aufbau: GelaendeAufbau, mitLuftbild: boolean): Cesium.Primitive[] {
   const prims: Cesium.Primitive[] = [];
+  const absenkung = zeichenAbsenkung(gelaende);
   for (const { patch, netz } of aufbau.netze) {
     if (!netz.anzahlDreiecke) continue;
     const anzahl = netz.anzahlPunkte;
     const positionen = new Float64Array(anzahl * 3);
     for (let i = 0; i < anzahl; i++) {
       const [lon, lat] = nachWgs([netz.punkte[i * 3], netz.punkte[i * 3 + 1]]);
-      const c = Cesium.Cartesian3.fromDegrees(lon, lat, netz.punkte[i * 3 + 2]);
+      // ABGESENKT GEZEICHNET — nicht abgesenkt GERECHNET. Begruendung bei
+      // `zeichenAbsenkung`. `netz.punkte` bleibt unangetastet; die abfragbare
+      // Oberflaeche (Gelaendeoberflaeche) benutzt dasselbe Array und liefert
+      // weiterhin die ungeaenderte Hoehe.
+      const c = Cesium.Cartesian3.fromDegrees(lon, lat, netz.punkte[i * 3 + 2] - absenkung);
       positionen[i * 3] = c.x;
       positionen[i * 3 + 1] = c.y;
       positionen[i * 3 + 2] = c.z;
@@ -339,8 +384,11 @@ export function baueGelaendeAusNetz(gelaende: Gelaende, aufbau: GelaendeAufbau, 
  */
 export function baueGelaende(gelaende: Gelaende, mitLuftbild: boolean): Cesium.Primitive[] {
   const prims: Cesium.Primitive[] = [];
+  // Dieselbe Absenkung wie beim Netzweg — der Rueckfallweg darf sich nicht
+  // anders verhalten als der Hauptweg (Begruendung bei `zeichenAbsenkung`).
+  const absenkung = zeichenAbsenkung(gelaende);
   for (const patch of gelaende.patches) {
-    const geo = kachelGeometrie(patch);
+    const geo = kachelGeometrie(patch, absenkung);
     if (!geo) continue;
     const instanz = new Cesium.GeometryInstance({
       geometry: geo,
@@ -378,7 +426,7 @@ export function baueGelaende(gelaende: Gelaende, mitLuftbild: boolean): Cesium.P
   return prims;
 }
 
-function kachelGeometrie(patch: GelaendePatch): Cesium.Geometry | null {
+function kachelGeometrie(patch: GelaendePatch, absenkungM = 0): Cesium.Geometry | null {
   const { spalten, zeilen, bbox, hoehen } = patch;
   if (spalten < 2 || zeilen < 2) return null;
   const anzahl = spalten * zeilen;
@@ -391,7 +439,7 @@ function kachelGeometrie(patch: GelaendePatch): Cesium.Geometry | null {
     for (let s = 0; s < spalten; s++) {
       const e = bbox.minE + ((bbox.maxE - bbox.minE) * s) / (spalten - 1);
       const [lon, lat] = nachWgs([e, n]);
-      const c = Cesium.Cartesian3.fromDegrees(lon, lat, hoehen[z][s]);
+      const c = Cesium.Cartesian3.fromDegrees(lon, lat, hoehen[z][s] - absenkungM);
       positionen[i * 3] = c.x;
       positionen[i * 3 + 1] = c.y;
       positionen[i * 3 + 2] = c.z;

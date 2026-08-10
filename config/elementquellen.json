@@ -1,0 +1,193 @@
+{
+  "id": "elementquellen",
+  "version": "2026.1",
+  "stand": "2026-08-10",
+  "bezeichnung": "Quellenketten und Abdeckungserwartungen je Elementart",
+
+  "hinweis": "DAS IST DIE ANTWORT AUF »an neuen Stellen fehlen Baeume«. Der Befund war nicht, dass Baeume fehlten, sondern dass NIEMAND ES GEMERKT HAT: Der Darmstaedter Katasterauszug deckt nur das urspruengliche Pilotgebiet ab, ausserhalb gibt es keine Katasterbaeume, und wo OSM dort duenn ist, blieb die Flaeche leer — ohne eine einzige Meldung. Diese Datei legt je Elementart fest, WOHER die Daten kommen sollen (amtlich zuerst, OSM als Ergaenzung, Klassenannahme als letzter Ausweg) und WAS ZU ERWARTEN IST. Nach dem Import wird gegen die Erwartung geprueft; jede Unterschreitung erscheint im Auftragsprotokoll UND in der Oberflaeche. Ein stiller Ausfall ist damit ausgeschlossen.",
+
+  "haftungshinweis": "Die Abdeckungserwartungen sind KEINE Norm. Sie sind Schwellen, ab denen ein Mensch hinsehen soll. Die absoluten Werte tragen darum durchweg verifikation.status = 'zu_pruefen'; belastbar ist die RELATIVE Pruefung (Vergleich der Dichte innerhalb des Gebiets), weil sie ohne erfundene Sollwerte auskommt.",
+
+  "pruefung": {
+    "gitterM": 250,
+    "hinweis": "Die relative Pruefung zerlegt das Gebiet in Zellen dieser Kantenlaenge, rechnet je Zelle die Dichte einer Elementart und vergleicht sie mit dem Median aller Zellen, die ueberhaupt in Frage kommen. Genau das faengt den beobachteten Fehler: ein Gebiet, das zur Haelfte aus dem Katasterauszug faellt, zeigt dann eine Haelfte mit Dichte 0 neben einer Haelfte mit voller Dichte — unabhaengig davon, welche Dichte 'richtig' waere.",
+    "warnungUnterAnteil": 0.25,
+    "mindestZellen": 4
+  },
+
+  "elemente": [
+    {
+      "id": "baum",
+      "bezeichnung": "Baum",
+      "punktArt": "baum",
+      "quellenkette": [
+        { "stufe": 1, "art": "kataster", "bezeichnung": "Kommunales Baumkataster (gemessene Position, Hoehe, Krone)", "guete": "gemessen" },
+        { "stufe": 2, "art": "osm", "bezeichnung": "OpenStreetMap natural=tree / tree_row", "guete": "erfasst" },
+        { "stufe": 3, "art": "klassenannahme", "bezeichnung": "Hoehe und Kronendurchmesser aus der Klasse (Laub 12 m, Nadel 16 m, sonst 10 m)", "guete": "annahme" }
+      ],
+      "abdeckung": {
+        "bezugsflaechen": ["gruen", "wald", "platz", "fussgaengerzone"],
+        "erwartetJeHektar": 20,
+        "begruendung": "Groessenordnung einer innerstaedtischen Gruenanlage mit Baumbestand. Der Wert dient als grobe Untergrenze; massgeblich ist die relative Pruefung.",
+        "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-10", "beleg": "Annahme, nicht belegt. Eine belastbare Solldichte gibt es nicht — sie haengt von Nutzung, Alter und Pflege ab." }
+      }
+    },
+    {
+      "id": "laterne",
+      "bezeichnung": "Strassenlaterne",
+      "punktArt": "laterne",
+      "quellenkette": [
+        { "stufe": 1, "art": "kataster", "bezeichnung": "Beleuchtungskataster der Stadt", "guete": "gemessen", "hinweis": "Fuer keine der geprueften Staedte offen verfuegbar." },
+        { "stufe": 2, "art": "osm", "bezeichnung": "OpenStreetMap highway=street_lamp", "guete": "erfasst" },
+        { "stufe": 3, "art": "klassenannahme", "bezeichnung": "Masthoehe 5 m", "guete": "annahme" }
+      ],
+      "abdeckung": {
+        "bezugsflaechen": ["fahrbahn", "gehweg", "platz", "fussgaengerzone"],
+        "erwartetJeHektar": 8,
+        "begruendung": "Strassenbeleuchtung ist im Stadtgebiet flaechendeckend vorhanden; fehlt sie in den Daten, fehlen die DATEN, nicht die Laternen.",
+        "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-10", "beleg": "Annahme, nicht belegt." }
+      }
+    },
+    {
+      "id": "bank",
+      "bezeichnung": "Sitzbank",
+      "punktArt": "bank",
+      "quellenkette": [
+        { "stufe": 2, "art": "osm", "bezeichnung": "OpenStreetMap amenity=bench", "guete": "erfasst" },
+        { "stufe": 3, "art": "klassenannahme", "bezeichnung": "Regelmasse der Objektbibliothek", "guete": "annahme" }
+      ],
+      "abdeckung": { "bezugsflaechen": ["gruen", "platz", "fussgaengerzone"], "erwartetJeHektar": 3, "begruendung": "Moeblierung oeffentlicher Freiflaechen.", "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-10", "beleg": "Annahme." } }
+    },
+    {
+      "id": "poller",
+      "bezeichnung": "Poller",
+      "punktArt": "poller",
+      "quellenkette": [
+        { "stufe": 2, "art": "osm", "bezeichnung": "OpenStreetMap barrier=bollard", "guete": "erfasst" },
+        { "stufe": 3, "art": "klassenannahme", "bezeichnung": "Hoehe 0,90 m", "guete": "annahme" }
+      ],
+      "abdeckung": { "bezugsflaechen": ["fussgaengerzone", "platz"], "erwartetJeHektar": 5, "begruendung": "Poller sichern Fussgaengerbereiche gegen Einfahrt — fuer die Rettungswegplanung erheblich.", "verifikation": { "status": "zu_pruefen", "geprueftAm": "2026-08-10", "beleg": "Annahme." } }
+    },
+    {
+      "id": "haltestelle",
+      "bezeichnung": "Haltestelle",
+      "punktArt": "haltestelle",
+      "quellenkette": [
+        { "stufe": 1, "art": "betreiber", "bezeichnung": "Liniennetz des Verkehrsbetriebs", "guete": "gemessen", "hinweis": "Nicht angebunden." },
+        { "stufe": 2, "art": "osm", "bezeichnung": "OpenStreetMap railway=tram_stop / highway=bus_stop / public_transport", "guete": "erfasst" }
+      ],
+      "abdeckung": { "bezugsflaechen": [], "erwartetJeHektar": 0, "begruendung": "Haltestellen sind punktuell; eine Flaechendichte ist sinnlos. Geprueft wird nur, ob es sie ueberhaupt gibt.", "verifikation": { "status": "verifiziert", "geprueftAm": "2026-08-10", "beleg": "Bewusster Verzicht auf eine Erwartung." } }
+    },
+    {
+      "id": "gleis",
+      "bezeichnung": "Gleis",
+      "linienArt": "gleis",
+      "quellenkette": [
+        { "stufe": 1, "art": "betreiber", "bezeichnung": "Gleisplan des Verkehrsbetriebs", "guete": "gemessen", "hinweis": "Nicht angebunden. Er waere die einzige Quelle, die die BAUART (Rillenschiene oder Schotteroberbau) belegt — sie wird derzeit geometrisch abgeleitet." },
+        { "stufe": 2, "art": "osm", "bezeichnung": "OpenStreetMap railway=tram/rail/light_rail/subway", "guete": "erfasst" },
+        { "stufe": 3, "art": "klassenannahme", "bezeichnung": "Spurweite aus der Art (Tram 1,000 m, sonst 1,435 m), Profil 60R2", "guete": "annahme" }
+      ],
+      "abdeckung": { "bezugsflaechen": [], "erwartetJeHektar": 0, "begruendung": "Netzabhaengig; keine Flaechendichte.", "verifikation": { "status": "verifiziert", "geprueftAm": "2026-08-10", "beleg": "Bewusster Verzicht." } }
+    },
+    {
+      "id": "mauer",
+      "bezeichnung": "Mauer, Zaun, Hecke",
+      "linienArt": "mauer",
+      "quellenkette": [
+        { "stufe": 1, "art": "alkis", "bezeichnung": "ALKIS Bauwerke/Mauern", "guete": "gemessen", "hinweis": "Im vereinfachten ALKIS-Modell nicht enthalten." },
+        { "stufe": 2, "art": "osm", "bezeichnung": "OpenStreetMap barrier=wall/fence/hedge/retaining_wall", "guete": "erfasst" },
+        { "stufe": 3, "art": "klassenannahme", "bezeichnung": "Hoehen und Dicken je Art", "guete": "annahme" }
+      ],
+      "abdeckung": { "bezugsflaechen": [], "erwartetJeHektar": 0, "begruendung": "Ortsabhaengig.", "verifikation": { "status": "verifiziert", "geprueftAm": "2026-08-10", "beleg": "Bewusster Verzicht." } }
+    },
+    {
+      "id": "zebrastreifen",
+      "bezeichnung": "Fussgaengerueberweg",
+      "belag": "zebra",
+      "quellenkette": [
+        { "stufe": 1, "art": "stadt", "bezeichnung": "Markierungskataster der Stadt", "guete": "gemessen", "hinweis": "Nicht offen verfuegbar." },
+        { "stufe": 2, "art": "osm", "bezeichnung": "OpenStreetMap highway=crossing / footway=crossing mit crossing:markings", "guete": "erfasst" },
+        { "stufe": 3, "art": "klassenannahme", "bezeichnung": "Regelmasse 4 m quer, 3 m laengs", "guete": "annahme" }
+      ],
+      "abdeckung": { "bezugsflaechen": [], "erwartetJeHektar": 0, "begruendung": "Knotenabhaengig.", "verifikation": { "status": "verifiziert", "geprueftAm": "2026-08-10", "beleg": "Bewusster Verzicht." } }
+    },
+    {
+      "id": "ampel",
+      "bezeichnung": "Lichtsignalanlage",
+      "punktArt": "ampel",
+      "quellenkette": [
+        { "stufe": 1, "art": "stadt", "bezeichnung": "LSA-Kataster der Stadt", "guete": "gemessen", "hinweis": "Nicht offen verfuegbar." },
+        { "stufe": 2, "art": "osm", "bezeichnung": "OpenStreetMap highway=traffic_signals", "guete": "erfasst" },
+        { "stufe": 3, "art": "klassenannahme", "bezeichnung": "Maststandort aus der Fahrbahnachse abgeleitet (5,5 m Versatz)", "guete": "annahme" }
+      ],
+      "abdeckung": { "bezugsflaechen": [], "erwartetJeHektar": 0, "begruendung": "Knotenabhaengig.", "verifikation": { "status": "verifiziert", "geprueftAm": "2026-08-10", "beleg": "Bewusster Verzicht." } }
+    },
+    {
+      "id": "verkehrszeichen",
+      "bezeichnung": "Verkehrszeichen",
+      "punktArt": "verkehrszeichen",
+      "quellenkette": [
+        { "stufe": 1, "art": "stadt", "bezeichnung": "Verkehrszeichenkataster (VZK) der Stadt", "guete": "gemessen", "hinweis": "Nicht offen verfuegbar. Es waere die Quelle fuer Halteverbote und Sperrungen im Festbetrieb." },
+        { "stufe": 2, "art": "osm", "bezeichnung": "OpenStreetMap traffic_sign / highway=stop / give_way", "guete": "erfasst" }
+      ],
+      "abdeckung": { "bezugsflaechen": [], "erwartetJeHektar": 0, "begruendung": "Knotenabhaengig.", "verifikation": { "status": "verifiziert", "geprueftAm": "2026-08-10", "beleg": "Bewusster Verzicht." } }
+    }
+  ],
+
+  "kataster": {
+    "hinweis": "ORTSGEBUNDENE EXTRAKTE. Jeder Eintrag sagt, WELCHES GEBIET er abdeckt. Liegt das Zielgebiet nicht darin, meldet der Import das, statt still weniger zu liefern — das war der eigentliche Fehler beim Ausbau auf den Grossen Woog. Eine neue Stadt braucht einen Eintrag hier und KEINEN Programmtext.",
+    "baum": [
+      {
+        "stadt": "darmstadt",
+        "bezeichnung": "Baumkataster Wissenschaftsstadt Darmstadt (Stadtbaeume und Topobaeume)",
+        "dateien": ["darmstadt_stadtbaeume.json", "darmstadt_topobaeume.json"],
+        "dienst": "3d.darmstadt.de (PlexMap, Cesium-3D-Tiles i3dm)",
+        "url": "https://3d.darmstadt.de/static/tiles/942da2a0-5b49-4130-8f19-0666dbae7864_6/tileset.json",
+        "lizenz": "Nutzung mit Quellenvermerk (formale Freigabe des Vermessungsamts ausstehend)",
+        "quellenvermerk": "(c) Wissenschaftsstadt Darmstadt, Baumkataster",
+        "gebiet": "aus_datei",
+        "hinweis": "Der Auszug ist ein AUSSCHNITT, kein Vollbestand. Sein Gebiet wird beim Laden aus den enthaltenen Punkten bestimmt und mit dem Zielgebiet verglichen."
+      },
+      {
+        "stadt": "frankfurt",
+        "bezeichnung": "Baumkataster Frankfurt am Main (Gruenflaechenamt)",
+        "dateien": ["frankfurt_stadtbaeume.json"],
+        "dienst": "Offene Daten Portal der Stadt Frankfurt am Main",
+        "url": "https://offenedaten.frankfurt.de/dataset/baumkataster-frankfurt-am-main",
+        "lizenz": "siehe Portal (Datenlizenz Deutschland)",
+        "quellenvermerk": "(c) Stadt Frankfurt am Main, Gruenflaechenamt — Baumkataster",
+        "gebiet": "aus_datei",
+        "vorhanden": false,
+        "hinweis": "Rund 168.000 Baeume auf oeffentlichem Grund, seit 2014 offen, mit Art, Pflanzjahr, Kronendurchmesser und Koordinaten in ETRS89. Noch NICHT extrahiert — der Eintrag steht hier, damit die Anbindung eine Konfigurationsaufgabe bleibt und keine Programmieraufgabe."
+      },
+      {
+        "stadt": "offenbach",
+        "bezeichnung": "Baumkataster Offenbach am Main",
+        "dateien": ["offenbach_stadtbaeume.json"],
+        "dienst": "opendata.hessen.de",
+        "url": "https://opendata.hessen.de/dataset/baumkataster-op1",
+        "lizenz": "Datenlizenz Deutschland — Namensnennung 2.0",
+        "quellenvermerk": "(c) Stadt Offenbach am Main, Baumkataster",
+        "gebiet": "aus_datei",
+        "vorhanden": false,
+        "hinweis": "Als GML/WFS im hessischen Open-Data-Portal gefuehrt. Noch nicht extrahiert."
+      }
+    ],
+    "weitereStaedte": {
+      "hinweis": "Recherchiert am 10.08.2026, NICHT einzeln geprueft — die Liste sagt, wo eine Anbindung lohnt, nicht dass sie bereits funktioniert. Quellen: flurbaum.de/baumkataster.html (Uebersicht kommunaler Baumkataster im deutschsprachigen Raum), GovData-Suche »Baumkataster«.",
+      "eintraege": [
+        { "stadt": "Berlin", "umfang": "ueber 625.000 Strassen- und Parkbaeume" },
+        { "stadt": "Koeln", "umfang": "rund 130.000 Baeume" },
+        { "stadt": "Frankfurt am Main", "umfang": "ueber 168.000 Baeume" },
+        { "stadt": "Wuerzburg", "umfang": "ueber 40.000 Baeume" },
+        { "stadt": "Konstanz", "umfang": "rund 16.000 Baeume" },
+        { "stadt": "Flensburg", "umfang": "18.697 Baeume" },
+        { "stadt": "Bonn, Duesseldorf, Krefeld, Muenster, Bochum, Duisburg, Gelsenkirchen, Recklinghausen, Viersen, Wesel, Troisdorf, Monheim am Rhein", "umfang": "Nordrhein-Westfalen, Portale je Stadt" },
+        { "stadt": "Hannover, Osnabrueck, Norderstedt, Stade, Bad Bramstedt", "umfang": "Niedersachsen und Schleswig-Holstein" },
+        { "stadt": "Leipzig, Halle, Magdeburg, Chemnitz, Rostock", "umfang": "Ostdeutschland" },
+        { "stadt": "Karlsruhe, Heilbronn, Ulm, Konstanz, Weingarten", "umfang": "Baden-Wuerttemberg" },
+        { "stadt": "Augsburg, Bamberg, Regensburg, Wuerzburg", "umfang": "Bayern" }
+      ]
+    }
+  }
+}

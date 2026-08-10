@@ -26,13 +26,14 @@ import {
   baueBeschriftungen,
   baueGebaeudeKanten,
   baueGeschossbaender,
+  baueBrueckenkoerper,
   HIMMEL,
 } from './stadt.ts';
 import { LICHT } from './palette.ts';
 import { baueBaeume, baueHecken } from './vegetation.ts';
 import { baueKanten, kantenBilanz } from './kanten.ts';
 import { baueTreppen } from './treppen.ts';
-import { baueHaltestellen, baueBarrieren, baueStrassenmoebel, baueVerkehrszeichen } from './verkehr.ts';
+import { baueHaltestellen, baueBarrieren, bauePortale, baueStrassenmoebel, baueVerkehrszeichen } from './verkehr.ts';
 // Gleise kommen seit 09.08.2026 aus einem eigenen Modul: sie werden nicht mehr
 // als Baender je OSM-Weg gezeichnet, sondern als Querschnitt entlang eines
 // vernetzten Strangs (docs/BAUWERKSMODELL.md, Stufe 4 und 5).
@@ -393,17 +394,35 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
         ...baueKanten(gelaende.bruchkanten, h),
         ...baueFahrbahnmarkierungen(gelaende.linien ?? [], h),
       ];
+      // Bruecken: Ueberbau und Widerlager. Die Fahrbahn darauf zeichnet
+      // baueBodenzeichnung bereits auf ihrer Hoehenebene; hier kommt der
+      // Koerper darunter dazu — und damit die lichte Hoehe als BILD.
+      const bruecken = baueBrueckenkoerper(gelaende.flaechen, h);
+      nutzungPrims.push(...bruecken.prims);
+      if (bruecken.bericht.bruecken) {
+        console.info(
+          `[Bruecken] ${bruecken.bericht.bruecken} Ueberbauten gezeichnet` +
+            `${bruecken.bericht.kleinsteLichteHoeheM !== null ? `, kleinste lichte Hoehe ${bruecken.bericht.kleinsteLichteHoeheM.toFixed(2)} m` : ''}.`,
+        );
+      }
       // Treppen als Koerper: Ihre Stufenzahl folgt der GEMESSENEN
       // Hoehendifferenz aus dem Gelaendemodell, das Stufenmass ist eine
       // Annahme der Bauklassen. Ohne sie laeuft jede Fluchtwegrechnung ueber
       // 137 ebene Flaechen hinweg, als waeren es Gehwege.
-      const treppen = baueTreppen(gelaende.flaechen, h);
+      // Das Stufenmass kommt aus den BAUKLASSEN und reist mit dem Gelaende mit
+      // (`gelaende.stufenmass`). Damit rechnet der Browser mit genau denselben
+      // Eingaben wie der Import, der daraus die Gelaender abgeleitet hat.
+      const treppen = baueTreppen(gelaende.flaechen, h, gelaende.stufenmass);
       nutzungPrims.push(...treppen.prims);
       if (treppen.bericht.flaechen) {
         const t = treppen.bericht;
         console.info(
-          `[Treppen] ${t.flaechen} Flaechen -> ${t.laeufe} Laeufe mit ${t.stufen} Stufen (hoechster Lauf ${t.hoechsterLaufM} m); ${t.flach} als Podest/Rampe erkannt (unter 30 cm Steigung).`,
+          `[Treppen] ${t.flaechen} Flaechen -> ${t.teile} Laufteile -> ${t.laeufe} Laeufe mit ${t.stufen} Stufen ` +
+            `(hoechster Lauf ${t.hoechsterLaufM} m, Stufenhoehe ${t.stufenHoeheMinM !== null ? (t.stufenHoeheMinM * 100).toFixed(1) : '–'}–${t.stufenHoeheMaxM !== null ? (t.stufenHoeheMaxM * 100).toFixed(1) : '–'} cm, ` +
+            `${t.mitBeleg} mit gezaehlter Stufenzahl aus OSM); ${t.flach} als Podest/Rampe erkannt (unter 30 cm Steigung).`,
         );
+        for (const b of t.befunde.slice(0, 10)) console.warn(`[Treppen] ${b}`);
+        if (t.befunde.length > 10) console.warn(`[Treppen] … und ${t.befunde.length - 10} weitere Befunde.`);
       }
       const parkLabels = baueBeschriftungen(gelaende.beschriftungen ?? [], h);
       if (parkLabels) nutzungPrims.push(parkLabels);
@@ -446,6 +465,10 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
       ersetze(viewer, gruppen.current, 'gleise', []);
     }
     ersetze(viewer, gruppen.current, 'barrieren', ebenen.nutzung ? baueBarrieren(barrieren, h) : []);
+    // Portale: die Waende, in denen Rampen und Unterfuehrungen verschwinden.
+    // Sie stammen aus dem Hoehenband (server/geodata/hoehenband.ts) und tragen
+    // ihre lichte Hoehe als Angabe des Modells, nicht als Zierrat.
+    ersetze(viewer, gruppen.current, 'portale', ebenen.nutzung ? bauePortale(linien, h) : []);
     ersetze(viewer, gruppen.current, 'vegetation', ebenen.gebaeude ? [...baueBaeume(punkte, h), ...baueHecken(hecken, h)] : []);
     ersetze(viewer, gruppen.current, 'moebel', ebenen.nutzung ? baueStrassenmoebel(punkte, h) : []);
     ersetze(viewer, gruppen.current, 'verkehrszeichen', ebenen.nutzung ? baueVerkehrszeichen(punkte, h) : []);

@@ -419,3 +419,243 @@ Browser danach 159 MB.
   still: der Import holte genau 800 Flurstücke für 1,81 km². Richtig wäre
   Seitenabruf (`startIndex`) oder Kachelung, bis die Antwort unter der Grenze
   liegt. Betrifft die Flurstücksebene, nicht die 3D-Welt.
+
+---
+
+## 12. Ergebnis Stufe 7 — das Höhenband (10.08.2026, umgesetzt und nachgemessen)
+
+Der Befund des Auftraggebers lautete: **„Tiefgarageneinfahrten werden nicht
+tief."** Er hatte recht, und zwar aus drei zusammenwirkenden Gründen:
+
+1. `server/geodata/osm.ts` verwarf Tunnel ausdrücklich (`if (tags.tunnel …)
+   return null`). Eine Tiefgaragenrampe ist in OpenStreetMap ein
+   `highway=service` mit `tunnel` / `covered` / `layer=-1` — sie fiel damit
+   vollständig heraus, noch bevor irgendetwas gezeichnet wurde.
+2. Brücken wurden auf Geländehöhe gemalt. Eine Brücke, die dem Gelände folgt,
+   ist keine Brücke, sondern ein Weg.
+3. Das Modell kannte überhaupt keine **Unterkante** — nur Konstruktionshöhen
+   nach oben (0 bis 12 cm).
+
+Neu: `shared/domain/types.ts` → `Hoehenband` (Rohdaten `layer`, `bridge`,
+`tunnel`, `covered`, `level`, `incline`, `maxheight` **unverändert** aus OSM;
+alles Abgeleitete trägt `herkunft`), `server/geodata/hoehenband.ts` (Rechnung),
+`shared/bau/hoehenlage.ts` (die Auswertung — **eine** Formel für Import und
+Darstellung).
+
+### 12.1 Was OSM sagt und was nicht — drei Abgrenzungen aus Fehlläufen
+
+Der erste Lauf meldete **108 Rampen** im Pilotgebiet, und **alle 108** kamen auf
+exakt 8,00 m Tiefe. Eine Zahl, die bei jedem Bauwerk gleich ist, stammt nicht
+aus dem Bauwerk, sondern aus der Grenze, die man ihr gesetzt hat.
+
+| Merkmal | Falsche Lesart im ersten Lauf | Richtige Lesart | Beleg |
+|---|---|---|---|
+| `tunnel=building_passage` | „unterirdisch" → 18 Hausdurchfahrten 8 m tief ausgehoben | Durchfahrt **auf Straßenniveau** | OSM-Wiki Key:tunnel |
+| `covered=colonnade` + `layer=-1` | „unterirdisch" → 2 Arkaden ausgehoben | überdeckt, **nicht** unterirdisch | OSM-Wiki: „covered=yes … usually open at least on one side" |
+| `layer=-1` allein | „eine Ebene tiefer = 3 m" | sagt nur, **was über was** liegt | OSM-Wiki Key:layer: „Layer provides absolutely no information about relative or absolute height difference" |
+
+Die Tiefengrenze bindet seitdem an das, was die Daten hergeben: `level=-2` →
+zwei Geschosse, `layer<=-2` → zwei Lagen, sonst **ein** Geschoss
+(`vertikal.tiefgarage.geschosshoeheM`, Bauklassen).
+
+### 12.2 Ein Bauwerk ist ein **Strang**, kein Polygonstück
+
+Nachgezählt in den Daten: Der **Citytunnel** allein erschien als **acht**
+Flächenstücke, jedes mit eigener Achse, eigener Tiefe und eigenem Portal —
+1,05 m hier, 3,38 m dort, 2,80 m daneben. Der Grund ist harmlos, die Folge
+nicht: OpenStreetMap zerlegt einen Weg an jeder Kreuzung und jedem
+Attributwechsel; der Import puffert jedes Stück einzeln zu einem Korridor.
+Rampenneigung × Stücklänge ergibt dann pro Stück eine andere Tiefe.
+
+Seit 10.08.2026 werden berührende unterirdische Flächen (≤ 1,50 m) zu einem
+**Strang** vereinigt und gemeinsam gerechnet. Ergebnis im Pilotgebiet:
+**33 Stränge** statt 71 Einzelstücke, größter Strang **12 Polygonstücke**.
+
+### 12.3 Der Weg wird **im Bauwerk** gemessen, nicht auf einer Achse
+
+Zwei Anläufe mit einer Strangachse sind gescheitert und stehen hier, damit sie
+niemand wiederholt:
+
+- Achse über die **Stückmitten**: schnitt zwischen zwei Mitten als Sehne quer
+  durch die Fahrbahn. Der Aushub, der sich am Abstand zur Achse bemisst, wurde
+  dadurch stellenweise 2 m breit statt 7.
+- Achse durch **Aneinanderhängen** der Stückachsen: lief bei Verzweigungen hin
+  und zurück — aus 1.198 m Strang wurden 2.350 m.
+
+Ein Tunnel mit Ausfahrt **hat keine Achse**. Gerechnet wird deshalb auf den
+**Rasterzellen** des Strangs: Der Weg bis zur nächsten Mündung wird mit einem
+Dijkstra über die Zellen gemessen, die Tiefe folgt aus diesem Weg
+(Neigung × Weg, gedeckelt durch die Tiefengrenze). Das kennt Kurven und
+Verzweigungen, ohne dass irgendwo eine Linie geraten werden müsste.
+
+**Mündung** heißt: ein *freies* Ende einer Stückachse (kein anderes Stück des
+Strangs schließt an), das in Reichweite einer Verkehrsfläche **ohne** Höhenband
+liegt. Ausdrücklich nicht die Seiten des Korridors — dort liegt überall eine
+Verkehrsfläche, weil ALKIS den Straßenraum flächendeckend führt.
+
+### 12.4 Ausgehoben wird nur, wo **keine Decke Platz hätte**
+
+Der erste Lauf hob jede unterirdische Fläche auf ihrer ganzen Länge aus. Damit
+lag der Boden auch dort tiefer, wo der Tunnel **unter einer Straße** hindurch
+läuft — und weil die Straße darüber ihre Höhen aus demselben Höhenmodell holt,
+sackte sie mit in den Graben.
+
+Nachgemessen an der Zufahrt beim Luisencenter (475303/5524750): Fahrbahn auf
+**143,50 m**, Höhenmodell darunter auf **140,60 m** — ein 2,90 m tiefer Schlitz
+mitten in der Straße, dessen Kanten als Flecken durch die Fahrbahn stachen.
+Über alle 71 Tunnelstücke gezählt lagen **6.925 von 6.925** ausgehobenen
+Rasterzellen unter einer kartierten Bodenfläche.
+
+Die Unterscheidung ist physisch und messbar: Ein Bauwerk ist **überdeckt**,
+sobald über ihm ein ganzes Geschoss Platz hat
+(`vertikal.tiefgarage.geschosshoeheM` = 2,90 m — lichte Höhe plus Decke).
+Solange weniger Platz da ist, **kann** dort keine Decke liegen: Der Strang läuft
+im offenen Trog. Ausgehoben wird nur dieser Trog.
+
+Daraus folgt zusätzlich eine Aussage über die Daten: Ein Strang, der an beiden
+Enden an die Oberfläche kommt und nirgends tief genug für eine Decke wird, ist
+**keine Unterführung**, sondern eine Durchfahrt auf Straßenniveau — eine
+Hofdurchfahrt, eine Arkade, ein Haustor. Im Pilotgebiet sind das **30 von 33**
+Strängen; sie bleiben auf Geländehöhe, und jeder einzelne steht als Datenlücke
+im Bericht.
+
+### 12.5 Der Trog bekommt ein **Loch im Boden** — dieselbe Antwort wie beim Gleis
+
+Wo ein Bauwerk den Boden einnimmt, bekommt der Boden ein Loch — keine Auflage,
+keine Verschiebung (Abschnitt 10). Der offene Trog wird aus den Bodenflächen
+ausgeschnitten (`troegeAusschneiden` in `server/geodata/gelaende.ts`), und zwar
+**1,50 m breiter je Seite als der Aushub**: Bliebe auch nur ein Streifen
+Bodenfläche über ausgehobenem Gelände stehen, holte er sich seine Höhen aus dem
+Graben und hinge in Fetzen hinein.
+
+Die gezeichnete Rampenfahrbahn ist dabei die **Vorlage für den Aushub**, nicht
+umgekehrt: Erst wird je Polygonstück eine Ausgleichsebene durch seine
+gemessenen Sohlenpunkte gelegt, dann wird bis 5 cm unter **diese Ebene**
+ausgehoben. Sonst gehen die geglättete Ebene und der kurvenfolgende Weg
+auseinander, und die Fahrbahn blitzt in Fetzen durch den Boden.
+
+### 12.6 Zahlen des Pilotgebiets (`gel_ac266e9db45b09df`, 10.08.2026)
+
+| Größe | Wert |
+|---|---|
+| Unterirdische Stränge | 33, größter aus 12 Polygonstücken |
+| davon abgesenkt | 2 (Citytunnel, Versorgungsebene Luisencenter) |
+| davon als Durchfahrt auf Straßenniveau erkannt | 30 — jede als Datenlücke gemeldet |
+| ohne Anschluss an die Oberfläche | 1 — nicht ausgehoben, gemeldet |
+| Offener Trog | 1.519 m², 1.414 Rasterzellen eingeschnitten |
+| Aus Bodenflächen ausgeschnitten | 3.073 m² aus 42 Flächen |
+| Tiefste abgeleitete Sohle | 5,80 m (`level=-2`) |
+| Portale | 8, lichte Höhe 4,50 m bzw. 1,95 m (beide OSM `maxheight`) |
+| Neigung aus OSM `incline` belegt | **0** — alle Tiefen sind Annahmen, so gemeldet |
+
+**Nachweis „`hoehen.bei()` ist messbar tiefer"** — Querprofil durch die
+Citytunnel-Rampe bei N 5524562, Rechtswert 474880 → 474915 in 2,5-m-Schritten
+(Meter über NHN):
+
+```
+140,99  141,07  141,09  141,11  141,13  141,14  141,17
+139,62  139,44                                        <- Trog
+141,27  141,30  141,32  141,34  141,33  141,35
+```
+
+Das Gelände neben der Rampe liegt auf 141,1–141,4 m, die Rampensohle auf
+139,4–139,6 m: **1,7 m tiefer**, an dieser Stelle 24 m vor dem Portal. Bild:
+`data/cache/43-rampe-portal.png` (Übersicht) und `43-rampe-portal-nah.png`
+(Portal in der Wand, Gleiszone im Vordergrund).
+
+### 12.7 Brücken: was gemessen werden konnte und was nicht
+
+Der Überbau liegt auf der Verbindung seiner beiden Widerlager statt auf dem
+Gelände. Seine **Dicke** hängt an der Stützweite: Als Faustzahl des
+Brückenbaus liegt die Schlankheit eines Balkenüberbaus bei etwa 1/20 der
+Stützweite, begrenzt auf 0,25 m bis zum Wert der Bauklassen (1,20 m). Der erste
+Lauf gab jeder Brücke pauschal 1,20 m — auf eine 6 m lange Fußgängerbrücke über
+einen Bach angewandt ergab das eine lichte Höhe von **−1,74 m**.
+
+Gemessen wird die lichte Höhe danach als kleinster Abstand zwischen
+Überbau-Unterkante und Gelände darunter. **Ergebnis: 0 von 11 Brücken im
+Pilotgebiet haben eine messbare lichte Höhe** — und das ist kein Rechenfehler,
+sondern ein Befund über die Datenquelle: Bei allen Brücken lag die Geländehöhe
+darunter **exakt auf der Verbindungslinie der Widerlager**; die Differenz
+betrug ausnahmslos genau die Überbaudicke. DGM1 ist ein **Gelände**modell;
+Brückenbauwerke sind darin nicht durchgängig entfernt, und ein Bauwerk, das im
+Höhenmodell als Boden steht, kann nichts überspannen.
+
+Ein solcher Wert wird **nicht** als lichte Höhe ausgegeben. Er steht als
+Datenlücke im Bericht, mit dem Hinweis, was belastbar wäre: eine Angabe aus der
+Quelle (OSM `maxheight`) oder ein Höhenmodell mit Bauwerksfreistellung.
+
+---
+
+## 13. Ergebnis Stufe 8 — Wasser bekommt eine Sohle (10.08.2026)
+
+Bis dahin wurde das Raster innerhalb einer Wasserfläche auf den **Spiegel**
+gelegt: Das Gewässer war eine ebene Platte ohne Tiefe, ein Bach lag auf dem
+Ufer statt darin. Jetzt wird auf die **Sohle** abgesenkt; der Spiegel bleibt als
+eigene, durchscheinende Ebene darüber (`wasserspiegelM`, gezeichnet in
+`web/src/scene/stadt.ts`).
+
+Die Sohle läuft **zum Ufer aus** (2,50 m Rampenbreite) — ein senkrechter
+Absturz an der Uferlinie wäre geometrisch bequem und sachlich falsch.
+
+Nachgemessen, `gel_ac266e9db45b09df`, alle 9 Gewässer mit Sohle (Meter über NHN):
+
+| Gewässer | Spiegel | `hoehen.bei()` in der Mitte | Tiefe |
+|---|---|---|---|
+| osm_wasser_1 | 140,862 | 140,06 | **0,80 m** |
+| osm_wasser_2 | 141,358 | 140,56 | **0,80 m** |
+| osm_wasser_4 | 141,247 | 140,45 | **0,80 m** |
+| osm_wasser_5 | 147,193 | 146,39 | **0,80 m** |
+| osm_wasser_0 | 140,245 | 139,51 | 0,73 m |
+| osm_wasser_8 | 139,742 | 139,08 | 0,66 m |
+| osm_wasser_6 | 145,871 | 145,34 | 0,54 m |
+| osm_wasser_7 | 145,509 | 144,98 | 0,52 m |
+| osm_wasser_3 | 139,617 | 139,41 | 0,21 m |
+
+Die vier vollen 0,80 m sind die Annahme der Bauklassen; die kleineren Werte
+sind **keine** flacheren Becken, sondern schmale Gewässer, in denen die
+Uferrampe die volle Tiefe nicht erreicht — die Geometrie sagt das von selbst.
+Bild: `data/cache/46-wasser-sohle.png` (Brunnenbecken Luisenplatz, in das
+Pflaster eingesenkt, Sohle durch den Spiegel sichtbar).
+
+**Die Tiefe ist eine ANNAHME, keine Messung.** Sie steht so in der Meldung des
+Importprotokolls und in `config/bauklassen/de-strassenraum-2026.2.json` mit
+`verifikation.status = "zu_pruefen"`.
+
+---
+
+## 14. Ergebnis Stufe 9 — Treppen mit Beleg (10.08.2026)
+
+Eine Treppe im Bestand hat genau **ein** belegtes Maß: `step_count` aus
+OpenStreetMap. Alles andere — Steigung, Auftritt, Breite — muss aus dem
+Höhenmodell abgeleitet werden.
+
+Was sich geändert hat:
+
+- **`step_count` geht jeder Ableitung vor.** Die Zählung überlebt jetzt auch
+  die Flächenvereinigung: `stufenzahlenUebertragen` überträgt sie von der
+  Rohfläche auf die fertige Fläche, aber **nur wenn sie eindeutig ist** — genau
+  eine Rohtreppe mit `step_count` in der fertigen Fläche. Im Pilotgebiet:
+  **4 Flächen mit gezählter Stufenzahl** aus OSM, daraus **9 Läufe mit Beleg**.
+- **Stufenmaß-Grenzen aus DIN 18065** stehen als Daten in den Bauklassen
+  (`hoeheZulaessigMinM` 0,12 m, `hoeheZulaessigMaxM` 0,21 m). Eine Ableitung,
+  die dort herausfällt, wird nicht stillschweigend gekappt, sondern **gemeldet**
+  — im Pilotgebiet 6 Befunde, z. B. `osm_treppe_119`: „step_count = 15 ergibt
+  bei 3,32 m Steigung 22,1 cm je Stufe — außerhalb von 12–21 cm. Die ZÄHLUNG
+  bleibt stehen, die Höhendifferenz aus dem Geländemodell ist hier vermutlich
+  falsch."
+- **L-förmige Läufe werden an Podesten geteilt** (`teileAnPodesten`): Wo das
+  Breitenprofil längs des Laufs um mehr als das 1,6-fache anschwillt, endet ein
+  Lauf und beginnt der nächste. 152 Treppenflächen → **156 Laufteile** → 78
+  Läufe mit **666 Stufen**; 78 Flächen sind unter 30 cm Steigung und werden als
+  Podest/Rampe eingestuft statt als Treppe.
+- **Sutherland–Hodgman ist ersetzt.** Der alte Schnitt setzte ein konvexes
+  Polygon voraus; eine L-Treppe ist nicht konvex. Jetzt wird der Umriss per
+  Ohrenschneiden zerlegt (`zerlegeUmriss`) und jedes Dreieck exakt gegen die
+  Stufenscheibe geschnitten (`scheibe`).
+- **Geländer** entstehen aus den Wangen der Läufe: 158 Stück im Pilotgebiet,
+  beidseitig nach DIN 18040-3. Das ist eine **Annahme** — erfasst ist es nicht,
+  und so steht es in der Meldung.
+
+Bild: `data/cache/44-treppe-gelaender.png` (32 gezählte Stufen, beidseitiges
+Geländer).

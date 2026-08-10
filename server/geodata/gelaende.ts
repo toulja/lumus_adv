@@ -10,13 +10,20 @@
  */
 
 import polygonClipping from 'polygon-clipping';
-import type { BBox, Bruchkante, Gelaende, GelaendeFlaeche, GelaendeLinienObjekt, GelaendePatch, Punkt, Quellennachweis, Ring } from '../../shared/domain/types.ts';
+import type { BBox, Bruchkante, Datenluecke, Gelaende, GelaendeFlaeche, GelaendeLinienObjekt, GelaendePatch, Punkt, Quellennachweis, Ring } from '../../shared/domain/types.ts';
 import { HoehenFeld, aufPolylinie, bboxFlaeche, bboxRing, bboxVonPunkten, flaeche, polylinieLaenge, punktInRing, ringNormalisieren, schwerpunkt } from '../../shared/geo/geometry.ts';
 import type { Stuetzpunkt } from '../../shared/geo/geometry.ts';
 import { Hoehenraster } from '../../shared/geo/raster.ts';
 import { kachelHuelle, kachelnAmRaster } from '../../shared/geo/gelaendenetz.ts';
+import { straengeBilden } from '../../shared/geo/netz.ts';
+import { teileAnPodesten, treppenlauf } from '../../shared/bau/treppe.ts';
 import { gelaende as gelaendeStore, id, jetzt, WURZEL as DATEN_WURZEL } from '../lib/store.ts';
+import { bahnkoerperBreiteM, eindeckungBreiteM } from '../../shared/bau/oberbau.ts';
+import { RANG } from './nutzung.ts';
 import { geoKonfig } from './konfig.ts';
+
+/** Zeichenrang der Gleiszone — aus der einen Rangtabelle, nicht neu erfunden. */
+const RANG_GLEISZONE = RANG.gleiszone;
 import * as lod2 from './lod2.ts';
 import * as alkis from './alkis.ts';
 import * as dgm from './dgm.ts';
@@ -519,7 +526,7 @@ function flaechenAufteilen(flaechen: GelaendeFlaeche[]): GelaendeFlaeche[] {
  */
 function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
   flaechen: GelaendeFlaeche[];
-  bericht: { basis: number; verfeinert: number; verworfen: number };
+  bericht: { basis: number; verfeinert: number; verworfen: number; mitHoehenband: number; abzuegeGescheitert: number };
 } {
   // LOKALER URSPRUNG — der Schluessel zur Robustheit.
   //
@@ -605,6 +612,34 @@ function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
     return out;
   };
 
+  // --- 0. WAS NICHT AUF DEM BODEN LIEGT, GEHOERT NICHT IN DIE AUFTEILUNG ----
+  //
+  // BEFUND 10.08.2026, beim ersten Lauf mit Hoehenband: „Keine Rampen,
+  // Unterfuehrungen oder Bruecken im Gebiet gefunden" — obwohl OpenStreetMap
+  // sie liefert. Ursache: Die Aufteilung vereinigt JE KLASSE. Eine Bruecke der
+  // Klasse „fahrbahn" verschmolz dabei mit der Strasse, die unter ihr
+  // hindurchfuehrt, und ihr Hoehenband ging verloren — die neue Sammelflaeche
+  // erbt nur Quelle, Rang und Belag.
+  //
+  // Das ist nicht nur ein verlorenes Merkmal, sondern ein Denkfehler: Die
+  // lueckenlose Aufteilung beantwortet die Frage „welche Klasse liegt an
+  // dieser Stelle AUF DEM BODEN". Eine Bruecke liegt dort gar nicht — sie
+  // liegt darueber, und die Strasse darunter behaelt ihren Platz. Objekte mit
+  // Hoehenband werden darum aus der Aufteilung herausgenommen und unveraendert
+  // wieder eingesetzt, mit Achse, Breite und Lage.
+  const istEbenerBoden = (f: GelaendeFlaeche): boolean => {
+    const l = f.lage;
+    if (!l) return true;
+    if (l.bruecke) return false;
+    if (l.tunnel && l.tunnel !== 'building_passage') return false;
+    if (l.ueberdeckt && l.ueberdeckt !== 'no') return false;
+    if (typeof l.layer === 'number' && l.layer !== 0) return false;
+    if (typeof l.osmLevel === 'number' && l.osmLevel !== 0) return false;
+    return true; // nur `incline` oder `maxheight`: liegt weiterhin auf dem Boden
+  };
+  const eigeneLage = flaechen.filter((f) => !istEbenerBoden(f));
+  flaechen = flaechen.filter(istEbenerBoden);
+
   // --- 1. Amtliche Basis ---------------------------------------------------
   const alkisNach = new Map<string, GelaendeFlaeche[]>();
   const osmNach = new Map<string, GelaendeFlaeche[]>();
@@ -618,7 +653,10 @@ function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
   // Ohne amtliche Basis (Bundesland ohne offenen ALKIS-Zugang) bleibt der
   // bisherige Weg: reine Vorrangaufteilung ueber alle Quellen.
   if (!alkisNach.size) {
-    return { flaechen: flaechenAufteilen(flaechen), bericht: { basis: 0, verfeinert: 0, verworfen: 0 } };
+    return {
+      flaechen: [...flaechenAufteilen(flaechen), ...eigeneLage],
+      bericht: { basis: 0, verfeinert: 0, verworfen: 0, mitHoehenband: eigeneLage.length, abzuegeGescheitert: 0 },
+    };
   }
 
   const basisGeom = new Map<string, number[][][][]>();
@@ -633,8 +671,69 @@ function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
   }
 
   // --- 2. OSM-Verfeinerungen ----------------------------------------------
+  //
+  // BELEGT ALS LISTE, NICHT ALS EINE GEOMETRIE — und das ist die Behebung
+  // eines gemessenen Fehlers, nicht Geschmack:
+  //
+  // BEFUND 10.08.2026: 87.194 m2 des OSM-Fahrbahndeckers lagen AUF der
+  // ALKIS-Platte, also 59,7 % des Deckers doppelt. Zwei koplanare Flaechen an
+  // derselben Stelle entscheidet der Tiefenpuffer bildpunktweise — das ergibt
+  // genau den „Fleckenteppich", den der Auftraggeber beschrieben hat. Die
+  // Zusage dieser Funktion („lueckenlos UND ueberschneidungsfrei") war damit
+  // nicht eingehalten.
+  //
+  // URSACHE: `belegt` wurde als EINE vereinigte Geometrie mitgefuehrt. Schlug
+  // die Vereinigung fuer eine Klasse fehl (polygon-clipping bricht bei
+  // entarteten Ringen ab), landete diese Klasse trotzdem im Ergebnis, fehlte
+  // aber in `belegt` — und Schritt 3 zeichnete die amtliche Basis
+  // ungeschnitten darueber. EIN gescheiterter Aufruf hat so die ganze
+  // Aufteilung entwertet.
+  //
+  // JETZT: eine Liste, ein Eintrag je Klasse. Der Abzug laeuft in einer
+  // Schleife mit eigenem Fangzweig je Eintrag. Ein Fehler kostet dann eine
+  // Ueberlappung, nicht alle.
   const ergebnis: GelaendeFlaeche[] = [];
-  let belegt: number[][][][] = [];
+  const belegtTeile: number[][][][][] = [];
+  let abzuegeGescheitert = 0;
+  /**
+   * ABZUG IN BLOECKEN — damit ein Fehlschlag klein bleibt.
+   *
+   * BEFUND 10.08.2026: Zwei gescheiterte Abzuege haben 87.194 m2 doppelt
+   * gezeichneter Flaeche hinterlassen (59,7 % des Fahrbahndeckers lagen auf der
+   * ALKIS-Platte). Zwei koplanare Flaechen entscheidet der Tiefenpuffer
+   * bildpunktweise — das IST der „Fleckenteppich".
+   *
+   * `polygon-clipping` bricht bei grossen, komplexen Eingaben ab („Unable to
+   * find segment in SweepLine tree"; bekannter Praezisionsfehler der
+   * Bibliothek, mfogel/polygon-clipping #60/#98/#115/#148). Zwei Massnahmen:
+   *  1. Der Subtrahend wird in BLOECKEN abgezogen. Scheitert ein Block, bleibt
+   *     nur dieser eine als Ueberlappung stehen statt der ganzen Klasse.
+   *  2. Die Koordinaten werden vorher auf MILLIMETER gerundet. Die Daten sind
+   *     ohnehin nur zentimetergenau; die zusaetzlichen Nachkommastellen aus der
+   *     Verschiebung sind Rauschen, an dem sich die Sweep-Line verschluckt.
+   */
+  const aufMillimeter = (mp: number[][][][]): number[][][][] =>
+    mp.map((poly) => poly.map((ring) => ring.map((p) => [Math.round(p[0] * 1000) / 1000, Math.round(p[1] * 1000) / 1000])));
+  const ABZUG_BLOCK = 40;
+  const ohneUeberlapp = (geom: number[][][][]): number[][][][] => {
+    let rest = aufMillimeter(geom);
+    for (const teil of belegtTeile) {
+      if (!rest.length) break;
+      const gerundet = aufMillimeter(teil);
+      for (let i = 0; i < gerundet.length; i += ABZUG_BLOCK) {
+        if (!rest.length) break;
+        const block = gerundet.slice(i, i + ABZUG_BLOCK);
+        try {
+          rest = ziehAb(rest, block);
+        } catch {
+          // GEZAEHLT, nicht verschwiegen: Jeder gescheiterte Abzug ist eine
+          // Doppelzeichnung im Bild. Die Zahl gehoert ins Auftragsprotokoll.
+          abzuegeGescheitert++;
+        }
+      }
+    }
+    return rest;
+  };
   let verfeinert = 0;
   let verworfen = 0;
 
@@ -660,14 +759,16 @@ function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
       // Wirtsraum aus den zulaessigen amtlichen Klassen (bereits verschoben)
       const wirtsraum = vereinigeMP(wirtsTeile);
       // AUF den Wirtsraum beschneiden — hier greift die Regel
-      let geom = schneide(vereinige(liste), wirtsraum);
-      geom = ziehAb(geom, belegt);
+      const geom = ohneUeberlapp(schneide(vereinige(liste), wirtsraum));
       if (!geom.length) continue;
 
       const neue = zuFlaechen(geom, liste[0], art, `osm_${art}`);
       ergebnis.push(...neue);
       verfeinert += neue.length;
-      belegt = belegt.length ? vereinigeMP([belegt, geom]) : geom;
+      // ERST NACH dem Einfuegen vormerken — und zwar unbedingt. Genau hier
+      // ging es vorher verloren: Der Vormerk-Schritt konnte fehlschlagen,
+      // nachdem die Flaechen schon im Ergebnis standen.
+      belegtTeile.push(geom);
     } catch {
       // Diese OSM-Klasse laesst sich nicht sauber verschneiden -> verwerfen.
       // Der Boden bleibt vollstaendig: die amtliche Basis fuellt die Stelle in
@@ -677,24 +778,22 @@ function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
   }
 
   // --- 3. Amtlicher Rest ---------------------------------------------------
+  // Jede Verfeinerung wird EINZELN abgezogen (siehe `ohneUeberlapp`). Ein
+  // gescheiterter Abzug kostet damit nur diese eine Ueberlappung — vorher
+  // kostete er die ganze Aufteilung.
   let basis = 0;
   for (const [art, geom] of basisGeom) {
-    let rest: number[][][][];
-    try {
-      rest = ziehAb(geom, belegt);
-    } catch {
-      // Abzug gescheitert: die volle amtliche Klasse zeichnen. Sie kann sich
-      // dann mit einer Verfeinerung ueberlappen — aber die amtliche Basis ist
-      // die Wahrheit, ein Loch waere schlimmer als eine Doppelzeichnung.
-      rest = geom;
-    }
+    const rest = ohneUeberlapp(geom);
     if (!rest.length) continue;
     const neue = zuFlaechen(rest, alkisNach.get(art)![0], art, `alkis_${art}`);
     ergebnis.push(...neue);
     basis += neue.length;
   }
 
-  return { flaechen: ergebnis, bericht: { basis, verfeinert, verworfen } };
+  // --- 4. Was ein Hoehenband hat, kommt unveraendert zurueck ----------------
+  ergebnis.push(...eigeneLage);
+
+  return { flaechen: ergebnis, bericht: { basis, verfeinert, verworfen, mitHoehenband: eigeneLage.length, abzuegeGescheitert } };
 }
 
 /**
@@ -722,11 +821,43 @@ function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
  * fragen dieselbe Oberflaeche ab. Eine nur gezeichnete Wasserflaeche waere
  * wieder eine zweite Wahrheit.
  */
-function wasserEinebnen(raster: Hoehenraster, flaechen: GelaendeFlaeche[]): { gewaesser: number; zellen: number; verworfen: number } {
+function wasserEinebnen(
+  raster: Hoehenraster,
+  flaechen: GelaendeFlaeche[],
+  sohle?: { sohleUnterSpiegelM: number; sohleUnterSpiegelWasserlaufM?: number },
+): { gewaesser: number; zellen: number; verworfen: number; tiefsteM: number; mitSohle: number } {
   const k = raster.kopf;
   let gewaesser = 0;
   let zellen = 0;
   let verworfen = 0;
+  let tiefsteM = 0;
+  let mitSohle = 0;
+  /**
+   * DIE SOHLE LAEUFT ZUM UFER AUS. Ein senkrechter Absturz an der Uferlinie
+   * waere geometrisch bequem und sachlich falsch — kein Gewaesser hat eine
+   * Wand am Rand. Innerhalb dieser Breite waechst die Tiefe von 0 auf den
+   * vollen Wert; dadurch entsteht eine Boeschung, die auch die Kantenregel
+   * richtig einordnet.
+   */
+  const UFER_RAMPE_M = 2.5;
+  const abstandZumUfer = (p: Punkt, ringe: Punkt[][]): number => {
+    let best = Infinity;
+    for (const r of ringe) {
+      for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+        const a = r[j];
+        const b = r[i];
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        const l2 = dx * dx + dy * dy;
+        let t = l2 > 0 ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2 : 0;
+        t = Math.max(0, Math.min(1, t));
+        const d = Math.hypot(p[0] - (a[0] + dx * t), p[1] - (a[1] + dy * t));
+        if (d < best) best = d;
+        if (best < 0.05) return best;
+      }
+    }
+    return best;
+  };
   for (const f of flaechen) {
     if (f.art !== 'wasser' || f.polygon.length < 3) continue;
     const mE = f.polygon.reduce((s, p) => s + p[0], 0) / f.polygon.length;
@@ -802,22 +933,415 @@ function wasserEinebnen(raster: Hoehenraster, flaechen: GelaendeFlaeche[]): { ge
     const s1 = Math.min(k.spalten - 1, Math.ceil((Math.max(...es) - k.minE) / k.zellM));
     const z0 = Math.max(0, Math.floor((Math.min(...ns) - k.minN) / k.zellM));
     const z1 = Math.min(k.zeilen - 1, Math.ceil((Math.max(...ns) - k.minN) / k.zellM));
+    // SOHLE STATT PLATTE (10.08.2026): Bis dahin wurde das Raster innerhalb
+    // der Wasserflaeche auf den SPIEGEL gelegt — das Gewaesser war eine ebene
+    // Platte ohne Tiefe, ein Bach lag auf dem Ufer statt darin. Jetzt wird auf
+    // die SOHLE abgesenkt; der Spiegel bleibt als eigene, durchscheinende
+    // Ebene darueber (`wasserspiegelM`, gezeichnet in web/src/scene/stadt.ts).
+    const tiefeVoll = sohle
+      ? istWasserlauf
+        ? (sohle.sohleUnterSpiegelWasserlaufM ?? sohle.sohleUnterSpiegelM)
+        : sohle.sohleUnterSpiegelM
+      : 0;
+    const ringe = [f.polygon, ...(f.loecher ?? [])];
     let gesetzt = 0;
+    let tiefste = 0;
     for (let z = z0; z <= z1; z++) {
       for (let s = s0; s <= s1; s++) {
         const [e, n] = raster.zellMitte(s, z);
         if (!punktInRing([e, n], f.polygon)) continue;
         if ((f.loecher ?? []).some((l) => punktInRing([e, n], l))) continue;
-        raster.setze(s, z, spiegel(e, n));
+        const sp = spiegel(e, n);
+        let tiefe = 0;
+        if (tiefeVoll > 0) {
+          const d = abstandZumUfer([e, n], ringe);
+          tiefe = tiefeVoll * Math.min(1, d / UFER_RAMPE_M);
+        }
+        raster.setze(s, z, sp - tiefe);
+        if (tiefe > tiefste) tiefste = tiefe;
         gesetzt++;
       }
     }
     if (gesetzt) {
       gewaesser++;
       zellen += gesetzt;
+      if (tiefste > 0) {
+        mitSohle++;
+        f.wassersohleM = Math.round((f.wasserspiegelM ?? spiegel(mE, mN)) * 1000 - tiefste * 1000) / 1000;
+        if (tiefste > tiefsteM) tiefsteM = tiefste;
+      }
     }
   }
-  return { gewaesser, zellen, verworfen };
+  return { gewaesser, zellen, verworfen, tiefsteM, mitSohle };
+}
+
+/**
+ * UEBERTRAEGT `step_count` UEBER DIE VEREINIGUNG HINWEG.
+ *
+ * DAS PROBLEM: Die Bodenflaechen werden je Klasse vereinigt (sonst liegen 736
+ * Einzelplatten statt eines Netzes). Dabei gehen die Merkmale der einzelnen
+ * OSM-Wege verloren — auch die gezaehlte Stufenzahl. Sie ist aber das einzige
+ * BELEGTE Mass, das eine Treppe im Bestand hat; ohne sie bleibt nur die
+ * Annahme aus den Bauklassen.
+ *
+ * DIE LOESUNG IST BEWUSST STRENG: Eine Zaehlung wird nur uebernommen, wenn sie
+ * EINDEUTIG ist — wenn genau eine Rohtreppe mit `step_count` in der fertigen
+ * Flaeche liegt. Verschmelzen zwei Treppen mit verschiedenen Zaehlungen, bleibt
+ * das Feld leer. Eine der beiden Zahlen zu nehmen waere eine Behauptung.
+ */
+function stufenzahlenUebertragen(
+  roh: GelaendeFlaeche[],
+  fertig: GelaendeFlaeche[],
+): { uebernommen: number; mehrdeutig: number } {
+  const mitZaehlung = roh
+    .filter((f) => f.art === 'treppe' && f.stufenzahl && f.polygon.length >= 3)
+    .map((f) => ({ punkt: schwerpunkt(f.polygon), anzahl: f.stufenzahl as number }));
+  if (!mitZaehlung.length) return { uebernommen: 0, mehrdeutig: 0 };
+  let uebernommen = 0;
+  let mehrdeutig = 0;
+  for (const f of fertig) {
+    if (f.art !== 'treppe' || f.polygon.length < 3) continue;
+    const treffer = mitZaehlung.filter(
+      (z) => punktInRing(z.punkt, f.polygon) && !(f.loecher ?? []).some((l) => punktInRing(z.punkt, l)),
+    );
+    if (!treffer.length) continue;
+    const werte = new Set(treffer.map((t) => t.anzahl));
+    if (werte.size === 1) {
+      f.stufenzahl = treffer[0].anzahl;
+      uebernommen++;
+    } else {
+      mehrdeutig++;
+    }
+  }
+  return { uebernommen, mehrdeutig };
+}
+
+/**
+ * GELAENDER AN TREPPEN — abgeleitet, nicht erfasst.
+ *
+ * DER BEFUND (Uebergabe 4.4): „Gelaender fehlen ganz, obwohl sie fuer die
+ * Fluchtwegbeurteilung zaehlen." OpenStreetMap fuehrt `handrail` nur selten,
+ * und ein Gelaender ist auch kein Objekt, das man einzeln erfasst — es gehoert
+ * zur Treppe. DIN 18040-3 verlangt sie im oeffentlichen Verkehrsraum
+ * BEIDSEITIG; genau das wird hier angesetzt.
+ *
+ * Sie entstehen aus den WANGEN des Laufs, also aus derselben Rechnung, die die
+ * Stufen erzeugt (shared/bau/treppe.ts). Sie sind damit ausdruecklich eine
+ * ABLEITUNG und keine Messung — jedes Gelaender traegt das im Datensatz
+ * (`lage.herkunft = 'annahme'`).
+ */
+function gelaenderAnTreppen(
+  flaechen: GelaendeFlaeche[],
+  hoeheBei: (e: number, n: number) => number,
+  stufenmass: { hoeheM: number; hoeheZulaessigMinM?: number; hoeheZulaessigMaxM?: number },
+  hoeheM: number,
+): { linien: GelaendeLinienObjekt[]; bericht: { flaechen: number; teile: number; laeufe: number; stufen: number; flach: number; mitBeleg: number; befunde: string[] } } {
+  const linien: GelaendeLinienObjekt[] = [];
+  const bericht = { flaechen: 0, teile: 0, laeufe: 0, stufen: 0, flach: 0, mitBeleg: 0, befunde: [] as string[] };
+  for (const f of flaechen) {
+    if (f.art !== 'treppe' || f.polygon.length < 3) continue;
+    bericht.flaechen++;
+    const teile = teileAnPodesten(f.polygon);
+    bericht.teile += teile.length;
+    let nr = 0;
+    for (const teil of teile) {
+      // Bei geteilten Laeufen ist die Zaehlung fuer den GANZEN Aufgang belegt,
+      // nicht je Teillauf — sie darf dann nicht auf einen Teil angewandt werden.
+      const beleg = teile.length === 1 ? f.stufenzahl : undefined;
+      const lauf = treppenlauf(teil, hoeheBei, stufenmass, beleg);
+      for (const b of lauf.befunde) bericht.befunde.push(`${f.id}: ${b}`);
+      if (lauf.flach || !lauf.stufen.length) {
+        bericht.flach++;
+        continue;
+      }
+      bericht.laeufe++;
+      bericht.stufen += lauf.anzahl;
+      if (lauf.herkunft === 'step_count') bericht.mitBeleg++;
+      for (const [i, wange] of lauf.wangen.entries()) {
+        if (wange.length < 2) continue;
+        linien.push({
+          id: `gelaender_${f.id}_${nr}_${i}`,
+          art: 'gelaender',
+          achse: wange.map((p) => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100] as Punkt),
+          hoeheM,
+          breiteM: 0.06,
+          lage: { herkunft: 'annahme' },
+        });
+      }
+      nr++;
+    }
+  }
+  return { linien, bericht };
+}
+
+/**
+ * SCHNEIDET DIE GLEISZONE AUS DEN BODENFLAECHEN.
+ *
+ * WARUM DAS SEIN MUSS — und warum die Auflage-Loesung ausgeschieden ist:
+ * Die Rille ist eine VERTIEFUNG von 3,8 cm unter der Fahrbahnoberkante. Die
+ * Fahrbahn war im Modell ein geschlossenes Polygon ohne Loch und verdeckte sie
+ * vollstaendig. Nachgemessen an der Rheinstrasse (475357/5524443):
+ * `scene.drillPick` senkrecht auf die Gleisachse lieferte von vorn nach hinten
+ * `boden:fahrbahn:osm_fahrbahn_118`, dann `gleis:0`, dann `gelaende:p8` — die
+ * Fahrbahn lag ueber dem Gleis, obwohl das Gleisband 4,5 cm hoeher angesetzt
+ * war. Bildpunktmessung quer ueber die Achse: Fahrflaeche 101 px, Eindeckung
+ * 130 px, Rille 0 px.
+ *
+ * Die naheliegende Abhilfe — das Gleis hoeher legen — ist gerechnet und
+ * verworfen: Bodenzeichnung und Gleisband sind zwei getrennt vernetzte
+ * Flaechen, die dasselbe Gelaende an verschiedenen Stuetzpunkten abtasten. Ein
+ * Versatz, der die Netztoleranz sicher ueberbietet, muesste groesser sein als
+ * die Bordsteinhoehe von 12 cm — dann stuende das Gleis als Rampe auf der
+ * Strasse.
+ *
+ * ALSO: Loch statt Auflage. Je Gleisachse entsteht ein Korridor in der Breite
+ * der Eindeckung (Rillenschiene) bzw. des Bahnkoerpers (Schotteroberbau), alle
+ * werden vereinigt, von den Bodenflaechen abgezogen und als eigene Flaechen der
+ * Klasse `gleiszone` eingesetzt. Danach liegt das Gleisprofil buendig
+ * (`zPlatte = 0`) und man sieht in die Rille hinein.
+ *
+ * ZWEI FALLEN, beide hier umgangen:
+ *  1. `bandRing` in shared/geo/geometry.ts hat einen bekannten Selbstschnitt.
+ *     Der Korridor wird darum aus SEGMENT-RECHTECKEN gebildet und vereinigt —
+ *     an den Knicken ueberlappen sie sich, und genau das ist gewollt: die
+ *     Vereinigung schliesst die Kerbe, die eine Gehrung offen liesse.
+ *  2. `polygon-clipping` bricht bei UTM-Koordinaten mit „Unable to find
+ *     segment in SweepLine tree" ab, weil nach dem Ganzzahlanteil (Rechtswert
+ *     ~475.000) kaum Mantisse fuer die Schnittrechnung bleibt. Alle
+ *     Koordinaten werden darum um einen lokalen Ursprung verschoben — dasselbe
+ *     Vorgehen wie in `bodenAufbauen`.
+ */
+function gleiszoneAusschneiden(
+  flaechen: GelaendeFlaeche[],
+  linien: GelaendeLinienObjekt[],
+): { flaechen: GelaendeFlaeche[]; bericht: { gleise: number; laengeM: number; zonen: number; flaecheM2: number; beschnitten: number } } {
+  const gleise = linien.filter((l) => l.art === 'gleis' && l.achse.length >= 2);
+  const leer = { gleise: 0, laengeM: 0, zonen: 0, flaecheM2: 0, beschnitten: 0 };
+  if (!gleise.length) return { flaechen, bericht: leer };
+
+  // Lokaler Ursprung — der Schluessel zur Robustheit (siehe bodenAufbauen).
+  let ox = Infinity;
+  let oy = Infinity;
+  for (const f of flaechen) for (const p of f.polygon) {
+    if (p[0] < ox) ox = p[0];
+    if (p[1] < oy) oy = p[1];
+  }
+  for (const l of gleise) for (const p of l.achse) {
+    if (p[0] < ox) ox = p[0];
+    if (p[1] < oy) oy = p[1];
+  }
+  if (!Number.isFinite(ox)) return { flaechen, bericht: leer };
+
+  // --- 1. Korridor je Gleis aus Segment-Rechtecken --------------------------
+  const rechtecke: number[][][][] = [];
+  let laenge = 0;
+  for (const l of gleise) {
+    const spur = l.spurweiteM && l.spurweiteM > 0 ? l.spurweiteM : 1.0;
+    // Rillenschiene: die Eindeckung. Eigener Bahnkoerper: das Bettungstrapez.
+    const breite = l.eigenerBahnkoerper === false ? eindeckungBreiteM(spur) : bahnkoerperBreiteM(spur);
+    const h = breite / 2;
+    for (let i = 1; i < l.achse.length; i++) {
+      const a = l.achse[i - 1];
+      const b = l.achse[i];
+      const dx = b[0] - a[0];
+      const dy = b[1] - a[1];
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-6) continue;
+      laenge += len;
+      // Quer zur Achse, auf beide Seiten. Die Rechtecke werden an den Enden um
+      // die halbe Breite VERLAENGERT — dadurch ueberlappen sich benachbarte
+      // Segmente im Knick, und die Vereinigung laesst dort keine Kerbe.
+      const ex = dx / len;
+      const ey = dy / len;
+      const nx = (-ey * breite) / 2;
+      const ny = (ex * breite) / 2;
+      const a2: [number, number] = [a[0] - ex * h - ox, a[1] - ey * h - oy];
+      const b2: [number, number] = [b[0] + ex * h - ox, b[1] + ey * h - oy];
+      rechtecke.push([
+        [
+          [a2[0] + nx, a2[1] + ny],
+          [b2[0] + nx, b2[1] + ny],
+          [b2[0] - nx, b2[1] - ny],
+          [a2[0] - nx, a2[1] - ny],
+          [a2[0] + nx, a2[1] + ny],
+        ],
+      ]);
+    }
+  }
+  if (!rechtecke.length) return { flaechen, bericht: leer };
+
+  // --- 2. Vereinigen, in Bloecken (polygon-clipping wird sonst sehr langsam) -
+  let zone: number[][][][] = [];
+  const BLOCK = 200;
+  for (let i = 0; i < rechtecke.length; i += BLOCK) {
+    const teil = rechtecke.slice(i, i + BLOCK);
+    try {
+      const b = polygonClipping.union(teil[0] as never, ...(teil.slice(1) as never[])) as never as number[][][][];
+      zone = zone.length ? ((polygonClipping.union(zone as never, b as never) as never) as number[][][][]) : b;
+    } catch {
+      // Einen Block zu verlieren waere schlimmer als eine Ueberlappung.
+      for (const r of teil) zone.push(r as never);
+    }
+  }
+  if (!zone.length) return { flaechen, bericht: leer };
+
+  // --- 3. Von den Bodenflaechen abziehen ------------------------------------
+  const alsGeom = (f: GelaendeFlaeche): number[][][] =>
+    [geschlossenerRing(f.polygon), ...(f.loecher ?? []).map(geschlossenerRing)].map((r) => r.map((p) => [p[0] - ox, p[1] - oy]));
+  const raus: GelaendeFlaeche[] = [];
+  let beschnitten = 0;
+  for (const f of flaechen) {
+    // Wasser und Bahnflaechen bleiben unberuehrt: ein Gleis auf einer
+    // Bahnflaeche ist dort zu Hause, und ueber Wasser fuehrt eine Bruecke.
+    if (f.art === 'wasser' || f.art === 'bahn') {
+      raus.push(f);
+      continue;
+    }
+    let rest: number[][][][];
+    try {
+      rest = polygonClipping.difference([alsGeom(f)] as never, zone as never) as never;
+    } catch {
+      raus.push(f);
+      continue;
+    }
+    if (rest.length === 1 && rest[0].length === (f.loecher?.length ?? 0) + 1) {
+      // Nichts abgeschnitten (gleiche Ringzahl) — Originalgeometrie behalten,
+      // damit die Rundung der Sweep-Line nicht jede Flaeche minimal veraendert.
+      const gleich = Math.abs(rest[0][0].length - geschlossenerRing(f.polygon).length) === 0;
+      if (gleich) {
+        raus.push(f);
+        continue;
+      }
+    }
+    if (!rest.length) {
+      beschnitten++;
+      continue; // vollstaendig von der Gleiszone eingenommen
+    }
+    beschnitten++;
+    let nr = 0;
+    for (const poly of rest) {
+      const ringe = (poly as unknown as Ring[])
+        .map((r) => ringNormalisieren(r.map((p) => [p[0] + ox, p[1] + oy] as Punkt)))
+        .filter((r) => r.length >= 3);
+      if (!ringe.length) continue;
+      raus.push({ ...f, id: nr === 0 ? f.id : `${f.id}#g${nr}`, polygon: ringe[0], loecher: ringe.length > 1 ? ringe.slice(1) : undefined });
+      nr++;
+    }
+  }
+
+  // --- 4. Die Gleiszone selbst als Flaeche einsetzen -------------------------
+  let nr = 0;
+  let flaecheM2 = 0;
+  for (const poly of zone) {
+    const ringe = (poly as unknown as Ring[])
+      .map((r) => ringNormalisieren(r.map((p) => [p[0] + ox, p[1] + oy] as Punkt)))
+      .filter((r) => r.length >= 3);
+    if (!ringe.length) continue;
+    flaecheM2 += Math.abs(flaeche(ringe[0]));
+    raus.push({
+      id: `gleiszone_${nr++}`,
+      art: 'gleiszone',
+      polygon: ringe[0],
+      loecher: ringe.length > 1 ? ringe.slice(1) : undefined,
+      quelle: 'osm',
+      bezeichnung: 'Gleiszone',
+      rang: RANG_GLEISZONE,
+    });
+  }
+
+  return {
+    flaechen: raus,
+    bericht: { gleise: gleise.length, laengeM: Math.round(laenge), zonen: nr, flaecheM2: Math.round(flaecheM2), beschnitten },
+  };
+}
+
+/**
+ * SCHNEIDET DEN OFFENEN TROG EINER RAMPE AUS DEN BODENFLAECHEN.
+ *
+ * WARUM (Befund 10.08.2026, nachgemessen): Der Aushub einer Rampe senkt das
+ * HOEHENMODELL. Jede Bodenflaeche darueber holt ihre Hoehen aus demselben
+ * Modell — also sackt sie mit. An der Zufahrt beim Luisencenter stand die
+ * Fahrbahn auf 143,50 m und das Modell unter ihr auf 140,60 m; die Kanten des
+ * Grabens stachen als Flecken durch die Strasse. Ueber alle Tunnelstuecke
+ * gezaehlt lagen 6.925 von 6.925 ausgehobenen Rasterzellen unter einer
+ * kartierten Bodenflaeche.
+ *
+ * ES IST DIESELBE ANTWORT WIE BEI DER GLEISZONE: Wo ein Bauwerk den Boden
+ * einnimmt, bekommt der Boden ein LOCH — keine Auflage, keine Verschiebung.
+ * Ausgeschnitten wird nur der OFFENE Trog (server/geodata/hoehenband.ts
+ * bestimmt ihn aus der Ueberdeckung); den ueberdeckten Teil des Tunnels traegt
+ * die Strasse darueber, und die bleibt unversehrt.
+ *
+ * Flaechen MIT Hoehenband bleiben unberuehrt — die Rampe selbst ist es, die den
+ * Trog fuellt.
+ */
+function troegeAusschneiden(
+  flaechen: GelaendeFlaeche[],
+  troege: Ring[],
+): { flaechen: GelaendeFlaeche[]; beschnitten: number; flaecheM2: number } {
+  if (!troege.length) return { flaechen, beschnitten: 0, flaecheM2: 0 };
+  let ox = Infinity;
+  let oy = Infinity;
+  for (const f of flaechen) for (const p of f.polygon) {
+    if (p[0] < ox) ox = p[0];
+    if (p[1] < oy) oy = p[1];
+  }
+  for (const t of troege) for (const p of t) {
+    if (p[0] < ox) ox = p[0];
+    if (p[1] < oy) oy = p[1];
+  }
+  if (!Number.isFinite(ox)) return { flaechen, beschnitten: 0, flaecheM2: 0 };
+
+  const stuecke = troege
+    .filter((t) => t.length >= 3)
+    .map((t) => [geschlossenerRing(t).map((p) => [p[0] - ox, p[1] - oy])] as number[][][]);
+  if (!stuecke.length) return { flaechen, beschnitten: 0, flaecheM2: 0 };
+  let zone: number[][][][] = [];
+  try {
+    zone = polygonClipping.union(stuecke[0] as never, ...(stuecke.slice(1) as never[])) as never as number[][][][];
+  } catch {
+    zone = stuecke as never as number[][][][];
+  }
+  if (!zone.length) return { flaechen, beschnitten: 0, flaecheM2: 0 };
+
+  const alsGeom = (f: GelaendeFlaeche): number[][][] =>
+    [geschlossenerRing(f.polygon), ...(f.loecher ?? []).map(geschlossenerRing)].map((r) => r.map((p) => [p[0] - ox, p[1] - oy]));
+  const raus: GelaendeFlaeche[] = [];
+  let beschnitten = 0;
+  for (const f of flaechen) {
+    // Die Rampe selbst und alles mit eigenem Hoehenband bleibt: sie FUELLT den Trog.
+    if (f.lage || f.art === 'wasser') {
+      raus.push(f);
+      continue;
+    }
+    let rest: number[][][][];
+    try {
+      rest = polygonClipping.difference([alsGeom(f)] as never, zone as never) as never;
+    } catch {
+      raus.push(f);
+      continue;
+    }
+    if (rest.length === 1 && rest[0].length === (f.loecher?.length ?? 0) + 1 && rest[0][0].length === geschlossenerRing(f.polygon).length) {
+      raus.push(f);
+      continue;
+    }
+    beschnitten++;
+    let nr = 0;
+    for (const poly of rest) {
+      const ringe = (poly as unknown as Ring[])
+        .map((r) => ringNormalisieren(r.map((p) => [p[0] + ox, p[1] + oy] as Punkt)))
+        .filter((r) => r.length >= 3);
+      if (!ringe.length) continue;
+      raus.push({ ...f, id: nr === 0 ? f.id : `${f.id}#t${nr}`, polygon: ringe[0], loecher: ringe.length > 1 ? ringe.slice(1) : undefined });
+      nr++;
+    }
+  }
+  let flaecheM2 = 0;
+  for (const poly of zone) {
+    const r = (poly as unknown as Ring[])[0];
+    if (r && r.length >= 3) flaecheM2 += Math.abs(flaeche(r.map((p) => [p[0] + ox, p[1] + oy] as Punkt)));
+  }
+  return { flaechen: raus, beschnitten, flaecheM2: Math.round(flaecheM2) };
 }
 
 /**
@@ -1005,6 +1529,15 @@ async function ausfuehren(
   const gid = id('gel_');
   const nachweise: Quellennachweis[] = [];
   const abgerufen = jetzt();
+  /**
+   * DATENLUECKEN — wo das Modell weniger weiss, als es soll. Sie werden ueber
+   * den ganzen Lauf gesammelt (Hoehenband, Baumkataster, Abdeckungspruefung,
+   * Altbestand) und landen am Ende am Gelaende, wo die Oberflaeche sie zeigt.
+   * Die Liste steht bewusst GANZ OBEN: Sie wird an fuenf Stellen gefuellt, und
+   * eine spaetere Deklaration hat beim Lauf vom 10.08.2026 dazu gefuehrt, dass
+   * das ganze Hoehenband still ausfiel.
+   */
+  const datenluecken: Datenluecke[] = [];
 
   // --- 1. Gebaeude aus LoD2 -------------------------------------------------
   melde(a, 'Amtliche 3D-Gebaeude (LoD2) werden gelesen', 0.05, 'Suche LoD2-Quelle.');
@@ -1332,13 +1865,24 @@ async function ausfuehren(
   const vorher = flaechen.length;
   melde(a, 'Boden wird aufgebaut (ALKIS als Basis, OSM als Verfeinerung)', 0.992);
   const t0 = Date.now();
+  const rohFlaechen = flaechen;
   const boden = bodenAufbauen(flaechen);
   flaechen = amGebietSchneiden(boden.flaechen, a.bbox);
+  const stufen = stufenzahlenUebertragen(rohFlaechen, flaechen);
+  if (stufen.uebernommen || stufen.mehrdeutig) {
+    melde(
+      a,
+      'Treppen',
+      0.9935,
+      `${stufen.uebernommen} Treppenflaechen mit gezaehlter Stufenzahl aus OpenStreetMap (step_count) — sie geht jeder Ableitung vor` +
+        `${stufen.mehrdeutig ? `; ${stufen.mehrdeutig} Flaechen mit widerspruechlichen Zaehlungen bleiben ohne Beleg` : ''}.`,
+    );
+  }
 
   // Gewaesser einebnen — erst hier moeglich, weil vorher nicht bekannt ist, wo
   // Wasser liegt. Das Raster ist die eine Oberflaeche, also wird es korrigiert
   // und nicht die Zeichnung (Begruendung bei wasserEinebnen).
-  const wasser = wasserEinebnen(raster, flaechen);
+  const wasser = wasserEinebnen(raster, flaechen, bauwerk.wasserMasse()?.wasser);
   if (wasser.gewaesser || wasser.verworfen) {
     // Die Kachel-Hoehengitter stammen aus dem Raster VOR dem Einebnen. Ohne
     // Nachziehen zeigt der grobe Rueckfallweg weiter den interpolierten
@@ -1367,6 +1911,7 @@ async function ausfuehren(
       'Gewaesser eingeebnet',
       0.993,
       `${wasser.gewaesser} Gewaesserflaechen auf ihren Wasserspiegel gelegt (${wasser.zellen.toLocaleString('de-DE')} Rasterzellen)` +
+        `${wasser.mitSohle ? `, davon ${wasser.mitSohle} mit einer SOHLE (tiefste Stelle ${wasser.tiefsteM.toFixed(2)} m unter dem Spiegel; die Tiefe ist eine ANNAHME der Bauklassen, keine Messung)` : ''}` +
         `${wasser.verworfen ? `, ${wasser.verworfen} verworfen (Ufer zu steil fuer eine Spiegelebene)` : ''}.`,
     );
   }
@@ -1377,9 +1922,67 @@ async function ausfuehren(
     0.994,
     `${vorher} Rohflaechen -> ${flaechen.length} lueckenlose Flaechen: ` +
       `${boden.bericht.basis} amtlich, ${boden.bericht.verfeinert} durch OSM verfeinert` +
+      `${boden.bericht.mitHoehenband ? `, ${boden.bericht.mitHoehenband} mit eigenem Hoehenband (Bruecke/Tunnel/Rampe) aus der Aufteilung herausgehalten` : ''}` +
       `${boden.bericht.verworfen ? `, ${boden.bericht.verworfen} OSM-Flaechen ohne zulaessige Wirtsklasse verworfen` : ''}` +
+      `${boden.bericht.abzuegeGescheitert ? `. ACHTUNG: ${boden.bericht.abzuegeGescheitert} Abzuege sind gescheitert — dort zeichnen zwei Klassen uebereinander` : ''}` +
       ` (${((Date.now() - t0) / 1000).toFixed(1)} s).`,
   );
+
+  // --- 4a2. HOEHENBAND: Rampen, Unterfuehrungen, Bruecken -------------------
+  // Muss VOR den Kanten laufen: die Trogwaende einer Rampe sind Bruchkanten,
+  // und das abgesenkte Raster ist die Grundlage jeder weiteren Hoehenfrage.
+  let hoehenbandLinien: GelaendeLinienObjekt[] = [];
+  let hoehenbandKanten: Bruchkante[] = [];
+  try {
+    const { rampenAbsenken, brueckenEinmessen } = await import('./hoehenband.ts');
+    const vertikal = bauwerk.vertikalMasse();
+    const r = rampenAbsenken(flaechen, raster, vertikal);
+    hoehenbandLinien = r.linien;
+    hoehenbandKanten = r.kanten;
+    brueckenEinmessen(flaechen, (e, n) => raster.hoeheOder(e, n, rasterStat.mittel), vertikal, r.bericht);
+    const b = r.bericht;
+    // DER TROG BEKOMMT SEIN LOCH. Ohne diesen Schnitt saecken die Flaechen
+    // ueber dem Aushub mit hinein (Begruendung bei troegeAusschneiden).
+    let trogSchnitt = { beschnitten: 0, flaecheM2: 0 };
+    if (r.troege.length) {
+      const t = troegeAusschneiden(flaechen, r.troege);
+      flaechen = t.flaechen;
+      trogSchnitt = { beschnitten: t.beschnitten, flaecheM2: t.flaecheM2 };
+    }
+    for (const text of b.luecken) {
+      datenluecken.push({ elementart: 'tunnel', bezeichnung: 'Unterirdischer Strang', art: 'unter_erwartung', text, orte: [] });
+    }
+    if (b.rampen || b.bruecken) {
+      melde(
+        a,
+        'Hoehenband',
+        0.9942,
+        `${b.straenge} unterirdische Straenge aus ${b.groessterStrang > 1 ? `bis zu ${b.groessterStrang} Polygonstuecken ` : ''}gebildet; ` +
+          `${b.rampen} davon abgesenkt (${Math.round(b.rampenLaengeM)} m Strang, davon ${Math.round(b.trogFlaecheM2).toLocaleString('de-DE')} m² OFFENER TROG ausgehoben, ` +
+          `tiefste ${b.tiefsteM.toFixed(2)} m, ${b.mitIncline} mit gemessener Neigung aus OSM, ` +
+          `${b.rasterZellen.toLocaleString('de-DE')} Rasterzellen eingeschnitten), ${b.portale} Portale` +
+          `${trogSchnitt.beschnitten ? `; ${trogSchnitt.flaecheM2.toLocaleString('de-DE')} m² Trog aus ${trogSchnitt.beschnitten} Bodenflaechen ausgeschnitten` : ''}` +
+          `${b.ohneAnschluss ? `; ${b.ohneAnschluss} Straenge ohne Anschluss an die Oberflaeche blieben unberuehrt` : ''}` +
+          `${b.alsDurchfahrt ? `; ${b.alsDurchfahrt} als Tunnel erfasste Wege sind zu flach fuer eine Decke und wurden als Durchfahrt auf Strassenniveau belassen` : ''}. ` +
+          `${b.bruecken} Bruecken eingemessen, ${b.brueckenMitLichterHoehe} davon mit lichter Hoehe` +
+          `${b.kleinsteLichteHoeheM !== null ? ` (kleinste ${b.kleinsteLichteHoeheM.toFixed(2)} m)` : ''}.` +
+          `${b.rampen && !b.mitIncline ? ' ACHTUNG: keine einzige Neigung war belegt — alle Tiefen sind Annahmen.' : ''}`,
+      );
+      if (b.brueckenOhneMessung) {
+        const text =
+          `Unter ${b.brueckenOhneMessung} von ${b.bruecken} Bruecken laesst sich keine lichte Hoehe messen: Das Hoehenmodell ` +
+          `zeigt dort keine Senke. DGM1 ist ein GELAENDEmodell — Brueckenbauwerke sind darin nicht durchgaengig entfernt, und ` +
+          `ein Bauwerk, das im Hoehenmodell als Boden steht, kann nichts ueberspannen. Belastbar waere hier nur eine Angabe ` +
+          `aus der Quelle (OpenStreetMap maxheight) oder ein Hoehenmodell mit Bauwerksfreistellung.`;
+        datenluecken.push({ elementart: 'bruecke', bezeichnung: 'Bruecke', art: 'unter_erwartung', text, orte: [] });
+        melde(a, 'Hoehenband', 0.9943, text);
+      }
+    } else {
+      melde(a, 'Hoehenband', 0.9942, 'Keine Rampen, Unterfuehrungen oder Bruecken im Gebiet gefunden.');
+    }
+  } catch (e) {
+    melde(a, 'Hoehenband', 0.9942, `Hoehenband nicht gebildet: ${(e as Error).message} — Rampen und Bruecken bleiben auf Gelaendehoehe.`);
+  }
 
   // --- 4b. Konstruktionshoehen und Kanten (Bauwerksmodell, Stufe 2 und 3) ---
   // Erst hier moeglich: die Kanten ergeben sich aus der NACHBARSCHAFT der
@@ -1395,7 +1998,7 @@ async function ausfuehren(
         `${hoehen.unbelegt.length ? `. ANNAHMEN (nicht belegt): ${hoehen.unbelegt.join(', ')}` : ''}.`,
     );
     const k = bauwerk.bruchkantenBilden(flaechen, (e, n) => raster.hoeheOder(e, n, rasterStat.mittel));
-    bruchkanten = k.kanten;
+    bruchkanten = [...k.kanten, ...hoehenbandKanten];
     const teile = Object.entries(k.nachBauart).map(([b, e]) => `${e.anzahl} x ${b} (${e.laengeM.toLocaleString('de-DE')} m)`);
     melde(
       a,
@@ -1428,7 +2031,17 @@ async function ausfuehren(
     // Gemessene Baeume der Stadt schlagen die OSM-Einzelpunkte; OSM ergaenzt
     // nur noch, was das Kataster nicht kennt (Privatgrund, Umland).
     try {
-      const { katasterBaeume, mischeBaeume, KATASTER_QUELLE } = await import('./baumkataster.ts');
+      const { katasterBaeume, katasterGebiet, mischeBaeume, KATASTER_QUELLE } = await import('./baumkataster.ts');
+      const { katasterAbdeckung } = await import('./elementquellen.ts');
+      // GEBIETSANGABE DES EXTRAKTS: Ein Katasterauszug ist ein Ausschnitt.
+      // Deckt er das bestellte Gebiet nicht, wird das GEMELDET — genau das
+      // fehlte, als das Gebiet auf den Grossen Woog erweitert wurde.
+      const gebiet = katasterGebiet();
+      const luecke = katasterAbdeckung(a.bbox, gebiet, KATASTER_QUELLE.datensatz);
+      if (luecke) {
+        datenluecken.push(luecke);
+        melde(a, 'Baumkataster', 0.9965, luecke.text);
+      }
       const kataster = katasterBaeume(a.bbox);
       if (kataster.length) {
         const gemischt = mischeBaeume(kataster, punkte);
@@ -1465,26 +2078,45 @@ async function ausfuehren(
     // Eisenbahntrasse statt wie eine Strassenbahn. Die Frage laesst sich aber
     // GEOMETRISCH beantworten: liegt die Gleisachse im Strassenraum, ist es
     // eine Rillenschiene im Pflaster.
+    // STABIL SEIT 10.08.2026 — vorher schwankte der Wert von Import zu Import
+    // (73/73, dann 68/73, dann 68/72). Zwei Ursachen, beide behoben:
+    //
+    //  1. Die Abtastung haing an der Laenge des OSM-Stuecks (`gesamt / 20`).
+    //     Ein 3,6-m-Stueck bekam denselben Stimmzettel wie ein 400-m-Strang,
+    //     und ein einziger Punkt entschied. Jetzt wird in FESTEN 2-m-Schritten
+    //     abgetastet: jeder Meter Gleis zaehlt gleich viel.
+    //  2. Entschieden wurde je OSM-STUECK. OpenStreetMap teilt einen Weg bei
+    //     jedem Attributwechsel, und der Gebietszuschnitt teilt ihn noch
+    //     einmal — dieselbe Strecke zerfiel in verschieden viele Stuecke, und
+    //     die Mehrheit kippte. Jetzt wird je STRANG entschieden (Topologie
+    //     ueber gemeinsame Knoten, shared/geo/netz.ts) und das Ergebnis auf
+    //     alle seine Stuecke geschrieben. Ein Strang ist die Einheit, die es
+    //     in der Wirklichkeit gibt; ein OSM-Stueck ist es nicht.
     const verkehrsflaechen = flaechen.filter(
       (f) => f.art === 'fahrbahn' || f.art === 'platz' || f.art === 'fussgaengerzone',
     );
+    const imStrassenraum = (p: Punkt) =>
+      verkehrsflaechen.some((f) => punktInRing(p, f.polygon) && !(f.loecher ?? []).some((h) => punktInRing(p, h)));
+    const gleisLinien = linien.filter((l) => l.art === 'gleis' && l.achse.length >= 2);
     let imPflaster = 0;
-    for (const l of linien) {
-      if (l.art !== 'gleis' || l.achse.length < 2) continue;
-      let drin = 0;
-      let geprueft = 0;
-      const gesamt = polylinieLaenge(l.achse);
-      const schritt = Math.max(5, gesamt / 20);
-      for (let s = 0; s <= gesamt; s += schritt) {
-        const { p } = aufPolylinie(l.achse, s);
-        geprueft++;
-        if (verkehrsflaechen.some((f) => punktInRing(p, f.polygon) && !(f.loecher ?? []).some((h) => punktInRing(p, h)))) {
-          drin++;
+    {
+      const { straenge } = straengeBilden(gleisLinien.map((l) => ({ punkte: l.achse, quelle: l })));
+      const SCHRITT_M = 2;
+      for (const strang of straenge) {
+        const gesamt = polylinieLaenge(strang.punkte);
+        let drin = 0;
+        let geprueft = 0;
+        for (let s = 0; s <= gesamt; s += SCHRITT_M) {
+          geprueft++;
+          if (imStrassenraum(aufPolylinie(strang.punkte, s).p)) drin++;
         }
+        const anteil = geprueft ? drin / geprueft : 0;
+        const eigen = anteil < 0.5;
+        for (const q of strang.quellen) q.eigenerBahnkoerper = eigen;
       }
-      const anteil = geprueft ? drin / geprueft : 0;
-      l.eigenerBahnkoerper = anteil < 0.5;
-      if (!l.eigenerBahnkoerper) imPflaster++;
+      // Ein Stueck, das in keinen Strang kam (entartete Achse), bleibt bei
+      // seiner Tag-Heuristik — aber es wird gezaehlt, damit es auffaellt.
+      for (const l of gleisLinien) if (l.eigenerBahnkoerper === false) imPflaster++;
     }
 
     // --- OSM-Gebaeudemerkmale den amtlichen Gebaeuden zuordnen ------------
@@ -1543,6 +2175,131 @@ async function ausfuehren(
     melde(a, 'Stadtdetails', 0.998, `Stadtdetails nicht verfuegbar: ${(e as Error).message}`);
   }
 
+  // --- 4c2. Gelaender an Treppen -------------------------------------------
+  // Sie gehoeren ins MODELL, nicht in die Zeichnung: DIN 18040-3 verlangt sie
+  // im oeffentlichen Verkehrsraum beidseitig, und die Fluchtwegbeurteilung
+  // fragt danach. Gerechnet wird mit derselben Funktion, die im Browser die
+  // Stufen baut — gleiche Eingaben, gleiches Ergebnis.
+  let gelaenderLinien: GelaendeLinienObjekt[] = [];
+  try {
+    const tm = bauwerk.treppenMasse();
+    if (tm) {
+      const g = gelaenderAnTreppen(
+        flaechen,
+        (e, n) => raster.hoeheOder(e, n, rasterStat.mittel),
+        tm.stufe,
+        tm.gelaender ? (tm.gelaender.hoeheMinM + tm.gelaender.hoeheMaxM) / 2 : 0.9,
+      );
+      gelaenderLinien = g.linien;
+      const b = g.bericht;
+      melde(
+        a,
+        'Treppen und Gelaender',
+        0.9975,
+        `${b.flaechen} Treppenflaechen -> ${b.teile} Laufteile (an Podesten geteilt) -> ${b.laeufe} Laeufe mit ${b.stufen} Stufen, ` +
+          `${b.mitBeleg} davon mit gezaehlter Stufenzahl. ${b.flach} als Podest/Rampe eingestuft (unter 30 cm Steigung). ` +
+          `${g.linien.length} Gelaender abgeleitet (beidseitig, DIN 18040-3 — ANNAHME, nicht erfasst).` +
+          `${b.befunde.length ? ` ${b.befunde.length} Befunde: ${b.befunde.slice(0, 3).join(' | ')}${b.befunde.length > 3 ? ' …' : ''}` : ''}`,
+      );
+    }
+  } catch (e) {
+    melde(a, 'Gelaender', 0.9975, `Gelaender nicht abgeleitet: ${(e as Error).message}`);
+  }
+
+  // --- 4d. Gleiszone aus den Bodenflaechen ausschneiden ---------------------
+  // Erst hier moeglich: es braucht die Gleisachsen aus den Stadtdetails UND
+  // die Entscheidung, welche Bauart vorliegt (die Breite haengt daran).
+  // Begruendung ausfuehrlich bei `gleiszoneAusschneiden`.
+  try {
+    const vorher = flaechen.length;
+    const g = gleiszoneAusschneiden(flaechen, linien);
+    flaechen = g.flaechen;
+    if (g.bericht.zonen) {
+      melde(
+        a,
+        'Gleiszone ausgeschnitten',
+        0.9985,
+        `${g.bericht.gleise} Gleisstuecke (${g.bericht.laengeM.toLocaleString('de-DE')} m) -> ${g.bericht.zonen} Gleiszonen ` +
+          `mit ${g.bericht.flaecheM2.toLocaleString('de-DE')} m2; ${g.bericht.beschnitten} Bodenflaechen beschnitten ` +
+          `(${vorher} -> ${flaechen.length} Flaechen). Das Gleis liegt damit IN der Fahrbahn, nicht darauf.`,
+      );
+    }
+  } catch (e) {
+    melde(a, 'Gleiszone', 0.9985, `Gleiszone nicht ausgeschnitten: ${(e as Error).message} — das Gleis liegt weiter als Auflage auf der Fahrbahn.`);
+  }
+
+  // --- 4e. ABDECKUNGSPRUEFUNG und ALTBESTAND-MELDUNGEN ---------------------
+  // Der Kern der Standardisierung: Es reicht nicht, Daten zu holen — es muss
+  // auffallen, WO sie fehlen. Beides landet im Protokoll UND am Gelaende, wo
+  // die Oberflaeche es anzeigt.
+  try {
+    const { abdeckungPruefen, elementQuellenLaden } = await import('./elementquellen.ts');
+    const q = elementQuellenLaden();
+    const gefunden = abdeckungPruefen(a.bbox, flaechen, punkte, linien, q);
+    datenluecken.push(...gefunden);
+    for (const l of gefunden) melde(a, 'Datenluecke', 0.9988, `${l.bezeichnung}: ${l.text}`);
+    if (!gefunden.length) {
+      melde(a, 'Abdeckung geprueft', 0.9988, `Abdeckung aller ${q.elemente.length} Elementarten geprueft — keine Luecke gefunden.`);
+    }
+  } catch (e) {
+    melde(a, 'Abdeckung', 0.9988, `Abdeckung NICHT geprueft: ${(e as Error).message} — ein stiller Ausfall ist damit wieder moeglich.`);
+  }
+  {
+    // ALTBESTAND: `ausAltbestand()` in osm.ts faengt einen gescheiterten
+    // Overpass-Abruf mit einem zwischengespeicherten Stand ab. Die Meldungen
+    // dazu wurden bisher erzeugt und NIRGENDS angezeigt — am 08.08.2026fielen
+    // dadurch 349 Baeume, 238 Barrieren und 117 Zebrastreifen weg, ohne dass
+    // es im Protokoll auftauchte. Jetzt stehen sie hier und im Nachweis.
+    const { altbestandMeldungen, abrufFehler } = await import('./osm.ts');
+    // AUSGEFALLENE ABFRAGEN: Sie liefern gar nichts. Ohne diese Meldung sieht
+    // das Ergebnis aus wie ein Gebiet OHNE Strassenmoebel statt wie ein Gebiet
+    // OHNE DATEN — der teuerste aller stillen Ausfaelle.
+    for (const m of abrufFehler) {
+      melde(a, 'Abruf ausgefallen', 0.9989, m);
+      datenluecken.push({
+        elementart: 'osm',
+        bezeichnung: 'OpenStreetMap-Abruf ausgefallen',
+        art: 'altbestand',
+        text: m,
+        orte: [],
+      });
+    }
+    if (abrufFehler.length) {
+      nachweise.push({
+        datensatz: 'OpenStreetMap — TEILABFRAGEN AUSGEFALLEN',
+        dienst: 'Overpass API',
+        url: 'https://overpass-api.de/api/interpreter',
+        abgerufenAm: abgerufen,
+        lizenz: 'Open Database License (ODbL) 1.0',
+        quellenvermerk: '(c) OpenStreetMap-Mitwirkende',
+        hinweis: `Diese Objektarten fehlen im Gelaende: ${abrufFehler.join(' | ')}`,
+      });
+      abrufFehler.length = 0;
+    }
+    for (const m of altbestandMeldungen) {
+      melde(a, 'Altbestand benutzt', 0.9989, m);
+      datenluecken.push({
+        elementart: 'osm',
+        bezeichnung: 'OpenStreetMap-Abruf',
+        art: 'altbestand',
+        text: m,
+        orte: [],
+      });
+    }
+    if (altbestandMeldungen.length) {
+      nachweise.push({
+        datensatz: 'OpenStreetMap — ZWISCHENGESPEICHERTER STAND benutzt',
+        dienst: 'Overpass API (Abruf gescheitert)',
+        url: 'https://overpass-api.de/api/interpreter',
+        abgerufenAm: abgerufen,
+        lizenz: 'Open Database License (ODbL) 1.0',
+        quellenvermerk: '(c) OpenStreetMap-Mitwirkende',
+        hinweis: altbestandMeldungen.join(' | '),
+      });
+      altbestandMeldungen.length = 0; // fuer den naechsten Auftrag zuruecksetzen
+    }
+  }
+
   // --- 5. Speichern ---------------------------------------------------------
   // Das Raster wird als eigene Binaerdatei abgelegt, nicht in die
   // Gelaendedatei geschrieben: 2,16 Mio. Zellen waeren als JSON rund 14 MB,
@@ -1594,7 +2351,9 @@ async function ausfuehren(
     flaechen,
     bruchkanten: bruchkanten.length ? bruchkanten : undefined,
     punkte,
-    linien: linienAmGebietSchneiden([...linien, ...markierungen], a.bbox),
+    linien: linienAmGebietSchneiden([...linien, ...markierungen, ...hoehenbandLinien, ...gelaenderLinien], a.bbox),
+    stufenmass: bauwerk.treppenMasse()?.stufe,
+    datenluecken: datenluecken.length ? datenluecken : undefined,
     beschriftungen: beschriftungen.length ? beschriftungen : undefined,
     flurstuecke,
     quellennachweis: nachweise,

@@ -730,6 +730,71 @@ export function baueBarrieren(linien: GelaendeLinienObjekt[], hoehen: Hoehenlage
 }
 
 // ===========================================================================
+// 6b  PORTALE — was eine Einfahrt zur Einfahrt macht
+// ===========================================================================
+
+/** Hoehe des Sturzes ueber der lichten Oeffnung. */
+const PORTAL_STURZ_M = 0.8;
+/** Dicke der Portalwange. */
+const PORTAL_WANGE_M = 0.45;
+
+/**
+ * Baut die Portale von Rampen und Unterfuehrungen: zwei Wangen und ein Sturz.
+ *
+ * WARUM DAS NOETIG IST: Eine abgesenkte Rampe allein sieht aus wie ein Weg,
+ * der im Boden verschwindet. Erst die Wand mit der Oeffnung sagt „hier geht es
+ * unter das Haus". Der Auftraggeber hat den Befund genau so formuliert —
+ * „Tiefgarageneinfahrten werden nicht tief" —, und die Tiefe allein haette
+ * ihn nicht beantwortet.
+ *
+ * Die LICHTE HOEHE der Oeffnung ist kein Zierrat: Sie steht am Objekt
+ * (`lage.lichteHoeheM`) und stammt entweder aus OpenStreetMap (`maxheight`,
+ * dann Beleg) oder aus den Bauklassen (dann Annahme). Genau diese Zahl braucht
+ * die Regelpruefung, wenn sie fragt, ob ein Einsatzfahrzeug hier hineinkommt.
+ */
+export function bauePortale(linien: GelaendeLinienObjekt[], hoehen: Hoehenlage): Cesium.Primitive[] {
+  const s = new TeileSammler();
+  let gebaut = 0;
+  for (const l of linien) {
+    if (l.art !== 'portal' || l.achse.length < 2) continue;
+    const a = l.achse[0];
+    const b = l.achse[l.achse.length - 1];
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const laenge = Math.hypot(dx, dy);
+    if (laenge < 0.5) continue;
+    const ex = dx / laenge;
+    const ey = dy / laenge;
+    // Laengs zur Fahrtrichtung (also quer zur Portalachse) fuer die Dicke.
+    const qx = -ey * (PORTAL_WANGE_M / 2);
+    const qy = ex * (PORTAL_WANGE_M / 2);
+    const boden = standHoehe(hoehen, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+    const lichte = l.hoeheM > 0 ? l.hoeheM : 2.2;
+
+    const rechteck = (von: Punkt, bis: Punkt): Ring => [
+      [von[0] + qx, von[1] + qy],
+      [bis[0] + qx, bis[1] + qy],
+      [bis[0] - qx, bis[1] - qy],
+      [von[0] - qx, von[1] - qy],
+    ];
+    // Zwei Wangen, je PORTAL_WANGE_M breit, an den Enden der Achse.
+    for (const [von, richtung] of [
+      [a, 1],
+      [b, -1],
+    ] as [Punkt, number][]) {
+      const ende: Punkt = [von[0] + ex * PORTAL_WANGE_M * richtung, von[1] + ey * PORTAL_WANGE_M * richtung];
+      koerperFest(s, rechteck(von, ende), boden, boden + lichte + PORTAL_STURZ_M, VERKEHR_FARBEN.mauer);
+    }
+    // Der Sturz ueber der Oeffnung — er traegt die Aussage „so hoch und nicht hoeher".
+    koerperFest(s, rechteck(a, b), boden + lichte, boden + lichte + PORTAL_STURZ_M, VERKEHR_FARBEN.mauer);
+    gebaut++;
+  }
+  if (!gebaut) return [];
+  const p = s.primitive('portal', false, false);
+  return p ? [p] : [];
+}
+
+// ===========================================================================
 // 7  STRASSENMOEBEL
 // ===========================================================================
 

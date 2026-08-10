@@ -32,6 +32,69 @@ import { bboxVonPunkten, punktInRing } from '../../shared/geo/geometry.ts';
 // Bauklassen laden
 // ---------------------------------------------------------------------------
 
+export interface StufenMasse {
+  hoeheM: number;
+  auftrittM: number;
+  /** Regelbereich nach DIN 18065 — was eine gebaute Treppe einhalten soll. */
+  hoeheRegelMinM?: number;
+  hoeheRegelMaxM?: number;
+  auftrittRegelMinM?: number;
+  auftrittRegelMaxM?: number;
+  schrittmassMinM?: number;
+  schrittmassMaxM?: number;
+  /** Weitere Spanne, in der ein ABGELEITETER Lauf noch plausibel ist. */
+  hoeheZulaessigMinM?: number;
+  hoeheZulaessigMaxM?: number;
+}
+
+export interface GelaenderMasse {
+  hoeheMinM: number;
+  hoeheMaxM: number;
+  durchmesserMinM: number;
+  durchmesserMaxM: number;
+  beidseitig: boolean;
+}
+
+export interface WasserMasse {
+  spiegelUeberGelaendeM: number;
+  sohleUnterSpiegelM: number;
+  sohleUnterSpiegelWasserlaufM?: number;
+  mindestUferabstandM?: number;
+}
+
+/** Das Hoehenband — Rampen, Tiefgaragen, Unterfuehrungen, Bruecken. */
+export interface VertikalMasse {
+  rampe: {
+    maxNeigungProzent: number;
+    annahmeNeigungProzent: number;
+    vorflaecheLaengeM: number;
+    vorflaecheMaxNeigungProzent: number;
+    fahrbahnBreiteMinM: number;
+    fahrbahnBreiteGewendeltMinM: number;
+    verifikation: { status: string; beleg: string };
+  };
+  tiefgarage: {
+    lichteHoeheM: number;
+    lichteHoeheUnterUnterzugM: number;
+    geschosshoeheM: number;
+    verifikation: { status: string; beleg: string };
+  };
+  unterfuehrung: { lichteHoeheFussgaengerM: number; lichteHoeheStrasseM: number; verifikation: { status: string; beleg: string } };
+  bruecke: {
+    lichteHoeheUeberStrasseM: number;
+    lichteHoeheNeubauM: number;
+    ueberbauDickeM: number;
+    verifikation: { status: string; beleg: string };
+  };
+  feuerwehr: {
+    lichteHoeheM: number;
+    breiteM: number;
+    breiteZwischenBauteilenM: number;
+    bewegungsflaecheM: [number, number];
+    verifikation: { status: string; beleg: string };
+  };
+}
+
 interface BauklassenDatei {
   id: string;
   version: string;
@@ -43,13 +106,15 @@ interface BauklassenDatei {
     bezeichnung: string;
     fuerFlaechenArt: string[];
     oberkanteM: number | null;
-    stufe?: { hoeheM: number; auftrittM: number };
-    wasser?: { spiegelUeberGelaendeM: number; sohleUnterSpiegelM: number };
+    stufe?: StufenMasse;
+    gelaender?: GelaenderMasse;
+    wasser?: WasserMasse;
     verifikation: { status: 'verifiziert' | 'zu_pruefen'; geprueftAm: string; beleg: string };
   }[];
   kantenregel: {
     stufen: { bisM: number | null; bauart: string; bezeichnung: string; anlaufM?: number; boeschungMaxNeigung?: number }[];
   };
+  vertikal?: VertikalMasse;
 }
 
 let zwischenspeicher: BauklassenDatei | null = null;
@@ -63,7 +128,7 @@ let zwischenspeicher: BauklassenDatei | null = null;
  */
 export function bauklassenLaden(datei?: string): BauklassenDatei {
   if (zwischenspeicher && !datei) return zwischenspeicher;
-  const pfad = datei ?? path.resolve(process.cwd(), 'config', 'bauklassen', 'de-strassenraum-2026.1.json');
+  const pfad = datei ?? path.resolve(process.cwd(), 'config', 'bauklassen', 'de-strassenraum-2026.2.json');
   if (!fs.existsSync(pfad)) throw new Error(`Bauklassen fehlen: ${pfad}`);
   const d = JSON.parse(fs.readFileSync(pfad, 'utf8')) as BauklassenDatei;
   const fehler: string[] = [];
@@ -77,6 +142,29 @@ export function bauklassenLaden(datei?: string): BauklassenDatei {
   if (fehler.length) throw new Error(`Bauklassen ${path.basename(pfad)} unbrauchbar: ${fehler.join('; ')}`);
   if (!datei) zwischenspeicher = d;
   return d;
+}
+
+/**
+ * Die Masse des Hoehenbands (Rampen, Tiefgaragen, Unterfuehrungen, Bruecken).
+ * Fehlt der Abschnitt in der Datei, gibt es kein Hoehenband — dann bleibt es
+ * bei „nur nach oben", und das steht dann auch so im Protokoll.
+ */
+export function vertikalMasse(d = bauklassenLaden()): VertikalMasse | null {
+  return d.vertikal ?? null;
+}
+
+/** Stufen- und Gelaendermasse der Treppenklasse. */
+export function treppenMasse(d = bauklassenLaden()): { stufe: StufenMasse; gelaender?: GelaenderMasse; belegt: boolean } | null {
+  const k = d.klassen.find((x) => x.id === 'treppe');
+  if (!k?.stufe) return null;
+  return { stufe: k.stufe, gelaender: k.gelaender, belegt: k.verifikation.status === 'verifiziert' };
+}
+
+/** Spiegel- und Sohlenmasse der Wasserklasse. */
+export function wasserMasse(d = bauklassenLaden()): { wasser: WasserMasse; belegt: boolean } | null {
+  const k = d.klassen.find((x) => x.id === 'wasser');
+  if (!k?.wasser) return null;
+  return { wasser: k.wasser, belegt: k.verifikation.status === 'verifiziert' };
 }
 
 /** Zuordnung Flaechenart -> Konstruktionshoehe, aus der Datei aufgeloest. */

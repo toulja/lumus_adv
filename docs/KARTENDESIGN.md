@@ -868,6 +868,130 @@ gleichwertige bunte Flecken nebeneinanderliegen. Zwei Maßnahmen:
 
 ---
 
+---
+
+## 6 Die Palette wird **gerechnet**, nicht gewählt (10.08.2026)
+
+Der Auftraggeber sah einen „Fleckenteppich" und Flächen, die er nicht
+auseinanderhalten konnte. Der Abschnitt 5.4 hatte eine Palette *vorgeschlagen*;
+was fehlte, war der Nachweis, dass sie an den Stellen trägt, an denen sie
+gebraucht wird. Denn nicht jedes Klassenpaar ist gleich wichtig: Ob sich Wald
+und Radweg unterscheiden lassen, entscheidet sich nur dort, wo Wald und Radweg
+**aneinanderstoßen** — und im Pilotgebiet tun sie das auf 0 m.
+
+### 6.1 Erst messen, welche Klassen sich überhaupt berühren
+
+`scripts/flaechen-nachbarschaft.ts` misst an den fertigen Bodenflächen, welche
+Zeichenklassen sich berühren und über **welche Länge**. Ergebnis für das
+Pilotgebiet (`npm run flaechen:nachbarschaft`, Ablage in
+`data/abnahme/flaechen-nachbarschaft.json`):
+
+- **141.681 m** gemeinsame Grenze
+- **53 Klassenpaare** — von 105 theoretisch möglichen
+- längstes Paar `fahrbahn|platte` mit **28.646 m** (20,2 % aller Grenze)
+- die 10 längsten Paare tragen zusammen **rund drei Viertel** der Grenze
+
+Wichtig für die Klassenbildung: Der Schlüssel ist die **Zeichen**klasse, nicht
+die Nutzungsart. `fahrbahn` aus ALKIS wird als `platte` gezeichnet — sonst
+zählte man ein Paar, das im Bild gar nicht vorkommt.
+
+### 6.2 Die Helligkeitsleiter ist eine **Färbung des Nachbarschaftsgraphen**
+
+Damit wird aus der Palettenfrage eine gelöste Aufgabe: Gesucht ist die kleinste
+Zahl von Helligkeitsstufen, mit der sich der gemessene Nachbarschaftsgraph so
+färben lässt, dass **kein Paar, das sich nennenswert berührt**, dieselbe Stufe
+bekommt. `scripts/palette-leiter.ts` rechnet das für verschiedene Schwellen —
+ab welchem Anteil an der Gesamtgrenze ein Paar als „berührt sich" gilt:
+
+| Schwelle | Paare oberhalb | nötige Stufen |
+|---|---|---|
+| 2 % | 8 | 4 |
+| 1 % | 12 | 4 |
+| **0,5 %** | **17** | **5** |
+| 0,25 % | 24 | 6 |
+| 0 % (alle 53) | 53 | 9 |
+
+Gewählt: **0,5 %** → **fünf Stufen**. Neun Stufen wären zwar „vollständig",
+müssten aber L\* 93 bis L\* 20 überspannen — die untersten Stufen wären so
+dunkel wie die Konturen, und die Karte kippt in das „graue Einerlei", das der
+Auftraggeber schon einmal abgelehnt hat. Fünf Stufen mit ΔL\* 9,5 passen in das
+Band L\* 92,8 bis 54,8.
+
+Das ist der Punkt, an dem sich diese Palette von einer gewählten unterscheidet:
+Die Stufenzahl ist **hergeleitet**, und die 17 Paare oberhalb der Schwelle
+tragen zusammen **95,6 %** der gesamten Grenzlänge. Für die restlichen 4,4 %
+muss die Farbtemperatur tragen (Abschnitt 3.2).
+
+### 6.3 Die Töne werden aus L\*a\*b\* zurückgerechnet
+
+`scripts/palette-rechnen.ts` erzeugt jeden Ton aus Zielwerten in CIELAB, wandelt
+nach sRGB, rundet auf den Hexwert und **rechnet ihn zurück** — die Tabelle unten
+zeigt die zurückgerechneten Werte, nicht die gewünschten. Deshalb ist die
+Stufenweite 9,5 und nicht 9,0: Nach der Quantisierung auf 8 Bit je Kanal blieb
+sonst ein Paar knapp unter der geforderten Differenz von 9.
+
+Ergebnis der Selbstprüfung (`npm run palette:pruefen`, Stand 10.08.2026):
+
+```
+  fahrbahn         #e9eaec  L* 92,67      wald        #8ea283  L* 64,35
+  landwirtschaft   #eaecd3  L* 92,66      wasser      #899fac  L* 64,24
+  HIMMEL           #d5dee6  L* 88,02      PLATTE      #999c9f  L* 64,20
+  gruen            #c6d4bd  L* 83,32      weg         #a49a91  L* 64,20
+  platz            #cfcfd0  L* 83,15      gleiszone   #728691  L* 54,73
+  radweg           #c8b0ad  L* 73,77      bahn        #80838a  L* 54,72
+  fussgaengerzone  #acb8b3  L* 73,74      sonstige    #87827e  L* 54,68
+  treppe           #bbb4ae  L* 73,72      bebauung    #87827e  L* 54,68
+  gehweg           #b4b5b9  L* 73,71      GELÄNDE     #87827e  L* 54,68
+```
+
+### 6.4 `pruefePalette()` prüft jetzt die **gemessene** Nachbarschaft
+
+Die Selbstprüfung in `web/src/scene/palette.ts` lief bisher gegen eine
+Wunschliste. Jetzt kennt sie `NACHBARSCHAFT_M` — die 53 gemessenen Paare — und
+meldet beim Laden, wenn ein Paar oberhalb der Schwelle **weniger als ΔL\* 9**
+auseinanderliegt. Neun Prüfungen insgesamt, darunter:
+
+- kein Flächenton heller als **L\* 93** (sonst leuchtet die Karte)
+- der Himmel darf **nicht heller** sein als die hellste Fläche (er war es:
+  L\* 94 gegen 92,7 — die Karte wirkte dadurch matt, das Bild „ausgeblichen")
+- jede Kontur mindestens **3:1** gegen ihre Füllung (WCAG 2.1 SC 1.4.11)
+- Gleiszone und Eindeckung des Oberbaus **derselbe** Ton — sie sind dasselbe
+  Bauteil, und zwei Töne wären zwei Wahrheiten
+
+Der Lauf ist als `npm run palette:pruefen` auch ohne Browser möglich und endet
+mit Rückgabewert 1, wenn ein Befund bleibt. Stand 10.08.2026: **bestanden, kein
+Befund**; 98,3 % der Grenzlänge liegen bei ΔL\* ≥ 9.
+
+### 6.5 Was die neue Palette an Zeichenfehlern **sichtbar gemacht** hat
+
+Solange die Geländeplatte denselben Ton trug wie die Flächen darauf, war jeder
+Durchstich unsichtbar. Mit dem eigenen Ton (`GRUNDTON` #87827e) wurde er
+sichtbar — und messbar:
+
+1. **59,7 % Doppelzeichnung.** 87.194 m² der OSM-Fahrbahndecke lagen über der
+   amtlichen Platte, weil eine einzelne fehlgeschlagene Vereinigung die Klasse
+   im Ergebnis ließ, aber nicht in der Belegtfläche. Behoben durch blockweisen
+   Abzug mit Millimeterrundung: **607 m² (0,4 %)** Rest, und gescheiterte Abzüge
+   werden seitdem **gezählt und gemeldet**.
+2. **Gelände sticht durch die Bodenflächen.** Zwei Ursachen: Die vereinfachte
+   Geländeplatte durfte um `netzToleranzM` vom Raster abweichen (behoben, indem
+   die **Zeichnung** der Platte um genau diesen Betrag abgesenkt wird —
+   gerechnet wird unverändert), und Bodenflächen wurden innen gar nicht
+   unterteilt (behoben mit `granularity`).
+3. **Die Maschenweite der Bodenflächen** ist gemessen worden (20.000
+   Stichproben): Bei 2 m liegt das Gelände in 13,4 % der Stichproben mehr als
+   2 cm über der Fläche, 99-%-Wert 19 cm. Bei 1 m wären es 3,6 % und 5,8 cm —
+   **der Schritt wurde trotzdem verworfen**, weil große Flächen (der größte
+   Gehweg misst 233 × 370 m) bei 1 m in den Rückfallweg ohne Unterteilung
+   fallen und dann über ihre ganze Breite durchhängen. Im Bild verschwand die
+   Grünfläche vollständig unter der Geländeplatte. Wer das auflösen will, muss
+   die Masche **je Fläche aus ihrer Größe** bestimmen, nicht die Konstante
+   drehen. Der Befund steht als Kommentar an `FLAECHEN_MASCHE_RAD` in
+   `web/src/scene/stadt.ts`.
+
+
+---
+
 ## Quellenverzeichnis
 
 Alle Quellen abgerufen am **07.08.2026**.
