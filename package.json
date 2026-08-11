@@ -24,7 +24,8 @@
     "gelaende:aufraeumen": "node scripts/gelaende-aufraeumen.ts",
     "palette:pruefen": "node scripts/palette-pruefen.ts",
     "palette:rechnen": "node scripts/palette-rechnen.ts",
-    "flaechen:nachbarschaft": "node scripts/flaechen-nachbarschaft.ts"
+    "flaechen:nachbarschaft": "node scripts/flaechen-nachbarschaft.ts",
+    "lod2:vorrat": "node scripts/lod2-vorrat.ts"
   },
   "dependencies": {
     "express": "^4.21.2",

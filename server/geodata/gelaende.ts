@@ -1842,13 +1842,23 @@ async function ausfuehren(
   melde(a, 'Flurstuecke (ALKIS) werden geladen', 0.96);
   let flurstuecke: Gelaende['flurstuecke'] = [];
   try {
-    const fs = await alkis.flurstuecke(a.bbox, a.land);
-    flurstuecke = fs.map((f) => ({
+    const abruf = await alkis.flurstueckeMitNachweis(a.bbox, a.land);
+    flurstuecke = abruf.liste.map((f) => ({
       id: f.id,
       kennzeichen: f.kennzeichen || f.nummer,
       polygon: f.polygon,
       flaeche: f.flaecheAmtlich ?? f.flaecheGerechnet,
     }));
+    // SOLL GEGEN IST — nicht behaupten, sondern nachweisen. Bis zum 11.08.2026
+    // stand hier nur die gelieferte Zahl, und die war gekappt: Der Dienst hielt
+    // 1.863 Flurstuecke bereit, der Import nahm 800 und schrieb sie als
+    // Tatsache hin. 57 % fehlten, ohne ein Wort.
+    const vollstaendig = abruf.soll !== null && abruf.geliefert >= abruf.soll;
+    const nachweisText =
+      abruf.soll === null
+        ? `${flurstuecke.length} Flurstuecke aus ${abruf.kacheln} Kacheln. Der Dienst nannte keine Sollzahl — Vollstaendigkeit nicht nachweisbar.`
+        : `${flurstuecke.length} von ${abruf.soll} Flurstuecken (${abruf.kacheln} Kacheln)` +
+          `${vollstaendig ? ' — vollstaendig, vom Dienst gegengezaehlt.' : `. ES FEHLEN ${abruf.soll - abruf.geliefert}.`}`;
     nachweise.push({
       datensatz: 'ALKIS Liegenschaftskarte (vereinfachtes Modell)',
       dienst: `WFS ${k.flurstuecke.typenameFlurstueck}`,
@@ -1856,9 +1866,19 @@ async function ausfuehren(
       abgerufenAm: abgerufen,
       lizenz: k.flurstuecke.lizenz,
       quellenvermerk: k.flurstuecke.quellenvermerk,
-      hinweis: `${flurstuecke.length} Flurstuecke im Gebiet.`,
+      hinweis: nachweisText,
     });
-    melde(a, 'Flurstuecke geladen', 0.98, `${flurstuecke.length} Flurstuecke.`);
+    if (!vollstaendig || abruf.uebersprungen) {
+      const text =
+        (abruf.soll === null
+          ? `Die Flurstuecksebene laesst sich nicht gegenzaehlen: Der Dienst lieferte auf RESULTTYPE=hits keine Zahl. `
+          : `Die Flurstuecksebene ist unvollstaendig: ${abruf.geliefert} von ${abruf.soll} Objekten (${abruf.soll - abruf.geliefert} fehlen). `) +
+        (abruf.uebersprungen ? `${abruf.uebersprungen} von ${abruf.kacheln} Kacheln gaben nach allen Versuchen keine Antwort. ` : '') +
+        `Jede Aussage der Form »liegt auf Flurstueck X« ist damit fuer den fehlenden Teil stumm. ` +
+        `Ein erneuter Lauf holt in der Regel nach, was der Dienst beim ersten Mal nicht hergab.`;
+      datenluecken.push({ elementart: 'flurstueck', bezeichnung: 'Flurstuecke (ALKIS)', art: 'unter_erwartung', text, orte: [] });
+    }
+    melde(a, 'Flurstuecke geladen', 0.98, nachweisText);
   } catch (e) {
     melde(a, 'Flurstuecke', 0.98, `ALKIS nicht erreichbar: ${(e as Error).message} — Gelaende wird ohne Flurstuecke gespeichert.`);
   }

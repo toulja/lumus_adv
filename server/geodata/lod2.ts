@@ -478,6 +478,114 @@ export function quelleErmitteln(land = 'hessen', kreis?: string): Lod2Quelle | n
   return { art: 'download', beschreibung: `HVBG-Downloadcenter, ${eintrag.name}`, url };
 }
 
+/**
+ * DER BAUKOERPER-VORRAT — dasselbe Archiv nicht zwoelfmal entpacken.
+ *
+ * WARUM (gemessen 10.08.2026): Das LoD2-Archiv eines Kreises ist EINE Datei;
+ * Darmstadt-LoD2.zip hat 166 MB und enthaelt 1,63 GB CityGML mit 74.869
+ * Gebaeudebloecken. Jeder Import entpackt sie vollstaendig und wirft danach
+ * weg, was nicht im Zielgebiet liegt — fuer 1,81 km2 passierten 8.504 von
+ * 74.869 Bloecken den Vorfilter. Bei EINEM Lauf sind das ertragbare 13 bis 17
+ * Sekunden Fixkosten. Bei zwoelf Stadtkacheln ist es dieselbe Arbeit zwoelfmal.
+ *
+ * Der Vorrat zieht die Zerlegung EINMAL vor: 94.793 fertige Baukoerper, je
+ * einer als Zeile. Danach ist jeder Lauf ein Bbox-Filter ueber eine Datei
+ * statt ein Entpacklauf ueber 1,63 GB.
+ *
+ * ZEILENWEISE (NDJSON), NICHT EIN GROSSES JSON: 94.793 Koerper ergeben rund
+ * 158 MB. Als ein einziger Aufruf von `JSON.stringify` waere das nah an Nodes
+ * Zeichenkettengrenze von 536 MB — dieselbe Wand, an der der frueherere
+ * Entpackweg schon einmal gestorben ist (Kommentar bei `ausZipDatei`). Zeile
+ * fuer Zeile gibt es diese Grenze nicht, und der Filter kann streamen.
+ *
+ * DER VORRAT IST KEIN ZWEITER DATENBESTAND: Er entsteht aus derselben Datei
+ * mit demselben Zerlegeweg und wird verworfen, sobald das Archiv juenger ist.
+ */
+function vorratPfad(datei: string): string {
+  return cache.pfad('lod2', `${path.basename(datei).replace(/\.zip$/i, '')}.baukoerper.ndjson`);
+}
+
+/** Legt den Vorrat an — einmalig, ueber das GANZE Archiv. */
+export async function vorratAnlegen(datei: string, bericht?: (g: number, mb: number) => void): Promise<{ pfad: string; anzahl: number; bytes: number }> {
+  const ziel = vorratPfad(datei);
+  const gesamt: BBox = { minE: -Infinity, minN: -Infinity, maxE: Infinity, maxN: Infinity };
+  const alle = await ausZipDatei(datei, gesamt, bericht);
+  const strom = fs.createWriteStream(ziel + '.teil');
+  for (const g of alle) {
+    // DIE HUELLE STEHT VOR DEM JSON, durch einen Tabulator getrennt.
+    // Ohne sie muesste der Leser jede der 94.794 Zeilen auspacken, nur um zu
+    // entscheiden, dass er sie nicht braucht — gemessen 28,4 s und damit
+    // LANGSAMER als das Entpacken des Archivs (13-17 s). Mit ihr kostet die
+    // Entscheidung vier Zahlen.
+    const h = bboxVonPunkten(g.grundriss);
+    const zeile = `${Math.floor(h.minE)} ${Math.floor(h.minN)} ${Math.ceil(h.maxE)} ${Math.ceil(h.maxN)}\t${JSON.stringify(g)}\n`;
+    if (!strom.write(zeile)) await new Promise<void>((r) => strom.once('drain', () => r()));
+  }
+  await new Promise<void>((r) => strom.end(r));
+  fs.renameSync(ziel + '.teil', ziel);
+  return { pfad: ziel, anzahl: alle.length, bytes: fs.statSync(ziel).size };
+}
+
+/**
+ * Liest den Vorrat, wenn es ihn gibt und er nicht aelter ist als das Archiv.
+ * Gibt `null` zurueck, wenn kein brauchbarer Vorrat da ist — dann laeuft der
+ * gewoehnliche Weg, und nichts ist verloren.
+ */
+async function ausVorrat(datei: string, bbox: BBox, bericht?: (g: number, mb: number) => void): Promise<GelaendeGebaeude[] | null> {
+  const pfad = vorratPfad(datei);
+  try {
+    const vs = fs.statSync(pfad);
+    const as = fs.statSync(datei);
+    if (vs.mtimeMs < as.mtimeMs) return null; // Archiv ist neuer — Vorrat verworfen
+  } catch {
+    return null;
+  }
+  /*
+   * AUF BYTEEBENE, NICHT AUF ZEICHENEBENE.
+   *
+   * Der erste Versuch las die Datei mit `encoding: 'utf8'` und schnitt sie mit
+   * `split('\n')` — gemessen 32,8 s und damit doppelt so lang wie das
+   * Entpacken des Archivs, das der Vorrat gerade ersetzen sollte. Die Kosten
+   * stecken nicht im Auspacken der Gebaeude, sondern darin, 160 MB in
+   * Zeichenketten zu verwandeln, von denen 94 % sofort weggeworfen werden.
+   *
+   * Jetzt bleibt die Datei ein Puffer. Gesucht wird nach den Bytes 0x0A
+   * (Zeilenende) und 0x09 (Tabulator); dekodiert und ausgepackt wird nur, was
+   * die Huellpruefung ueberlebt.
+   */
+  const puffer = await fs.promises.readFile(pfad);
+  const out: GelaendeGebaeude[] = [];
+  const ZEILE = 0x0a;
+  const TAB = 0x09;
+  let von = 0;
+  while (von < puffer.length) {
+    let bis = puffer.indexOf(ZEILE, von);
+    if (bis < 0) bis = puffer.length;
+    const tab = puffer.indexOf(TAB, von);
+    if (tab > von && tab < bis) {
+      const kopf = puffer.toString('latin1', von, tab);
+      const leer1 = kopf.indexOf(' ');
+      const leer2 = kopf.indexOf(' ', leer1 + 1);
+      const leer3 = kopf.indexOf(' ', leer2 + 1);
+      const minE = +kopf.slice(0, leer1);
+      const minN = +kopf.slice(leer1 + 1, leer2);
+      const maxE = +kopf.slice(leer2 + 1, leer3);
+      const maxN = +kopf.slice(leer3 + 1);
+      if (!(minE > bbox.maxE || maxE < bbox.minE || minN > bbox.maxN || maxN < bbox.minN)) {
+        // Der Kopf ist auf ganze Meter GERUNDET (floor/ceil) und damit bewusst
+        // etwas zu gross — er darf nur VORfiltern. Entschieden wird an der
+        // echten Huelle, sonst liefert der Vorrat ein anderes Ergebnis als das
+        // Archiv: gemessen 5.493 statt 5.471 Gebaeude, 22 Randfaelle zu viel.
+        const g = JSON.parse(puffer.toString('utf8', tab + 1, bis)) as GelaendeGebaeude;
+        if (bboxUeberschneidet(bboxVonPunkten(g.grundriss), bbox)) out.push(g);
+      }
+    }
+    von = bis + 1;
+  }
+  bericht?.(out.length, puffer.length / (1024 * 1024));
+  return out;
+}
+
 /** Laedt LoD2-Gebaeude fuer ein Gebiet — aus lokaler Datei oder per Download. */
 export async function gebaeudeFuerGebiet(
   bbox: BBox,
@@ -489,6 +597,8 @@ export async function gebaeudeFuerGebiet(
   if (quelle.art === 'datei') {
     const datei = quelle.datei!;
     if (/\.zip$/i.test(datei)) {
+      const vorrat = await ausVorrat(datei, bbox, opts.bericht);
+      if (vorrat) return { gebaeude: vorrat, quelle };
       const gebaeude = await ausZipDatei(datei, bbox, opts.bericht);
       return { gebaeude, quelle };
     }
@@ -500,6 +610,12 @@ export async function gebaeudeFuerGebiet(
   const k = geoKonfig(opts.land ?? 'hessen');
   if (/\.zip$/i.test(quelle.url!)) {
     const zipPfad = await zipInCache(quelle.url!, k.geokodierung.userAgent);
+    // AUCH HIER DER VORRAT. Die Quelle heisst `download`, das Archiv liegt aber
+    // laengst im Zwischenspeicher — genau dieser Weg laeuft im Betrieb. Der
+    // Vorrat sass zuerst nur im `datei`-Zweig und griff dadurch nie; gemessen
+    // blieben die 21 s Entpackzeit stehen, obwohl die Zeilendatei bereitlag.
+    const vorrat = await ausVorrat(zipPfad, bbox, opts.bericht);
+    if (vorrat) return { gebaeude: vorrat, quelle };
     const gebaeude = await ausZipDatei(zipPfad, bbox, opts.bericht);
     return { gebaeude, quelle };
   }

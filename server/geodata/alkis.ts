@@ -79,7 +79,45 @@ function erkenneDimension(zahlen: number[]): 2 | 3 {
   return Math.abs(zahlen[2]) < 5000 ? 3 : 2;
 }
 
-async function wfsAbruf(typename: string, bbox: BBox, land: string, maxFeatures: number): Promise<unknown> {
+/**
+ * WIE VIELE OBJEKTE HAELT DER DIENST FUER DIESES RECHTECK BEREIT?
+ *
+ * `RESULTTYPE=hits` liefert die Antwort ohne die Daten — eine exakte Zahl in
+ * `numberMatched`. Sie ist das SOLL, gegen das der Abruf sich messen lassen
+ * muss. Ohne sie kann ein Import nur BEHAUPTEN, vollstaendig zu sein.
+ *
+ * (In der normalen Antwort steht `numberMatched="unknown"`, aber ein exaktes
+ * `numberReturned` — das ist das IST. Erst beide zusammen ergeben einen Beweis.)
+ */
+async function wfsSoll(typename: string, bbox: BBox, land: string): Promise<number | null> {
+  const k = geoKonfig(land);
+  const f = k.flurstuecke;
+  const p = new URLSearchParams({
+    SERVICE: 'WFS',
+    VERSION: f.version,
+    REQUEST: 'GetFeature',
+    TYPENAMES: typename,
+    RESULTTYPE: 'hits',
+    SRSNAME: f.srsName,
+    BBOX: `${bbox.minE},${bbox.minN},${bbox.maxE},${bbox.maxN},${f.srsName}`,
+  });
+  const res = await fetch(`${f.url}?${p.toString()}`, { headers: { 'User-Agent': k.geokodierung.userAgent } });
+  if (!res.ok) return null;
+  const xml = await res.text();
+  const m = /numberMatched="(\d+)"/.exec(xml);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Ein GetFeature. Liefert das Dokument UND die Zahl, die der Dienst selbst als
+ * geliefert meldet — ohne die laesst sich eine Kappung nicht erkennen.
+ */
+async function wfsAbruf(
+  typename: string,
+  bbox: BBox,
+  land: string,
+  maxFeatures: number,
+): Promise<{ doc: unknown; geliefert: number }> {
   const k = geoKonfig(land);
   const f = k.flurstuecke;
   const p = new URLSearchParams({
@@ -101,7 +139,11 @@ async function wfsAbruf(typename: string, bbox: BBox, land: string, maxFeatures:
     const m = /<[^>]*ExceptionText[^>]*>([^<]*)</.exec(xml);
     throw new Error(`ALKIS-WFS ${typename}: ${m?.[1] ?? 'Dienstfehler'}`);
   }
-  return parser.parse(xml);
+  const doc = parser.parse(xml);
+  const gemeldet = Number(
+    ((doc as Record<string, unknown>)?.FeatureCollection as Record<string, unknown> | undefined)?.['@_numberReturned'],
+  );
+  return { doc, geliefert: Number.isFinite(gemeldet) ? gemeldet : mitglieder(doc).length };
 }
 
 function mitglieder(doc: unknown): Record<string, unknown>[] {
@@ -112,9 +154,136 @@ function mitglieder(doc: unknown): Record<string, unknown>[] {
   return (Array.isArray(roh) ? roh : [roh]) as Record<string, unknown>[];
 }
 
-export async function flurstuecke(bbox: BBox, land = 'hessen'): Promise<AlkisFlurstueck[]> {
+/** Zerlegt ein Gebiet in moeglichst quadratische Kacheln von ca. zielM Metern. */
+function kachelGitter(bbox: BBox, zielM: number): BBox[] {
+  const spalten = Math.max(1, Math.round((bbox.maxE - bbox.minE) / zielM));
+  const zeilen = Math.max(1, Math.round((bbox.maxN - bbox.minN) / zielM));
+  const dE = (bbox.maxE - bbox.minE) / spalten;
+  const dN = (bbox.maxN - bbox.minN) / zeilen;
+  const out: BBox[] = [];
+  for (let z = 0; z < zeilen; z++) {
+    for (let s = 0; s < spalten; s++) {
+      out.push({ minE: bbox.minE + s * dE, maxE: bbox.minE + (s + 1) * dE, minN: bbox.minN + z * dN, maxN: bbox.minN + (z + 1) * dN });
+    }
+  }
+  return out;
+}
+
+/** Kachelkantenlaenge des Flurstuecksabrufs. */
+const FLURSTUECK_KACHEL_M = 1000;
+
+/** Zuschlag auf das gemeldete Soll — der Bestand kann sich zwischen den Abrufen aendern. */
+const FLURSTUECK_RESERVE = 1.1;
+
+export interface FlurstueckAbruf {
+  liste: AlkisFlurstueck[];
+  /** Was der Dienst laut `RESULTTYPE=hits` bereithaelt (null = nicht ermittelbar). */
+  soll: number | null;
+  /** Was er tatsaechlich geliefert hat (Summe ueber alle Kacheln, ohne Doppelte). */
+  geliefert: number;
+  kacheln: number;
+  /** Kacheln, die nach allen Versuchen keine Antwort gaben. */
+  uebersprungen: number;
+}
+
+/**
+ * FLURSTUECKE — gekachelt und mit BEWEIS statt Behauptung.
+ *
+ * DER BEFUND (10.08.2026, nachgemessen am Dienst): Der Abruf lief mit
+ * `COUNT = maxFeatures = 800` gegen die GANZE Gebiets-Bbox. Fuer das
+ * Pilotgebiet von 1,81 km2 haelt der Dienst 1.863 Flurstuecke bereit; der
+ * Import nahm 800. Es fehlten 1.063 Stueck oder 57 %, und niemand merkte es:
+ * `wfsAbruf` verglich nichts, und der Quellennachweis schrieb die 800 als
+ * Tatsache hin („800 Flurstuecke im Gebiet.").
+ *
+ * DREI ENTSCHEIDUNGEN, jede am Dienst geprueft:
+ *  1. KACHELN, NICHT SEITENABRUF. Die Capabilities melden ausdruecklich
+ *     `ImplementsResultPaging = FALSE`. `STARTINDEX` funktioniert im Versuch,
+ *     ist aber nicht zugesichert — darauf baut man kein Stadtmodell.
+ *  2. KACHELGROESSE 1 km. Gemessen an der dichtesten Innenstadtkachel:
+ *     4 km2 ergaben 4.176 Objekte in 6,6 MB und 1,15 s. 1 km2 liegt damit
+ *     komfortabel unter jeder Grenze; `CountDefault` des Dienstes ist 100.000.
+ *  3. DAS COUNT KOMMT AUS DEM SOLL, nicht aus einer Konstante. Erst `hits`
+ *     fragen, dann mit `soll + 10 %` holen. Damit kann eine Kappung gar nicht
+ *     mehr unbemerkt entstehen — und wenn doch, sagt der Vergleich es.
+ *
+ * Der Aufrufer bekommt Soll und Ist und muss die Differenz melden.
+ */
+export async function flurstueckeMitNachweis(bbox: BBox, land = 'hessen'): Promise<FlurstueckAbruf> {
   const k = geoKonfig(land).flurstuecke;
-  const doc = await wfsAbruf(k.typenameFlurstueck, bbox, land, k.maxFeatures);
+  const gefunden = new Map<string, AlkisFlurstueck>();
+  let uebersprungen = 0;
+  let gekappt = 0;
+
+  /*
+   * DAS SOLL KOMMT AUS EINER EINZIGEN ABFRAGE UEBER DAS GANZE GEBIET.
+   *
+   * Die naheliegende Summe der Kachel-Sollwerte ist FALSCH, und zwar messbar:
+   * Sie ergab fuer das Pilotgebiet 1.907 gegen 1.863 aus einer Gesamtabfrage —
+   * 44 Flurstuecke liegen auf einer Kachelgrenze und werden in beiden Kacheln
+   * mitgezaehlt. Ein Soll, das die Doppelten mitzaehlt, kann ein
+   * doppelfreies Ist nie erreichen; der Import haette sich dauerhaft selbst
+   * fuer unvollstaendig erklaert.
+   */
+  let soll: number | null = null;
+  try {
+    soll = await wfsSoll(k.typenameFlurstueck, bbox, land);
+  } catch {
+    soll = null;
+  }
+
+  const warteschlange = kachelGitter(bbox, FLURSTUECK_KACHEL_M).map((bb) => ({ bb, tiefe: 0 }));
+  let kacheln = 0;
+  while (warteschlange.length) {
+    const { bb, tiefe } = warteschlange.shift() as { bb: BBox; tiefe: number };
+    kacheln++;
+    let kachelSoll: number | null = null;
+    try {
+      kachelSoll = await wfsSoll(k.typenameFlurstueck, bb, land);
+    } catch {
+      kachelSoll = null;
+    }
+    if (kachelSoll === 0) continue;
+
+    const menge = kachelSoll === null ? k.maxFeatures : Math.max(50, Math.ceil(kachelSoll * FLURSTUECK_RESERVE));
+    let ergebnis: { doc: unknown; geliefert: number };
+    try {
+      ergebnis = await wfsAbruf(k.typenameFlurstueck, bb, land, menge);
+    } catch (e) {
+      uebersprungen++;
+      console.warn(`[alkis] Flurstueckskachel ${Math.round(bb.minE)}/${Math.round(bb.minN)} uebersprungen: ${(e as Error).message}`);
+      continue;
+    }
+    for (const fs of flurstueckeAusDoc(ergebnis.doc)) {
+      const schluessel = fs.kennzeichen || fs.id;
+      if (!gefunden.has(schluessel)) gefunden.set(schluessel, fs);
+    }
+    // Kam die Antwort genau an der bestellten Grenze zurueck, war sie moeglicher-
+    // weise abgeschnitten — dann vierteln statt hoffen (Muster aus nutzung.ts).
+    if (ergebnis.geliefert >= menge && tiefe < 3) {
+      const mE = (bb.minE + bb.maxE) / 2;
+      const mN = (bb.minN + bb.maxN) / 2;
+      for (const t of [
+        { minE: bb.minE, minN: bb.minN, maxE: mE, maxN: mN },
+        { minE: mE, minN: bb.minN, maxE: bb.maxE, maxN: mN },
+        { minE: bb.minE, minN: mN, maxE: mE, maxN: bb.maxN },
+        { minE: mE, minN: mN, maxE: bb.maxE, maxN: bb.maxN },
+      ]) {
+        warteschlange.push({ bb: t, tiefe: tiefe + 1 });
+      }
+      gekappt++;
+    }
+  }
+  if (gekappt) console.warn(`[alkis] ${gekappt} Flurstueckskachel(n) liefen an die Grenze und wurden geviertelt.`);
+  return { liste: [...gefunden.values()], soll, geliefert: gefunden.size, kacheln, uebersprungen };
+}
+
+/** Rueckwaertsvertraeglich: nur die Liste, ohne Nachweis. */
+export async function flurstuecke(bbox: BBox, land = 'hessen'): Promise<AlkisFlurstueck[]> {
+  return (await flurstueckeMitNachweis(bbox, land)).liste;
+}
+
+function flurstueckeAusDoc(doc: unknown): AlkisFlurstueck[] {
   const out: AlkisFlurstueck[] = [];
   for (const m of mitglieder(doc)) {
     const fs = m.Flurstueck as Record<string, unknown> | undefined;
@@ -138,22 +307,12 @@ export async function flurstuecke(bbox: BBox, land = 'hessen'): Promise<AlkisFlu
   return out;
 }
 
-export async function gebaeudegrundrisse(bbox: BBox, land = 'hessen'): Promise<AlkisGebaeude[]> {
-  const k = geoKonfig(land).flurstuecke;
-  const doc = await wfsAbruf(k.typenameGebaeude, bbox, land, k.maxFeatures);
-  const out: AlkisGebaeude[] = [];
-  for (const m of mitglieder(doc)) {
-    const g = m.GebaeudeBauwerk as Record<string, unknown> | undefined;
-    if (!g) continue;
-    const ringe = ringeSammeln(g.geometrie ?? g);
-    if (!ringe.length) continue;
-    const groesster = ringe.reduce((a, b) => (flaeche(b) > flaeche(a) ? b : a));
-    out.push({
-      id: String(g['@_id'] ?? textVon(g.oid) ?? `geb_${out.length}`),
-      funktion: textVon(g.funktion),
-      nutzung: textVon(g.gebnutzbez),
-      polygon: groesster,
-    });
-  }
-  return out;
-}
+/*
+ * ENTFERNT AM 11.08.2026: gebaeudegrundrisse().
+ *
+ * Die Funktion hatte im ganzen Programm keinen einzigen Aufrufer — die
+ * Gebaeude kommen aus LoD2 (server/geodata/lod2.ts), mit Trauf- und
+ * Firsthoehe und echten Dachflaechen. Ein zweiter, flacher Gebaeudeweg waere
+ * eine zweite Wahrheit gewesen; ausserdem war er der letzte Verbraucher der
+ * ungekachelten 800er-Kappung.
+ */
