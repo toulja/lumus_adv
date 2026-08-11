@@ -1953,8 +1953,34 @@ async function ausfuehren(
   let flaechen: GelaendeFlaeche[] = [];
   melde(a, 'Tatsaechliche Nutzung wird geladen', 0.985);
   try {
-    const { nutzungsflaechen, NUTZUNG_QUELLE } = await import('./nutzung.ts');
+    const { nutzungsflaechen, NUTZUNG_QUELLE, nutzungLuecken } = await import('./nutzung.ts');
     const alkisFlaechen = await nutzungsflaechen(a.bbox, a.land);
+    /*
+     * AUSGEFALLENE TEILGEBIETE DER BODENZEICHNUNG GEHOEREN INS ERGEBNIS.
+     *
+     * Der Abruf holt die tatsaechliche Nutzung in Teilkacheln. Faellt eine
+     * davon aus, fehlt ein Stueck Bodenzeichnung — beim Stadtlauf am
+     * 11.08.2026 waren es drei Teilkacheln in Kachel 14. Bisher stand das nur
+     * in der Serverkonsole: Wer die fertige Kachel oeffnet, sieht dort eine
+     * Flaeche ohne Nutzungsangabe und haelt sie fuer unbebautes Land.
+     *
+     * Mit Ortsangabe, damit man im Plan hinspringen kann statt zu suchen.
+     */
+    if (nutzungLuecken.length) {
+      const orte = nutzungLuecken.map((b) => [(b.minE + b.maxE) / 2, (b.minN + b.maxN) / 2] as Punkt);
+      const m2 = nutzungLuecken.reduce((s, b) => s + (b.maxE - b.minE) * (b.maxN - b.minN), 0);
+      datenluecken.push({
+        elementart: 'nutzungsflaeche',
+        bezeichnung: 'ALKIS Tatsaechliche Nutzung',
+        art: 'kataster_deckt_nicht',
+        text:
+          `${nutzungLuecken.length} Teilgebiet(e) mit zusammen ${(m2 / 10_000).toFixed(1)} ha konnten beim ` +
+          `Landesdienst nicht abgerufen werden. Dort fehlt die amtliche Bodenzeichnung vollstaendig — die Flaeche ` +
+          `ist NICHT unbebaut, sondern unbekannt. Erneuter Import holt sie nach, sobald der Dienst antwortet.`,
+        orte,
+      });
+      melde(a, 'Bodenzeichnung unvollstaendig', 0.985, `${nutzungLuecken.length} Teilgebiet(e) ohne ALKIS-Nutzung (${(m2 / 10_000).toFixed(1)} ha).`);
+    }
     flaechen.push(...alkisFlaechen);
     if (alkisFlaechen.length) {
       nachweise.push({ ...NUTZUNG_QUELLE, abgerufenAm: abgerufen, hinweis: `${alkisFlaechen.length} Nutzungsflaechen im Gebiet.` });

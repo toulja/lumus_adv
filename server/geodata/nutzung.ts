@@ -430,13 +430,24 @@ async function pool<T>(aufgaben: T[], parallel: number, arbeit: (t: T) => Promis
  * Wirft nie: faellt der Dienst aus, kommt ein leeres Array zurueck und der
  * Grund steht auf der Konsole — ein Gelaende ohne Bodenzeichnung ist besser
  * als ein abgebrochener Import.
+ *
+ * ABER ER STEHT NICHT NUR AUF DER KONSOLE (Befund 11.08.2026, Stadtkachel 14):
+ * Dort gingen drei Teilkacheln mit „fetch failed" verloren; gemeldet wurde das
+ * mit `console.warn`. Im Gelaende stand davon KEIN Wort — wer die Datei
+ * oeffnet, sieht einen Quadratkilometer ohne Bodenzeichnung und haelt ihn fuer
+ * unbebaut. Genau die stille Luecke, die dieses Projekt nicht haben darf.
+ * `nutzungLuecken` sammelt darum die ausgefallenen Teilgebiete; gelaende.ts
+ * macht daraus eine Datenluecke mit Ortsangabe.
  */
+export const nutzungLuecken: BBox[] = [];
+
 export async function nutzungsflaechen(
   bbox: BBox,
   land = 'hessen',
   opts: { kachelM?: number; parallel?: number } = {},
 ): Promise<GelaendeFlaeche[]> {
   const gefunden = new Map<string, GelaendeFlaeche[]>();
+  const ausgefallen: BBox[] = [];
   let uebersprungen = 0;
   try {
     const kachelM = Math.max(50, opts.kachelM ?? KACHEL_M);
@@ -451,6 +462,7 @@ export async function nutzungsflaechen(
           ergebnis = await mitWiederholung(() => kachelHolen(a.bb, land));
         } catch (e) {
           uebersprungen++;
+          ausgefallen.push(a.bb);
           console.warn(
             `[nutzung] Kachel ${Math.round(a.bb.minE)}/${Math.round(a.bb.minN)}-` +
               `${Math.round(a.bb.maxE)}/${Math.round(a.bb.maxN)} uebersprungen: ${(e as Error).message}`,
@@ -475,6 +487,8 @@ export async function nutzungsflaechen(
   } catch (e) {
     console.warn(`[nutzung] Abruf fehlgeschlagen: ${(e as Error).message}`);
   }
+  nutzungLuecken.length = 0;
+  nutzungLuecken.push(...ausgefallen);
   if (uebersprungen) console.warn(`[nutzung] ${uebersprungen} Kachel(n) ohne Daten — Ergebnis ist unvollstaendig.`);
 
   const out: GelaendeFlaeche[] = [];
