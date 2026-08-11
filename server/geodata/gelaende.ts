@@ -30,7 +30,25 @@ import * as dgm from './dgm.ts';
 import * as bauwerk from './bauwerk.ts';
 import { orthophoto } from './wms.ts';
 
-export const MAX_GEBIET_M2 = 2_000_000; // Lastenheft F1.1: max. 2 km2
+/**
+ * GROESSTES GEBIET EINES EINZELNEN GELAENDES.
+ *
+ * Das Lastenheft F1.1 nannte 2 km2 — die Groesse EINER Veranstaltung. Fuer ein
+ * Stadtabbild ist das die falsche Groesse: Darmstadt hat 122 km2 und braeuchte
+ * 61 Laeufe mit 61 Nahtstellen.
+ *
+ * Die neue Zahl ist nicht gegriffen, sondern die gemessene Grenze der
+ * ANZEIGE. Der Browser haelt fuer das Referenzgebiet 159 MB je 1,81 km2; im
+ * Stadtmittel sind es rund 62 MB je km2, weil die Aussenbezirke duenner bebaut
+ * sind. Bei einem Fenster-Budget von 2 GB liegt die Grenze damit bei etwa
+ * 32 km2 — und ein Gelaende, das sich bauen, aber nicht anzeigen laesst, ist
+ * kein Gelaende.
+ *
+ * 12 km2 laesst also reichlich Luft nach oben (rund ein Drittel des
+ * Messwerts) und macht aus 61 Laeufen etwa 14. Wer mehr will, muss zuerst das
+ * Nachladen nach Sichtbereich bauen; bis dahin ist diese Zahl die ehrliche.
+ */
+export const MAX_GEBIET_M2 = 12_000_000;
 
 /**
  * Zellgroesse des Hoehenrasters. 1 m ist die Aufloesung des amtlichen DGM1 —
