@@ -135,12 +135,25 @@ export function guetestufe(art: string, d = elementQuellenLaden()): QuellenStufe
  * vorhanden sind, um einen Median zu bilden, sagt die Pruefung genau das —
  * statt stillzuschweigen.
  */
+/**
+ * Elementarten, die auf Anweisung gar nicht erhoben wurden.
+ *
+ * BEFUND 11.08.2026, im Bericht des ersten Stadtmodells: 24 Meldungen „zu
+ * wenig Strassenlaternen" und 23 „zu wenig Sitzbaenke" — fuer Objekte, die
+ * der Auftraggeber ausdruecklich weglassen liess. Die Abdeckungspruefung kann
+ * das nicht wissen; sie sieht null Laternen und schliesst auf eine Luecke.
+ *
+ * Das ist schlimmer als unnoetig: Ein Bericht, der 47-mal Alarm schlaegt, wo
+ * eine Entscheidung steht, entwertet die 22 echten Meldungen daneben. Wer
+ * etwas bewusst weglaesst, muss es der Pruefung sagen.
+ */
 export function abdeckungPruefen(
   gebiet: BBox,
   flaechen: GelaendeFlaeche[],
   punkte: GelaendePunktObjekt[],
   linien: GelaendeLinienObjekt[],
   d = elementQuellenLaden(),
+  nichtErhoben: ReadonlySet<string> = new Set(),
 ): Datenluecke[] {
   const luecken: Datenluecke[] = [];
   const zelle = d.pruefung.gitterM;
@@ -153,6 +166,8 @@ export function abdeckungPruefen(
   };
 
   for (const el of d.elemente) {
+    // Was gar nicht erhoben wurde, kann nicht fehlen — es ist nicht da.
+    if (nichtErhoben.has(el.id)) continue;
     if (!el.abdeckung.bezugsflaechen.length) continue; // punktuelle Arten: keine Dichte
     const bezug = new Set(el.abdeckung.bezugsflaechen);
 

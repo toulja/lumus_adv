@@ -2493,7 +2493,18 @@ async function ausfuehren(
   try {
     const { abdeckungPruefen, elementQuellenLaden } = await import('./elementquellen.ts');
     const q = elementQuellenLaden();
-    const gefunden = abdeckungPruefen(a.bbox, flaechen, punkte, linien, q);
+    /*
+     * WAS AUF ANWEISUNG WEGGELASSEN WURDE, IST KEINE LUECKE.
+     *
+     * Der Bericht des ersten Stadtmodells enthielt 24-mal „zu wenig
+     * Strassenlaternen" und 23-mal „zu wenig Sitzbaenke" — fuer Objekte, die
+     * ausdruecklich nicht erhoben werden sollten. Die Pruefung sieht null und
+     * schliesst auf eine Luecke; sie kann die Entscheidung nicht kennen.
+     * 47 falsche Alarme entwerten die 22 echten daneben, und genau davon lebt
+     * dieser Bericht.
+     */
+    const nichtErhoben = new Set(opts.ohneMoebel ? ['laterne', 'bank', 'papierkorb', 'brunnen', 'fahrradstaender', 'trinkwasser'] : []);
+    const gefunden = abdeckungPruefen(a.bbox, flaechen, punkte, linien, q, nichtErhoben);
     datenluecken.push(...gefunden);
     for (const l of gefunden) melde(a, 'Datenluecke', 0.9988, `${l.bezeichnung}: ${l.text}`);
     if (!gefunden.length) {
