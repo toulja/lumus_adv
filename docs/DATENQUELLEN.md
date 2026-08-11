@@ -98,6 +98,14 @@ Wörtlich aus dem `<Fees>`-Element von `https://sgx.geodatenzentrum.de/wms_basem
 ODbL 1.0; Quellenvermerk „© OpenStreetMap-Mitwirkende". Nutzungsrichtlinie: https://operations.osmfoundation.org/policies/nominatim/
 🔧 Solange Nominatim genutzt wird, muss der OSM-Vermerk in jedem Export erscheinen, in dem eine per Nominatim ermittelte Koordinate steckt.
 
+**Bezugsweg seit 11.08.2026: Ortsauszug statt Overpass-API.** Die Wege-, Flächen- und Detaildaten kommen aus dem Geofabrik-Auszug `europe/germany/hessen-latest.osm.pbf` (https://download.geofabrik.de/europe/germany/hessen.html), nicht mehr aus der Overpass-API. Grund ist nicht Bequemlichkeit, sondern die Nutzungsregel: 26 Stadtkacheln × 10 Abfragen sind ein Massenabruf, und die Overpass-Betreiber weisen Massenabrufe ausdrücklich ab und verweisen auf Auszüge. In der Praxis kostete das zwei Stadtläufe (25 von 26 Kacheln durch Dienstausfall verloren).
+
+Der Auszug ist zugleich der **ehrlichere Nachweis**: Er hat einen festen Datenstand, den man nachschlagen und wiederherstellen kann. „Overpass API, abgerufen am …" sagt nur, wann gefragt wurde — dieselbe Abfrage liefert morgen etwas anderes. Der Quellennachweis jedes Geländes trägt darum Dateiname und Datenstand des Auszugs.
+
+Holen: `node scripts/osm-auszug-holen.ts` (prüft die MD5-Summe von Geofabrik). Gegenprobe gegen gespeicherte Overpass-Antworten: `node scripts/auszug-gegenprobe.ts` — am 11.08.2026 über 57 Abfragen: 21.992 gemeinsame Objekte, 100,00 % geometrisch identisch, 0 verloren, 33 zusätzlich (Auszug einen Tag alt, Antworten mehrere).
+
+⚠️ **Nicht jede Overpass-Instanz führt den Planeten.** `overpass.osm.ch` antwortete am 11.08.2026 als einzige zuverlässig — mit HTTP 200 in 0,2 s und **0 Gebäuden** für 1 km² Darmstadt (Bern zur selben Abfrage: 1.675). Es ist ein Schweiz-Auszug. Eine technisch einwandfreie, inhaltlich leere Antwort ist die teuerste Fehlerart dieses Projekts; der Import bricht deshalb ab, wenn eine **erfolgreiche** Abfrage für ein Gebiet ab 0,25 km² null Wegflächen liefert (`server/geodata/gelaende.ts`). Die naheliegende Gegenprobe `is_in` taugt dafür nicht — der Schweiz-Auszug führt Darmstadts grobe Verwaltungsgrenzen sehr wohl.
+
 ### Verbindlicher Quellenvermerk-Block für Berichte, PDF-Mappen und Kartenexporte
 
 ```
