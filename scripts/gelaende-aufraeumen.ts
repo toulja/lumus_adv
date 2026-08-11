@@ -80,8 +80,40 @@ if (!tun) {
   console.log('\nNichts veraendert. Mit `--tun` werden sie nach data/gelaende-abgelegt/ verschoben.');
   process.exit(0);
 }
+/*
+ * EIN GESPERRTER ORDNER DARF NICHT DEN GANZEN LAUF KOSTEN.
+ *
+ * BEFUND 11.08.2026: `renameSync` warf EPERM, weil ein laufender Node-Prozess
+ * (ein Import im Hintergrund) noch eine Datei darin offen hielt. Weil der
+ * Aufruf ungeschuetzt in der Schleife stand, brach das Aufraeumen beim ERSTEN
+ * betroffenen Ordner ab — die restlichen zehn blieben liegen, und die Meldung
+ * war ein Stapelabzug statt eines Satzes.
+ *
+ * Jetzt wird je Ordner gefangen, weitergemacht und am Ende gesagt, was nicht
+ * ging. Verschieben ist ohnehin die vorsichtige Sorte Aufraeumen; ein Ordner,
+ * der gerade benutzt wird, soll auch liegen bleiben.
+ */
+let verschoben = 0;
+const gescheitert: { id: string; grund: string }[] = [];
 if (weg.length) {
   mkdirSync(ABGELEGT, { recursive: true });
-  for (const id of weg) renameSync(join(GELAENDE, id), join(ABGELEGT, id));
+  for (const id of weg) {
+    const ziel = join(ABGELEGT, id);
+    if (existsSync(ziel)) {
+      gescheitert.push({ id, grund: 'liegt dort schon' });
+      continue;
+    }
+    try {
+      renameSync(join(GELAENDE, id), ziel);
+      verschoben++;
+    } catch (e) {
+      gescheitert.push({ id, grund: (e as NodeJS.ErrnoException).code === 'EPERM' ? 'in Benutzung (gesperrt)' : (e as Error).message });
+    }
+  }
 }
-console.log(`\n${weg.length} Ordner (${mb.toLocaleString('de-DE')} MB) nach ${ABGELEGT} verschoben.`);
+console.log(`\n${verschoben} Ordner nach ${ABGELEGT} verschoben.`);
+if (gescheitert.length) {
+  console.log(`${gescheitert.length} blieben liegen:`);
+  for (const g of gescheitert) console.log(`  ${g.id} — ${g.grund}`);
+  console.log('Nach dem Ende laufender Importe erneut aufrufen.');
+}

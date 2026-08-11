@@ -1742,6 +1742,30 @@ async function ausfuehren(
         0.47,
         `DGM1 uebernommen: ${st.zellen.toLocaleString('de-DE')} Zellen a ${RASTER_ZELL_M} m aus ${erg.kacheln.length} Kacheln, ${st.min.toFixed(1)}–${st.max.toFixed(1)} m ue. NHN${erg.gefuellt ? `, ${erg.gefuellt} Zellen aus der Nachbarschaft ergaenzt` : ''}.`,
       );
+      /*
+       * ERGAENZTE ZELLEN SIND KEINE MESSUNG — und ab einer gewissen Menge sind
+       * sie eine Falschaussage ueber die Landschaft.
+       *
+       * BEFUND 11.08.2026 beim Stadtlauf: Das DGM1-Archiv eines Landkreises
+       * endet an der Kreisgrenze, das Kachelraster des Stadtlaufs nicht. Fuer
+       * eine 3x3-km-Kachel mit nur 1 km2 Hoehendaten haette `luecken_fuellen()`
+       * acht Millionen Zellen aus dem Rand extrapoliert — eine erfundene
+       * Landschaft, die aussieht wie eine gemessene.
+       *
+       * Ein Prozent ist die Schwelle: Randzellen und einzelne Fehlstellen im
+       * amtlichen Raster liegen darunter, fehlende KACHELN darueber.
+       */
+      const anteil = st.zellen ? erg.gefuellt / st.zellen : 0;
+      if (anteil > 0.01) {
+        const text =
+          `${(anteil * 100).toFixed(1)} % des Hoehenrasters (${erg.gefuellt.toLocaleString('de-DE')} von ` +
+          `${st.zellen.toLocaleString('de-DE')} Zellen) sind NICHT gemessen, sondern aus der Nachbarschaft ergaenzt. ` +
+          `Das amtliche DGM1 deckt dieses Gebiet nur teilweise ab (${erg.kacheln.length} Kacheln geliefert). ` +
+          `Jede Hoehenaussage dort — Gelaende, Gebaeudefuss, Rampentiefe, Sichtachse — ist eine Naeherung aus dem Rand, ` +
+          `keine Messung. Belastbar waere nur eine Bestellung der fehlenden DGM1-Kacheln beim Land.`;
+        datenluecken.push({ elementart: 'gelaendehoehe', bezeichnung: 'Gelaendehoehen (DGM1)', art: 'unter_erwartung', text, orte: [] });
+        melde(a, 'Gelaendehoehen', 0.47, `ACHTUNG: ${text}`);
+      }
     } catch (e) {
       melde(a, 'Gelaendehoehen', 0.45, `DGM1 nicht verwendbar (${(e as Error).message}) — es wird aus den LoD2-Bodenhoehen genaehert.`);
     }
@@ -2435,7 +2459,38 @@ async function ausfuehren(
         quellenvermerk: '(c) OpenStreetMap-Mitwirkende',
         hinweis: `Diese Objektarten fehlen im Gelaende: ${abrufFehler.join(' | ')}`,
       });
+      /*
+       * TRAGENDE EBENEN: BEI AUSFALL WIRD NICHT FERTIGGEBAUT.
+       *
+       * BEFUND 11.08.2026, im Kontrolllauf der Stadtkachel 2: Overpass war auf
+       * TCP-Ebene nicht erreichbar (beide oeffentlichen Instanzen; der
+       * Landesdienst antwortete gleichzeitig in 0,27 s). Alle sechs
+       * OSM-Ebenen fielen aus — und der Import LIEF WEITER. Er haette ein
+       * Gelaende fertiggestellt, das aussieht wie fertig und in Wahrheit nur
+       * ALKIS und LoD2 enthaelt: keine Gehwege, keine Radwege, keine
+       * Fussgaengerzonen, keine Baeume. Bei einem Stadtlauf ueber 26 Kacheln
+       * waeren einzelne Kacheln stumm aermer als ihre Nachbarn — und man saehe
+       * es erst im fertigen Bild.
+       *
+       * Ein Hinweis im Nachweis reicht dafuer nicht. Wer ein Gelaende oeffnet,
+       * liest keinen Quellennachweis; er sieht eine Stadt.
+       *
+       * UNTERSCHIEDEN WIRD SORGFAELTIG: Es geht um AUSGEFALLENE Abfragen, nicht
+       * um leere Antworten. Ein Gebiet ohne Baeume ist ein Befund; ein Gebiet,
+       * dessen Baumabfrage nie ankam, ist keiner. Und es geht nur um die
+       * Ebenen, die das Abbild TRAGEN — Wege und Flaechen. Faellt die
+       * Haltestellenabfrage aus, bleibt das eine Datenluecke.
+       */
+      const tragend = abrufFehler.filter((m) => /^(wege|flaechen)\b/i.test(m));
       abrufFehler.length = 0;
+      if (tragend.length) {
+        throw new Error(
+          `Tragende Ebenen fehlen vollstaendig: ${tragend.map((m) => m.split(':')[0]).join(', ')}. ` +
+            `Das Gelaende wird NICHT gespeichert — ein Abbild ohne Wegenetz saehe fertig aus und waere es nicht. ` +
+            `Ursache laut Abruf: ${tragend[0].slice(0, 160)} ` +
+            `Wenn Overpass wieder erreichbar ist, denselben Auftrag erneut starten; die bereits geholten Ebenen liegen im Zwischenspeicher.`,
+        );
+      }
     }
     for (const m of altbestandMeldungen) {
       melde(a, 'Altbestand benutzt', 0.9989, m);

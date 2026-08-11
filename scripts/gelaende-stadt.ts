@@ -170,10 +170,40 @@ const kacheln: Kachel[] = [];
   const n1 = Math.max(...nord);
   for (let n = n0; n <= n1; n += kachelKm) {
     for (let e = e0; e <= e1; e += kachelKm) {
+      /*
+       * DIE KACHEL WIRD AUF DIE HOEHENDATEN ZUSAMMENGEZOGEN.
+       *
+       * BEFUND 11.08.2026, beim ersten Stadtlauf gestoppt: Das DGM1-Archiv
+       * endet an der Kreisgrenze, das 3-km-Raster nicht. Sechzehn der 26
+       * Kacheln ragten darueber hinaus, vier davon mit nur 1 von 9 km2
+       * Hoehendaten. Der Import haette die Luecken mit `luecken_fuellen()` aus
+       * dem Rand extrapoliert — acht Millionen erfundene Zellen je Kachel, die
+       * aussehen wie gemessenes Gelaende.
+       *
+       * Statt das Loch zu fuellen, wird der Auftrag kleiner: Die Kachel bekommt
+       * die Huelle IHRER gemessenen Quadratkilometer. Ein Randblock mit 1 km2
+       * Hoehen baut dann 1 km2 — vollstaendig statt gross und erfunden.
+       *
+       * Der Rest (L-Formen innerhalb der Huelle) bleibt und wird vom Import als
+       * Datenluecke gemeldet, sobald er 1 % ueberschreitet.
+       */
       let mit = 0;
-      for (let de = 0; de < kachelKm; de++) for (let dn = 0; dn < kachelKm; dn++) if (hoehen.has(`${e + de}_${n + dn}`)) mit++;
+      let e0 = Infinity;
+      let e1 = -Infinity;
+      let n0 = Infinity;
+      let n1 = -Infinity;
+      for (let de = 0; de < kachelKm; de++) {
+        for (let dn = 0; dn < kachelKm; dn++) {
+          if (!hoehen.has(`${e + de}_${n + dn}`)) continue;
+          mit++;
+          e0 = Math.min(e0, e + de);
+          e1 = Math.max(e1, e + de + 1);
+          n0 = Math.min(n0, n + dn);
+          n1 = Math.max(n1, n + dn + 1);
+        }
+      }
       if (!mit) continue;
-      const bb: BBox = { minE: e * 1000, minN: n * 1000, maxE: (e + kachelKm) * 1000, maxN: (n + kachelKm) * 1000 };
+      const bb: BBox = { minE: e0 * 1000, minN: n0 * 1000, maxE: e1 * 1000, maxN: n1 * 1000 };
       if (!beruehrtStadt(bb, ringe)) continue;
       kacheln.push({ nr: kacheln.length + 1, bb, km2MitHoehen: mit });
     }
@@ -183,7 +213,8 @@ const kacheln: Kachel[] = [];
 console.log('');
 console.log(`${kacheln.length} Kacheln a ${kachelKm} x ${kachelKm} km (${((km * km) / 1e6).toFixed(0)} km2), Raster auf ganzen Kilometern verankert:`);
 for (const k of kacheln) {
-  console.log(`  ${String(k.nr).padStart(2)}  E ${k.bb.minE}-${k.bb.maxE}  N ${k.bb.minN}-${k.bb.maxN}   ${k.km2MitHoehen} km2 mit Hoehendaten`);
+  const km2=((k.bb.maxE-k.bb.minE)*(k.bb.maxN-k.bb.minN))/1e6;
+  console.log(`  ${String(k.nr).padStart(2)}  E ${k.bb.minE}-${k.bb.maxE}  N ${k.bb.minN}-${k.bb.maxN}   ${km2.toFixed(0).padStart(2)} km2 Auftrag, ${k.km2MitHoehen} km2 gemessen${k.km2MitHoehen<km2?`  (${(100*k.km2MitHoehen/km2).toFixed(0)} %)`:`  (voll)`}`);
 }
 console.log(`Zusammen ${kacheln.reduce((s, k) => s + k.km2MitHoehen, 0)} km2 mit amtlichen Hoehen.`);
 if (trocken) {

@@ -80,6 +80,24 @@ const ABRUF_VERSUCHE = 5;
 const ABRUF_PAUSE_MS = 5000;
 const ABRUF_FRIST_MS = 120_000;
 
+/**
+ * NOTSCHALTER: Wenn der Dienst WEG ist, nicht bei jeder Abfrage neu hoffen.
+ *
+ * Die fuenf Versuche mit verdoppelnder Pause sind fuer eine DROSSEL gedacht —
+ * da lohnt Geduld, der Slot kommt zurueck. Bei einem echten Ausfall sind sie
+ * teuer: gemessen am 11.08.2026, als overpass-api.de auf TCP-Ebene nicht
+ * erreichbar war, kostete eine Abfrage 75 s, ein Import mit seinen zehn
+ * Abfragen also gut zwoelf Minuten — und ein Stadtlauf ueber 26 Kacheln
+ * fuenf Stunden Warten auf nichts.
+ *
+ * Nach zwei Abfragen, die alle Versuche verbraucht haben, ohne dass EINE
+ * Antwort kam, gilt der Dienst als ausgefallen: die naechsten Abfragen machen
+ * nur noch einen Versuch. Die erste erfolgreiche Antwort setzt den Schalter
+ * zurueck — eine Drossel, die sich loest, wird dadurch nicht bestraft.
+ */
+const NOTSCHALTER_AB = 2;
+let ausfaelleHintereinander = 0;
+
 /** Ohne Konfiguration wenigstens ein sprechender User-Agent (Overpass-Pflicht). */
 export function standardUserAgent(): string {
   try {
@@ -564,7 +582,9 @@ export async function overpass(
        * wo der Dienst ein `Retry-After` schickt, gilt DIESES.
        */
       let letzter: Error | null = null;
-      for (let versuch = 0; versuch < ABRUF_VERSUCHE; versuch++) {
+      // Gilt der Dienst als ausgefallen, wird nur noch einmal angeklopft.
+      const versuche = ausfaelleHintereinander >= NOTSCHALTER_AB ? 1 : ABRUF_VERSUCHE;
+      for (let versuch = 0; versuch < versuche; versuch++) {
         let warten = 0;
         // Ein dauerhafter Fehler (falsche Abfrage, 404) wird NICHT wiederholt —
         // er kommt beim naechsten Versuch genauso zurueck und kostet nur Zeit.
@@ -582,6 +602,7 @@ export async function overpass(
           });
           if (res.ok) {
             const daten = (await res.json()) as { elements?: OsmElement[] };
+            ausfaelleHintereinander = 0; // der Dienst antwortet wieder
             return daten.elements ?? [];
           }
           const text = await res.text().catch(() => '');
@@ -602,8 +623,9 @@ export async function overpass(
         if (versuch + 1 >= ABRUF_VERSUCHE) break;
         await new Promise((r) => setTimeout(r, warten || ABRUF_PAUSE_MS * 2 ** versuch));
       }
+      ausfaelleHintereinander++;
       throw new Error(
-        `Overpass-API nach ${ABRUF_VERSUCHE} Versuchen nicht verfuegbar` +
+        `Overpass-API nach ${versuche} Versuch${versuche === 1 ? '' : 'en'} nicht verfuegbar${versuche === 1 ? ' (Notschalter: der Dienst gilt seit zwei Abfragen als ausgefallen)' : ''}` +
           `${letzter ? ` (${letzter.message.slice(0, 120)})` : ''}.`,
       );
     });
