@@ -2381,6 +2381,44 @@ async function ausfuehren(
         if (m.geschosse && m.geschosse > 0 && m.geschosse < 60) treffer.geschosse = m.geschosse;
       }
       melde(a, 'Gebaeudemerkmale', 0.999, `${zugeordnet} amtliche Gebaeude mit OSM-Merkmalen ergaenzt, davon ${mitFarbe} mit Dachfarbe.`);
+
+      /*
+       * KENNT OSM HAEUSER, WO DAS AMTLICHE MODELL KEINE HAT?
+       *
+       * BEFUND 11.08.2026, Stadtkachel 24 (E474–477 / N5532–5534): 2.923
+       * Flurstuecke, 1.675 Nutzungsflaechen, 697 Wege — und 36 Gebaeude.
+       * Der Verdacht lag auf einer Luecke in der LoD2-Lieferung; nachgemessen
+       * war es das Gegenteil: Die Stadtgrenze endet bei N 5533530, die Kachel
+       * reicht 470 m darueber hinaus. Die 2.238 Haeuser, die OSM dort kennt,
+       * stehen in Erzhausen und Egelsbach — und das amtliche LoD2 der
+       * KREISFREIEN STADT Darmstadt fuehrt sie zu Recht nicht.
+       *
+       * Richtig ist das trotzdem nur fuer den, der es weiss. Wer die Kachel
+       * oeffnet, sieht Strassen und Grundstuecke einer Nachbargemeinde OHNE
+       * HAEUSER und haelt das Modell fuer kaputt. Die Kachelgrenzen liegen auf
+       * dem Kilometerraster, nicht auf der Gemarkung — dieser Ueberstand ist
+       * also Bauart, kein Unfall.
+       *
+       * Der Vergleich braucht keine Grenzkunde: OSM kennt hier deutlich mehr
+       * Haeuser als das amtliche Modell — das ist der Befund, und er wird
+       * genannt statt verschwiegen. Umgekehrt ist der Normalfall (LoD2 zerlegt
+       * ein Haus in mehrere Baukoerper und hat darum MEHR).
+       */
+      const osmGebaeude = merkmale.size;
+      if (osmGebaeude > 100 && osmGebaeude > gebaeude.length * 1.5) {
+        datenluecken.push({
+          elementart: 'gebaeude',
+          bezeichnung: '3D-Gebaeudemodell LoD2',
+          art: 'kataster_deckt_nicht',
+          text:
+            `OpenStreetMap kennt in diesem Gebiet ${osmGebaeude.toLocaleString('de-DE')} Gebaeude, das amtliche LoD2 liefert ` +
+            `${gebaeude.length.toLocaleString('de-DE')} Baukoerper. Die amtliche Lieferung endet an der Kreisgrenze; ` +
+            `ragt das Gebiet darueber hinaus, erscheinen dort Strassen und Grundstuecke OHNE Haeuser. ` +
+            `Das ist keine Stoerung, sondern die Reichweite der Lieferung — Haeuser der Nachbargemeinde braeuchten deren LoD2-Datei.`,
+          orte: [[(a.bbox.minE + a.bbox.maxE) / 2, (a.bbox.minN + a.bbox.maxN) / 2]],
+        });
+        melde(a, 'Gebaeude ausserhalb der Lieferung', 0.999, `OSM kennt ${osmGebaeude}, LoD2 liefert ${gebaeude.length} — Gebiet ragt ueber die Kreisgrenze hinaus.`);
+      }
     } catch (e) {
       melde(a, 'Gebaeudemerkmale', 0.999, `OSM-Gebaeudemerkmale nicht verfuegbar: ${(e as Error).message}`);
     }
