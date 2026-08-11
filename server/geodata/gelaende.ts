@@ -555,9 +555,29 @@ function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
     oy = 0;
   }
 
+  /*
+   * MILLIMETER AN JEDER EINGABE DER SWEEP-LINE, nicht nur an einer.
+   *
+   * BEFUND 11.08.2026, nachgestellt: `polygon-clipping` scheitert nicht an der
+   * MENGE, sondern an einzelnen entarteten Punkten — bei acht gemischten
+   * Stichproben je Groesse lag die Fehlerquote bei 0/0/13/38/38/0 % fuer
+   * 200/400/800/1.600/2.400/3.200 Polygone; bei 3.200 gingen acht von acht
+   * durch. Ausloeser war ein Punktpaar, das sich erst in der zwoelften
+   * Nachkommastelle unterscheidet (171.04 gegen 171.0400000000001).
+   *
+   * Die Rundung gab es bisher NUR im Abzug der Bodenklassen (`ohneUeberlapp`).
+   * Alle uebrigen siebzehn Aufrufe gingen ungerundet hinein. Sie liegt jetzt
+   * in den vier Hilfen, durch die jeder Aufruf dieses Moduls laeuft.
+   *
+   * Der Verlust ist keiner: Die Daten sind zentimetergenau, die zusaetzlichen
+   * Stellen stammen aus der Verschiebung um den lokalen Ursprung.
+   */
+  const mm = (mp: number[][][][]): number[][][][] =>
+    mp.map((poly) => poly.map((ring) => ring.map((p) => [Math.round(p[0] * 1000) / 1000, Math.round(p[1] * 1000) / 1000])));
+
   const alsGeom = (f: GelaendeFlaeche): number[][][] =>
     [geschlossenerRing(f.polygon), ...(f.loecher ?? []).map(geschlossenerRing)].map((r) =>
-      r.map((p) => [p[0] - ox, p[1] - oy]),
+      r.map((p) => [Math.round((p[0] - ox) * 1000) / 1000, Math.round((p[1] - oy) * 1000) / 1000]),
     );
 
   // Vereinigung einer Liste von POLYGONEN (je Flaeche ein Polygon mit Loechern)
@@ -569,7 +589,7 @@ function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
   };
   // Vereinigung mehrerer MULTIPOLYGONE (Wirtsraum, belegte Flaeche)
   const vereinigeMP = (mps: number[][][][][]): number[][][][] => {
-    const nn = mps.filter((m) => m.length);
+    const nn = mps.filter((m) => m.length).map(mm);
     if (!nn.length) return [];
     if (nn.length === 1) return nn[0];
     return polygonClipping.union(nn[0] as never, ...(nn.slice(1) as never[])) as never;
@@ -577,12 +597,12 @@ function bodenAufbauen(flaechen: GelaendeFlaeche[]): {
 
   const schneide = (a: number[][][][], b: number[][][][]): number[][][][] => {
     if (!a.length || !b.length) return [];
-    return polygonClipping.intersection(a as never, b as never) as never;
+    return polygonClipping.intersection(mm(a) as never, mm(b) as never) as never;
   };
   const ziehAb = (a: number[][][][], b: number[][][][]): number[][][][] => {
     if (!a.length) return [];
     if (!b.length) return a;
-    return polygonClipping.difference(a as never, b as never) as never;
+    return polygonClipping.difference(mm(a) as never, mm(b) as never) as never;
   };
 
   const zuFlaechen = (

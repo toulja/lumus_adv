@@ -114,7 +114,23 @@ export class Hoehenraster {
     const k = this.kopf;
     if (spalte < 0 || zeile < 0 || spalte >= k.spalten || zeile >= k.zeilen) return;
     this.werte[zeile * k.spalten + spalte] = h;
+    this.statCache = null; // die Zahlen von statistik() gelten jetzt nicht mehr
   }
+
+  /**
+   * Gemerktes Ergebnis von `statistik()`.
+   *
+   * BEFUND 11.08.2026: `statistik()` laeuft ueber JEDE Zelle. `netzAusRaster`
+   * ruft es je Kachel einmal auf, um die Ersatzhoehe zu bekommen — bei 40
+   * Kacheln und 2,6 Mio Zellen sind das 105 Mio unnoetige Durchlaeufe, und die
+   * Netzbauzeit bestand zu 81 % daraus (1.397 -> 261 ms gemessen). Fuer die
+   * Stadt waeren es 2.441 Kacheln auf 160 Mio Zellen.
+   *
+   * Die Zahlen haengen allein an den Daten; geaendert werden die nur ueber
+   * `setze()`, und genau dort wird der Merker verworfen. Ein Zwischenspeicher
+   * mit klarer Verfallsregel ist keine zweite Wahrheit.
+   */
+  private statCache: { min: number; max: number; mittel: number; zellen: number; ohneWert: number } | null = null;
 
   /**
    * Bilineare Hoehe an beliebiger Stelle.
@@ -195,8 +211,9 @@ export class Hoehenraster {
     return { prozent: betrag * 100, richtungGrad: (grad + 360) % 360 };
   }
 
-  /** Kennzahlen fuer Nachweis und Anzeige. */
+  /** Kennzahlen fuer Nachweis und Anzeige. Gemerkt bis zum naechsten `setze()`. */
   statistik(): { min: number; max: number; mittel: number; zellen: number; ohneWert: number } {
+    if (this.statCache) return this.statCache;
     let min = Infinity;
     let max = -Infinity;
     let summe = 0;
@@ -213,13 +230,14 @@ export class Hoehenraster {
       summe += h;
       anzahl++;
     }
-    return {
+    this.statCache = {
       min: anzahl ? min : 0,
       max: anzahl ? max : 0,
       mittel: anzahl ? summe / anzahl : 0,
       zellen: this.werte.length,
       ohneWert: ohne,
     };
+    return this.statCache;
   }
 
   /**

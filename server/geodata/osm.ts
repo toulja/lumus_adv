@@ -61,6 +61,25 @@ export const OSM_QUELLE: Omit<Quellennachweis, 'abgerufenAm'> = {
 
 const OVERPASS_URL = OSM_QUELLE.url;
 
+/**
+ * WIE OFT UND WIE LANGE AUF OVERPASS GEWARTET WIRD.
+ *
+ * Die Zahlen kommen aus einer Messung gegen overpass-api.de (11.08.2026), nicht
+ * aus dem Gefuehl:
+ *  - Die schwerste Abfrage dieses Imports (`way[building]`) ueber das ganze
+ *    Stadtgebiet Darmstadt (122 km2) liefert 32.418 Elemente in 23,2 MB und
+ *    braucht 12,0 s. Die Gebietsgroesse ist also NICHT die Grenze — 120 s
+ *    Frist lassen das Zehnfache zu und brechen doch ab, wenn nichts mehr kommt.
+ *  - Die Drossel des oeffentlichen Dienstes laesst zwei gleichzeitige Abfragen
+ *    je Zugriffskennung zu. Bei zehn Abfragen hintereinander gingen mit drei
+ *    Versuchen und 5/10 s Pause DREI von zehn verloren. Mit fuenf Versuchen und
+ *    verdoppelnder Pause (5/10/20/40 s) steht in Summe ueber eine Minute
+ *    Geduld je Abfrage zur Verfuegung — das deckt die beobachteten Sperren.
+ */
+const ABRUF_VERSUCHE = 5;
+const ABRUF_PAUSE_MS = 5000;
+const ABRUF_FRIST_MS = 120_000;
+
 /** Ohne Konfiguration wenigstens ein sprechender User-Agent (Overpass-Pflicht). */
 export function standardUserAgent(): string {
   try {
@@ -523,36 +542,69 @@ export async function overpass(
   let elemente: OsmElement[];
   try {
     elemente = await nacheinander(async () => {
-      // Drei Versuche mit wachsender Pause: Overpass ist unter Last regelmaessig
-      // fuer einige Sekunden dicht (nachgestellt 08.08.2026, HTTP 429/504).
-      for (let versuch = 0; versuch < 3; versuch++) {
-        const res = await fetch(OVERPASS_URL, {
-          method: 'POST',
-          headers: {
-            'User-Agent': userAgent,
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Accept: 'application/json',
-          },
-          body: new URLSearchParams({ data: rumpf }).toString(),
-        });
-        if (res.ok) {
-          const daten = (await res.json()) as { elements?: OsmElement[] };
-          return daten.elements ?? [];
+      /*
+       * WIEDERHOLT WIRD JEDER FEHLER, NICHT NUR EIN HTTP-STATUS.
+       *
+       * BEFUND 11.08.2026, nachgestellt gegen overpass-api.de: Die Schleife
+       * fing bisher nur `res.status`. Ein Abbruch der Verbindung, ein
+       * abgeschnittener Strom oder ein Fehler in `res.json()` flog aus der
+       * Versuchsschleife HERAUS und verbrannte alle drei Versuche auf einen
+       * Schlag. Bei zehn Abfragen je Import und einer Drossel von zwei Slugs
+       * je Zugriffskennung starben so drei von zehn.
+       *
+       * ZWEITENS: Es gab kein eigenes Zeitlimit. Overpass bekommt `[timeout:60]`
+       * mitgeschickt, das gilt aber nur SERVERSEITIG — haengt die Verbindung,
+       * wartet der Import unbegrenzt. Das Zeitlimit hier liegt darum bei
+       * `ABRUF_FRIST_MS`, deutlich ueber der serverseitigen Frist: Wer vorher
+       * abbricht, verwirft eine Antwort, die noch gekommen waere.
+       *
+       * DRITTENS: Die Drossel braucht Geduld, keine Eile. Overpass gibt einen
+       * Slot nach Sekunden bis Minuten wieder frei; 5 und 10 Sekunden waren zu
+       * kurz. Jetzt fuenf Versuche mit verdoppelnder Pause (5/10/20/40 s), und
+       * wo der Dienst ein `Retry-After` schickt, gilt DIESES.
+       */
+      let letzter: Error | null = null;
+      for (let versuch = 0; versuch < ABRUF_VERSUCHE; versuch++) {
+        let warten = 0;
+        // Ein dauerhafter Fehler (falsche Abfrage, 404) wird NICHT wiederholt —
+        // er kommt beim naechsten Versuch genauso zurueck und kostet nur Zeit.
+        let dauerhaft = false;
+        try {
+          const res = await fetch(OVERPASS_URL, {
+            method: 'POST',
+            headers: {
+              'User-Agent': userAgent,
+              'Content-Type': 'application/x-www-form-urlencoded',
+              Accept: 'application/json',
+            },
+            body: new URLSearchParams({ data: rumpf }).toString(),
+            signal: AbortSignal.timeout(ABRUF_FRIST_MS),
+          });
+          if (res.ok) {
+            const daten = (await res.json()) as { elements?: OsmElement[] };
+            return daten.elements ?? [];
+          }
+          const text = await res.text().catch(() => '');
+          // 429 = Drossel, 504 = Auslastung, 400 mit Dispatcher-Meldung = ebenfalls
+          // Drossel (Overpass meldet die Slot-Sperre am 07.08.2026 nachweislich als
+          // HTTP 400 mit HTML-Seite, nicht als 429). Alles davon ist voruebergehend.
+          const voruebergehend = res.status === 429 || res.status === 504 || istDrossel(text);
+          letzter = new Error(`Overpass-API nicht erreichbar (HTTP ${res.status}). ${fehlerText(text)}`.trim());
+          dauerhaft = !voruebergehend;
+          const nachAngabe = Number(res.headers.get('retry-after'));
+          warten = Number.isFinite(nachAngabe) && nachAngabe > 0 ? Math.min(nachAngabe * 1000, 60_000) : 0;
+        } catch (e) {
+          // Verbindungsabbruch, Zeitueberschreitung, kaputte Antwort: alles
+          // voruebergehend und alles einen weiteren Versuch wert.
+          letzter = e as Error;
         }
-        const text = await res.text().catch(() => '');
-        // 429 = Drossel, 504 = Auslastung, 400 mit Dispatcher-Meldung = ebenfalls
-        // Drossel (Overpass meldet die Slot-Sperre am 07.08.2026 nachweislich als
-        // HTTP 400 mit HTML-Seite, nicht als 429). Alles davon ist voruebergehend.
-        if (versuch < 2 && (res.status === 429 || res.status === 504 || istDrossel(text))) {
-          await new Promise((r) => setTimeout(r, 5000 * (versuch + 1)));
-          continue;
-        }
-        throw new Error(
-          `Overpass-API nicht erreichbar (HTTP ${res.status}). ${fehlerText(text)}`.trim(),
-        );
+        if (dauerhaft) throw letzter;
+        if (versuch + 1 >= ABRUF_VERSUCHE) break;
+        await new Promise((r) => setTimeout(r, warten || ABRUF_PAUSE_MS * 2 ** versuch));
       }
       throw new Error(
-        'Overpass-API dauerhaft ausgelastet (Drossel) — Bodenzeichnung aus OSM k. A.',
+        `Overpass-API nach ${ABRUF_VERSUCHE} Versuchen nicht verfuegbar` +
+          `${letzter ? ` (${letzter.message.slice(0, 120)})` : ''}.`,
       );
     });
   } catch (fehler) {
