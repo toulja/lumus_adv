@@ -73,6 +73,24 @@ export const DETAIL_QUELLE: Omit<Quellennachweis, 'abgerufenAm'> = {
 
 export interface DetailOpts {
   userAgent?: string;
+  /**
+   * STRASSENMOEBEL WEGLASSEN (Baenke, Laternen, Papierkoerbe, Brunnen,
+   * Fahrradstaender).
+   *
+   * Auftrag des Auftraggebers vom 11.08.2026 fuer das Stadtmodell: „lass die
+   * moeblierung weg, mach das fuer ganz darmstadt". Der Grund ist Menge, nicht
+   * Qualitaet — auf 122 km2 sind das zehntausende Einzelkoerper, von denen
+   * jeder in der Stadtansicht kleiner als ein Bildpunkt ist.
+   *
+   * Es wird darum nicht GELOESCHT, sondern abschaltbar: Der bestehende
+   * Detailbereich (Grosser Woog / Mathildenhoehe) behaelt seine Moebel, das
+   * Stadtmodell laesst sie weg. Beides ist derselbe Programmweg mit einem
+   * Schalter, keine zweite Qualitaetsstufe.
+   *
+   * Nebenwirkung, die zaehlt: es spart die Overpass-Abfrage `detail_moebel` —
+   * die schwerste der sieben Detailabfragen (Knoten ueber das ganze Gebiet).
+   */
+  ohneMoebel?: boolean;
 }
 
 export interface Stadtdetails {
@@ -1095,12 +1113,14 @@ export async function stadtdetails(bbox: BBox, opts?: DetailOpts): Promise<Stadt
     linien.push(...b.linien);
     punkte.push(...b.punkte);
   });
-  await teil('Strassenmoebel', async () => {
-    const m = await strassenmoebel(bbox, ziel, ua);
-    punkte.push(...m.punkte);
-    zusatzflaechen.push(...m.flaechen);
-    linien.push(...m.linien);
-  });
+  if (!opts?.ohneMoebel) {
+    await teil('Strassenmoebel', async () => {
+      const m = await strassenmoebel(bbox, ziel, ua);
+      punkte.push(...m.punkte);
+      zusatzflaechen.push(...m.flaechen);
+      linien.push(...m.linien);
+    });
+  }
   await teil('Ueberwege', async () => {
     zusatzflaechen.push(...(await ueberwege(bbox, ziel, ua)));
   });

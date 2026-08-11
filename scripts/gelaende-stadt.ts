@@ -30,6 +30,7 @@ import fs from 'node:fs';
 import { initStore, nutzer, organisationen } from '../server/lib/store.ts';
 import { importStarten, auftrag, MAX_GEBIET_M2 } from '../server/geodata/gelaende.ts';
 import { overpass, standardUserAgent } from '../server/geodata/osm.ts';
+import { auszugDatei, vorratVorbereiten } from '../server/geodata/osm-auszug.ts';
 import { nachUtm } from '../shared/geo/proj.ts';
 import { punktInRing } from '../shared/geo/geometry.ts';
 import type { BBox, Punkt } from '../shared/domain/types.ts';
@@ -230,6 +231,36 @@ if (!anleger) {
   process.exit(1);
 }
 
+/*
+ * OSM-VORRAT EINMAL FUER DIE GANZE STADT, nicht je Kachel.
+ *
+ * Der Ortsauszug wird beim ersten Zugriff fuer das angefragte Gebiet
+ * aufgeschlossen (drei Durchgaenge durch 343 MB, rund 40 s). Ohne diesen
+ * Vorgriff faende jede Kachel ihr eigenes, kleineres Gebiet vor und der
+ * Vorrat wuerde 26-mal neu gebaut — gut siebzehn Minuten fuer nichts.
+ *
+ * Mit dem Gebiet ALLER Kacheln auf einmal passiert es genau einmal; jede
+ * Kachel findet ihren Ausschnitt darin und wird sofort bedient.
+ */
+{
+  const alle = {
+    minE: Math.min(...kacheln.map((k) => k.bb.minE)),
+    minN: Math.min(...kacheln.map((k) => k.bb.minN)),
+    maxE: Math.max(...kacheln.map((k) => k.bb.maxE)),
+    maxN: Math.max(...kacheln.map((k) => k.bb.maxN)),
+  };
+  const datei = auszugDatei();
+  if (datei) {
+    console.log(`\nOSM-Ortsauszug: ${datei.pfad} (${(datei.bytes / 1e6).toFixed(0)} MB, Stand ${datei.stand.toLocaleString('de-DE')})`);
+    console.log(`  wird einmal fuer das Gesamtgebiet aufgeschlossen (${((alle.maxE - alle.minE) / 1000).toFixed(0)} x ${((alle.maxN - alle.minN) / 1000).toFixed(0)} km):`);
+    vorratVorbereiten(alle, (s) => console.log(s));
+  } else {
+    console.log('\nKein OSM-Ortsauszug vorhanden — es wird die Overpass-API befragt.');
+    console.log('  Fuer einen Stadtlauf ist das der schlechtere Weg (siehe server/geodata/pbf.ts).');
+    console.log('  Holen mit:  node scripts/osm-auszug-holen.ts');
+  }
+}
+
 const ergebnisse: { nr: number; id?: string; gebaeude?: number; flaechen?: number; sekunden: number; fehler?: string }[] = [];
 for (const k of kacheln) {
   if (nurNr !== null && k.nr !== nurNr) continue;
@@ -238,7 +269,18 @@ for (const k of kacheln) {
   const name = `${STADT.name} Kachel ${k.nr} (E${k.bb.minE / 1000} N${k.bb.minN / 1000})`;
   console.log(`\n=== ${k.nr}/${kacheln.length}  ${name} ===`);
   try {
-    const a = importStarten({ name, bbox: k.bb, land: 'hessen', kreis: 'Kreisfreie Stadt Darmstadt', nutzerId: anleger.id });
+    const a = importStarten({
+      name,
+      bbox: k.bb,
+      land: 'hessen',
+      kreis: 'Kreisfreie Stadt Darmstadt',
+      nutzerId: anleger.id,
+      // Anweisung des Auftraggebers fuer das Stadtmodell (11.08.2026):
+      // „lass die moeblierung weg". Der Detailbereich am Grossen Woog behaelt
+      // seine Baenke und Laternen — das ist derselbe Programmweg mit Schalter,
+      // keine zweite Qualitaetsstufe (Begruendung: stadtdetails.DetailOpts).
+      ohneMoebel: true,
+    });
     let gelesen = 0;
     while (true) {
       const stand = auftrag(a.id);

@@ -11,6 +11,10 @@ data/gelaende-abgelegt/
 data/cache/
 data/projekte/
 data/abnahme/
+# OSM-Ortsauszug: 343 MB Fremddaten mit eigener Herkunft und Pruefsumme.
+# Gehoert nicht in die Versionsverwaltung, sondern wird geholt mit:
+#   node scripts/osm-auszug-holen.ts
+data/osm-auszug/
 data/organisationen.json
 data/nutzer.json
 data/mitgliedschaften.json

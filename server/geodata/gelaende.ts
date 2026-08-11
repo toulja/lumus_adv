@@ -1629,6 +1629,8 @@ export function importStarten(opts: {
   hoehenGitter?: number;
   texturPx?: number;
   ohneLuftbild?: boolean;
+  /** Strassenmoebel weglassen (Stadtmodell) — Begruendung in DetailOpts.ohneMoebel. */
+  ohneMoebel?: boolean;
 }): ImportAuftrag {
   const flaecheM2 = bboxFlaeche(opts.bbox);
   if (flaecheM2 > MAX_GEBIET_M2) {
@@ -1662,7 +1664,7 @@ export function importStarten(opts: {
 
 async function ausfuehren(
   a: ImportAuftrag,
-  opts: { hoehenGitter?: number; texturPx?: number; ohneLuftbild?: boolean },
+  opts: { hoehenGitter?: number; texturPx?: number; ohneLuftbild?: boolean; ohneMoebel?: boolean },
 ) {
   a.status = 'laeuft';
   const k = geoKonfig(a.land);
@@ -2207,7 +2209,7 @@ async function ausfuehren(
   try {
     const { stadtdetails, DETAIL_QUELLE } = await import('./stadtdetails.ts');
     melde(a, 'Stadtdetails werden geladen', 0.996);
-    const d = await stadtdetails(a.bbox, { userAgent: k.geokodierung.userAgent });
+    const d = await stadtdetails(a.bbox, { userAgent: k.geokodierung.userAgent, ohneMoebel: opts.ohneMoebel });
     punkte = d.punkte;
     linien = d.linien;
     if (d.zusatzflaechen?.length) flaechen.push(...d.zusatzflaechen);
@@ -2253,7 +2255,14 @@ async function ausfuehren(
       nachweise.push({
         ...DETAIL_QUELLE,
         abgerufenAm: abgerufen,
-        hinweis: `${baeume} Baeume, ${gleise} Gleise, ${halte} Haltestellen, ${linien.length - gleise} Mauern/Zaeune/Hecken/Bordsteine, ${punkte.length - baeume - halte} Strassenmoebel.`,
+        hinweis:
+          `${baeume} Baeume, ${gleise} Gleise, ${halte} Haltestellen, ${linien.length - gleise} Mauern/Zaeune/Hecken/Bordsteine, ` +
+          // NICHT VERSCHWEIGEN, WAS NICHT ERHOBEN WURDE: Ohne diesen Satz saehe
+          // ein Stadtmodell ohne Baenke aus wie eine Stadt ohne Baenke, statt
+          // wie ein Modell, in dem sie bewusst nicht erhoben wurden.
+          (opts.ohneMoebel
+            ? 'Strassenmoebel (Baenke, Laternen, Papierkoerbe, Brunnen, Fahrradstaender) auf Anweisung NICHT erhoben.'
+            : `${punkte.length - baeume - halte} Strassenmoebel.`),
       });
     }
     // --- Rillenschiene erkennen ------------------------------------------
@@ -2492,6 +2501,38 @@ async function ausfuehren(
         );
       }
     }
+
+    /*
+     * EINE ANTWORT OHNE WEGE IST KEINE ANTWORT.
+     *
+     * Der Wachposten darueber faengt nur AUSGEFALLENE Abfragen. Am 11.08.2026
+     * kam die andere Haelfte ans Licht: overpass.osm.ch antwortete mit HTTP 200
+     * in 0,2 s — und lieferte fuer einen Quadratkilometer Darmstadt NULL
+     * Gebaeude, weil die Instanz nur einen Schweiz-Auszug fuehrt. Fuer Bern
+     * lieferte dieselbe Abfrage 1.675. Technisch einwandfrei, inhaltlich leer:
+     * der Import haette das als Befund genommen und eine Stadt ohne Strassen
+     * gespeichert.
+     *
+     * Die Probe braucht keine Quellenkunde, nur eine Tatsache ueber Darmstadt:
+     * Jeder Quadratkilometer im Stadtgebiet hat Wege — auch der Wald hat
+     * Forstwege. Ein Gebiet dieser Groesse mit NULL Wegflaechen gibt es nicht;
+     * wer das liefert, hat die Gegend nicht.
+     *
+     * BEWUSST NUR BEI NULL: Ein niedriger Wert kann echt sein (ein Kachelrand,
+     * der fast nur Feld ist). Null ueber Hunderte Hektar kann es nicht. Die
+     * Schwelle ist damit die einzige, die keine Annahme ueber die Gegend
+     * enthaelt.
+     */
+    const gebietKm2 = bboxFlaeche(a.bbox) / 1_000_000;
+    const wegflaechen = flaechen.filter((f) => f.quelle === 'osm').length;
+    if (gebietKm2 >= 0.25 && wegflaechen === 0) {
+      throw new Error(
+        `Das Wegenetz kam LEER zurueck: 0 OSM-Wegflaechen auf ${gebietKm2.toFixed(2)} km2. ` +
+          `Die Abfrage ist nicht gescheitert, sie hat nichts gefunden — das gibt es in einem Stadtgebiet nicht. ` +
+          `Wahrscheinlichste Ursache: Die befragte Quelle deckt dieses Gebiet gar nicht ab (so geschehen mit einer ` +
+          `Overpass-Instanz, die nur einen Schweiz-Auszug fuehrt). Das Gelaende wird NICHT gespeichert.`,
+      );
+    }
     for (const m of altbestandMeldungen) {
       melde(a, 'Altbestand benutzt', 0.9989, m);
       datenluecken.push({
@@ -2515,6 +2556,55 @@ async function ausfuehren(
       altbestandMeldungen.length = 0; // fuer den naechsten Auftrag zuruecksetzen
     }
   }
+
+  /*
+   * WELCHE OVERPASS-INSTANZ HAT GELIEFERT?
+   *
+   * Alle OSM-Nachweise tragen die Adresse aus OSM_QUELLE — overpass-api.de.
+   * Seit dem Ausfall vom 11.08.2026 fragt der Import aber der Reihe nach
+   * mehrere Instanzen, und die Antwort kann von einer anderen kommen. Bliebe
+   * die Adresse stehen, stuende im Nachweis ein Dienst, der bei diesem Abruf
+   * gar nicht geantwortet hat.
+   *
+   * Die DATEN sind dieselben (ODbL, dieselbe OSM-Datenbank), der STAND kann
+   * sich zwischen den Instanzen aber um Stunden unterscheiden — genau darum
+   * gehoert die benutzte Adresse ins Ergebnis und nicht in eine Fussnote.
+   */
+  const { overpassBenutzt } = await import('./osm.ts');
+  const { auszugStand } = await import('./osm-auszug.ts');
+  const overpassImNachweis = (liste: Quellennachweis[]): Quellennachweis[] => {
+    /*
+     * KAM ES AUS DEM ORTSAUSZUG, MUSS DAS DA STEHEN — mit dem STAND.
+     *
+     * Das ist der ehrlichere Nachweis von beiden: Ein Auszug hat ein Datum,
+     * das man nachschlagen und wiederherstellen kann. „Overpass API, abgerufen
+     * am …" sagt dagegen nur, wann gefragt wurde, nicht welchen Stand die
+     * Antwort hatte — dieselbe Abfrage liefert morgen etwas anderes.
+     */
+    const auszug = auszugStand();
+    if (auszug) {
+      return liste.map((q) =>
+        q.dienst === 'Overpass API'
+          ? {
+              ...q,
+              dienst: 'Geofabrik-Ortsauszug (OSM)',
+              url: 'https://download.geofabrik.de/europe/germany/hessen.html',
+              hinweis: `${q.hinweis ?? ''} Aus dem Ortsauszug ${auszug.datei.replace(/\\/g, '/')}, Datenstand ${auszug.stand.toLocaleString('de-DE')}.`.trim(),
+            }
+          : q,
+      );
+    }
+    const benutzt = [...overpassBenutzt];
+    // ZURUECKSETZEN: Der Stadtlauf fuehrt 26 Importe im SELBEN Prozess aus.
+    // Ohne dies truege Kachel 26 die Instanzen aus Kachel 1 im Nachweis — eine
+    // Behauptung ueber einen Abruf, den es dort nie gab.
+    overpassBenutzt.clear();
+    if (!benutzt.length) return liste;
+    const hinweis = benutzt.length === 1 ? '' : ` Abgerufen ueber ${benutzt.length} Instanzen: ${benutzt.join(', ')}.`;
+    return liste.map((q) =>
+      q.dienst === 'Overpass API' ? { ...q, url: benutzt[0], hinweis: `${q.hinweis ?? ''}${hinweis}`.trim() || undefined } : q,
+    );
+  };
 
   // --- 5. Speichern ---------------------------------------------------------
   // Das Raster wird als eigene Binaerdatei abgelegt, nicht in die
@@ -2572,7 +2662,7 @@ async function ausfuehren(
     datenluecken: datenluecken.length ? datenluecken : undefined,
     beschriftungen: beschriftungen.length ? beschriftungen : undefined,
     flurstuecke,
-    quellennachweis: nachweise,
+    quellennachweis: overpassImNachweis(nachweise),
     erstelltAm: jetzt(),
     erstelltVon: a.nutzerId,
   };

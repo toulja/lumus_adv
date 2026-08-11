@@ -46,6 +46,7 @@ import { bboxNachWgs, nachUtm } from '../../shared/geo/proj.ts';
 import { RANG } from './nutzung.ts';
 import { cache } from '../lib/store.ts';
 import { geoKonfig } from './konfig.ts';
+import { auszugAbfrage, auszugDatei, relationAbfrage, relationMitGeometrie } from './osm-auszug.ts';
 
 // ---------------------------------------------------------------------------
 // Quellennachweis
@@ -59,7 +60,56 @@ export const OSM_QUELLE: Omit<Quellennachweis, 'abgerufenAm'> = {
   quellenvermerk: '(c) OpenStreetMap-Mitwirkende',
 };
 
-const OVERPASS_URL = OSM_QUELLE.url;
+/**
+ * MEHRERE OVERPASS-INSTANZEN, der Reihe nach.
+ *
+ * BEFUND 11.08.2026, mitten im Stadtlauf: Nach Kachel 1 antwortete
+ * overpass-api.de mit `HTTP 504 — runtime error: Dispatcher_Client::request_re`
+ * und war danach gar nicht mehr erreichbar. Das ist ein Fehler IM DIENST, keine
+ * Sperre gegen uns — der Landesdienst lieferte zur selben Zeit in 0,27 s.
+ * Ergebnis: 25 von 26 Kacheln gescheitert.
+ *
+ * Ein Stadtabbild darf nicht an der Tagesform eines einzelnen freiwillig
+ * betriebenen Servers haengen. Jeder Wiederholversuch geht darum an die
+ * NAECHSTE Instanz statt an dieselbe; die erfolgreiche wird gemerkt und zuerst
+ * gefragt, und welche gedient hat, gehoert in den Quellennachweis (die Daten
+ * sind dieselben — ODbL, OSM-Mitwirkende —, der Stand kann sich aber um
+ * Stunden unterscheiden).
+ *
+ * WARUM overpass.osm.ch NICHT IN DER LISTE STEHT — der gefaehrlichste Befund
+ * dieses Tages. Die Instanz antwortete als einzige zuverlaessig und schnell,
+ * und sie hat mich beinahe eine leere Stadt bauen lassen. Gemessen mit
+ * derselben Abfrage:
+ *   overpass.osm.ch, 1 km2 Bern       1.675 Gebaeude, HTTP 200, 0,2 s
+ *   overpass.osm.ch, 1 km2 Woog           0 Gebaeude, HTTP 200, 0,2 s
+ * Es ist kein Spiegel des Planeten, sondern ein SCHWEIZ-AUSZUG. Fuer Darmstadt
+ * liefert er ein technisch einwandfreies, inhaltlich leeres Ergebnis — genau
+ * die Sorte Fehler, die dieses Projekt nicht haben darf: das Modell haette
+ * fertig ausgesehen und waere leer gewesen. (Die naheliegende Gegenprobe
+ * `is_in` taugt dafuer NICHT: der Auszug fuehrt Darmstadts grobe
+ * Verwaltungsgrenzen sehr wohl, gemessen 2 Grenzflaechen — nur eben kein
+ * einziges Gebaeude darin.)
+ *
+ * Die Lehre steht nicht hier, sondern in gelaende.ts: eine erfolgreiche
+ * Abfrage, die fuer eine ganze Kachel NULL Wege liefert, ist kein Befund,
+ * sondern ein Ausfall. Diese Liste zu pflegen genuegt nicht — der Import muss
+ * jeden Lieferanten am Ergebnis messen.
+ *
+ * ZUR REDUNDANZ, ebenfalls gemessen: overpass.kumi.systems und
+ * overpass.private.coffee loesen auf DIESELBE Adresse 193.219.97.30 auf. Es
+ * sind zwei Namen fuer einen Rechner, nicht zwei Spiegel — die Liste ist also
+ * kuerzer, als sie aussieht. Genau darum ist der Auszug in osm-auszug.ts der
+ * eigentliche Weg fuer grosse Gebiete, und dies hier nur noch der Notweg fuer
+ * kleine.
+ */
+const OVERPASS_SPIEGEL = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
+let overpassAktiv = 0;
+/** Welche Instanzen tatsaechlich geliefert haben — fuer den Nachweis. */
+export const overpassBenutzt = new Set<string>();
 
 /**
  * WIE OFT UND WIE LANGE AUF OVERPASS GEWARTET WIRD.
@@ -553,6 +603,24 @@ export async function overpass(
   bbox: BBox,
   userAgent: string,
 ): Promise<OsmElement[]> {
+  /*
+   * LIEGT EIN ORTSAUSZUG BEREIT, GILT DER — nicht der fremde Dienst.
+   *
+   * Der Auszug (data/osm-auszug/*.osm.pbf) ist vollstaendig, hat einen festen
+   * Stand und ist in Millisekunden da. Die Overpass-API ist keins davon: sie
+   * hat an zwei Tagen hintereinander 25 von 26 Stadtkacheln gekostet, und ihre
+   * eigenen Nutzungsregeln weisen Massenabrufe ab (Begruendung in pbf.ts).
+   *
+   * Der Dateizwischenspeicher wird dabei UEBERSPRUNGEN. Er ist gegen die
+   * Drossel eines Netzdienstes gebaut; hier gaebe es nichts zu sparen, aber
+   * etwas zu verlieren: eine alte, unter Overpass gecachte Antwort wuerde den
+   * frischeren Auszug verdecken.
+   */
+  if (auszugDatei()) {
+    const relId = relationAbfrage(rumpf);
+    return relId !== null ? relationMitGeometrie(relId) : auszugAbfrage(rumpf, bbox);
+  }
+
   const schluessel = cacheSchluessel(art, bbox, rumpf);
   const gecacht = cache.jsonLesen<OsmCache | null>(null, 'osm', schluessel);
   if (gecacht && Array.isArray(gecacht.elements)) return gecacht.elements;
@@ -589,8 +657,12 @@ export async function overpass(
         // Ein dauerhafter Fehler (falsche Abfrage, 404) wird NICHT wiederholt —
         // er kommt beim naechsten Versuch genauso zurueck und kostet nur Zeit.
         let dauerhaft = false;
+        // JEDER VERSUCH GEHT AN EINE ANDERE INSTANZ. Denselben Server fuenfmal
+        // zu fragen, waehrend er einen Dispatcher-Fehler wirft, ist verlorene
+        // Zeit — vier Instanzen durchzugehen ist derselbe Aufwand mit Aussicht.
+        const stelle = OVERPASS_SPIEGEL[(overpassAktiv + versuch) % OVERPASS_SPIEGEL.length];
         try {
-          const res = await fetch(OVERPASS_URL, {
+          const res = await fetch(stelle, {
             method: 'POST',
             headers: {
               'User-Agent': userAgent,
@@ -603,6 +675,8 @@ export async function overpass(
           if (res.ok) {
             const daten = (await res.json()) as { elements?: OsmElement[] };
             ausfaelleHintereinander = 0; // der Dienst antwortet wieder
+            overpassAktiv = (overpassAktiv + versuch) % OVERPASS_SPIEGEL.length; // diese zuerst fragen
+            overpassBenutzt.add(stelle);
             return daten.elements ?? [];
           }
           const text = await res.text().catch(() => '');
@@ -610,7 +684,7 @@ export async function overpass(
           // Drossel (Overpass meldet die Slot-Sperre am 07.08.2026 nachweislich als
           // HTTP 400 mit HTML-Seite, nicht als 429). Alles davon ist voruebergehend.
           const voruebergehend = res.status === 429 || res.status === 504 || istDrossel(text);
-          letzter = new Error(`Overpass-API nicht erreichbar (HTTP ${res.status}). ${fehlerText(text)}`.trim());
+          letzter = new Error(`Overpass ${new URL(stelle).host} nicht erreichbar (HTTP ${res.status}). ${fehlerText(text)}`.trim());
           dauerhaft = !voruebergehend;
           const nachAngabe = Number(res.headers.get('retry-after'));
           warten = Number.isFinite(nachAngabe) && nachAngabe > 0 ? Math.min(nachAngabe * 1000, 60_000) : 0;
@@ -620,10 +694,26 @@ export async function overpass(
           letzter = e as Error;
         }
         if (dauerhaft) throw letzter;
-        if (versuch + 1 >= ABRUF_VERSUCHE) break;
+        if (versuch + 1 >= versuche) break;
         await new Promise((r) => setTimeout(r, warten || ABRUF_PAUSE_MS * 2 ** versuch));
       }
       ausfaelleHintereinander++;
+      /*
+       * NACH EINEM FEHLSCHLAG WEITERRUECKEN — sonst hebt der Notschalter die
+       * Spiegel wieder auf.
+       *
+       * Der Notschalter laesst nach zwei erfolglosen Abfragen nur noch EINEN
+       * Versuch zu. Bliebe `overpassAktiv` dabei stehen, ginge dieser eine
+       * Versuch immer an dieselbe — nachweislich tote — Instanz, und die
+       * uebrigen drei kaemen nie an die Reihe. Genau der Ausfall, fuer den die
+       * Spiegel da sind, haette sie damit ausgeschaltet.
+       *
+       * Also faengt die naechste Abfrage dort an, wo diese aufgehoert hat: bei
+       * 4 Instanzen und 1 Versuch je Abfrage sind spaetestens nach vier
+       * Abfragen alle durchprobiert; antwortet eine, setzt der Erfolgszweig
+       * `overpassAktiv` auf sie und der Notschalter faellt zurueck.
+       */
+      overpassAktiv = (overpassAktiv + versuche) % OVERPASS_SPIEGEL.length;
       throw new Error(
         `Overpass-API nach ${versuche} Versuch${versuche === 1 ? '' : 'en'} nicht verfuegbar${versuche === 1 ? ' (Notschalter: der Dienst gilt seit zwei Abfragen als ausgefallen)' : ''}` +
           `${letzter ? ` (${letzter.message.slice(0, 120)})` : ''}.`,
