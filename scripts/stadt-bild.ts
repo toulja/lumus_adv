@@ -162,8 +162,21 @@ for (const k of kacheln) {
   }
 }
 
-// Baeume als einzelne Punkte — bei 4 m je Bildpunkt ist ein Baum ein Punkt.
-const BAUM: [number, number, number] = [104, 132, 96];
+/*
+ * BAEUME NACH ART GEFAERBT — damit man der Karte ansieht, was das Modell
+ * ueber sie weiss.
+ *
+ * Seit dem Nachlauf gegen die Attribut-API traegt jeder Katasterbaum seine
+ * amtliche Art (36.408 von 49.630; die uebrigen sind OSM-Baeume ausserhalb
+ * des Katasterausschnitts). Nadel- und immergruene Gehoelze bekommen darum
+ * einen eigenen Ton — ein Nadelwald sieht im Bild anders aus als eine
+ * Lindenallee, und wo gar keine Art bekannt ist, sagt der graugruene Ton
+ * genau das.
+ */
+const BAUM_LAUB: [number, number, number] = [104, 132, 96];
+const BAUM_NADEL: [number, number, number] = [54, 92, 78];
+const BAUM_IMMER: [number, number, number] = [76, 112, 92];
+const BAUM_OHNE: [number, number, number] = [126, 138, 122];
 let baeumeGezeichnet = 0;
 for (const k of kacheln) {
   for (const p of k.g.punkte ?? []) {
@@ -171,10 +184,22 @@ for (const k of kacheln) {
     const zx = Math.round((p.pos[0] - minE) / mpp);
     const zy = Math.round((maxN - p.pos[1]) / mpp);
     if (zx < 0 || zx >= W || zy < 0 || zy >= H) continue;
-    const i = (zy * W + zx) * 4;
-    daten[i] = BAUM[0];
-    daten[i + 1] = BAUM[1];
-    daten[i + 2] = BAUM[2];
+    const f = p.laubart === 'nadelbaum' ? BAUM_NADEL : p.laubart === 'immergruen' ? BAUM_IMMER : p.artLa ? BAUM_LAUB : BAUM_OHNE;
+    // Bei feiner Aufloesung bekommt der Baum seine gemessene Krone, sonst
+    // bliebe er ein Punkt und die Art waere nicht ablesbar.
+    const r = mpp <= 1 ? Math.max(0, Math.round((p.kroneM ?? 4) / 2 / mpp)) : 0;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > r * r) continue;
+        const x = zx + dx;
+        const y = zy + dy;
+        if (x < 0 || x >= W || y < 0 || y >= H) continue;
+        const i = (y * W + x) * 4;
+        daten[i] = f[0];
+        daten[i + 1] = f[1];
+        daten[i + 2] = f[2];
+      }
+    }
     baeumeGezeichnet++;
   }
 }
