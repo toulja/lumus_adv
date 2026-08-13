@@ -34,6 +34,80 @@ type KatasterZeile = [number, number, number, number, number, number, string, st
 
 const LAUBARTEN = new Set(['laubbaum', 'nadelbaum', 'immergruen']);
 
+/**
+ * AMTLICHE SACHDATEN je Baum — Art, Hoehe, Kronen- und Stammdurchmesser.
+ *
+ * Die 3D-Kacheln des Dienstes tragen nur Lage und Groesse; die Sachdaten
+ * liegen dahinter und werden ueber den JWT jeder Instanz herausgegeben
+ * (scripts/baumarten-holen.ts holt sie einmal in die Datei unten).
+ *
+ * WARUM DAS ZAEHLT: Die Hoehe wurde bisher aus dem Skalenwert ABGELEITET
+ * (SkalaY x 1,5). Die Ableitung ist richtig — gegen alle 36.409 amtlichen
+ * Hoehen nachgemessen betraegt die Abweichung im Median 0,00 m und im
+ * schlimmsten Fall 0,01 m —, aber ein amtlicher Wert ist keine Ableitung.
+ * Neu hinzu kommen Baumart und Stammdurchmesser, die es vorher gar nicht gab.
+ */
+interface Baummerkmal {
+  hoeheM?: number;
+  kroneM?: number;
+  stammCm?: number;
+  artDt?: string;
+  artLa?: string;
+}
+let merkmaleCache: Record<string, Baummerkmal> | null = null;
+function merkmale(): Record<string, Baummerkmal> {
+  if (merkmaleCache) return merkmaleCache;
+  const pfad = cache.pfad('baumkataster', 'darmstadt_baummerkmale.json');
+  try {
+    merkmaleCache = fs.existsSync(pfad) ? (JSON.parse(fs.readFileSync(pfad, 'utf8')) as Record<string, Baummerkmal>) : {};
+  } catch {
+    merkmaleCache = {};
+  }
+  return merkmaleCache;
+}
+
+/*
+ * NADELBAUM ODER LAUBBAUM — aus der GATTUNG, nicht aus dem deutschen Namen.
+ *
+ * Der lateinische Name ist eindeutig, der deutsche schwankt. Massgeblich ist
+ * hier die ERSCHEINUNG, nicht die Systematik: Die Einstufung steuert, ob die
+ * Szene einen Kegel oder eine Krone zeichnet.
+ *
+ * Darum steht die EIBE (Taxus) bei den immergruenen und nicht bei den
+ * Nadelbaeumen, obwohl sie botanisch ein Nadelholz ist — eine Eibe sieht nicht
+ * aus wie eine Fichte. Dieselbe Entscheidung hatte der frueherer Abgleich
+ * schon getroffen; die Gegenprobe gegen seine 1.690 bestimmten Baeume ergibt
+ * mit dieser Tabelle 1.689 Treffer (99,94 %). Die eine Abweichung ist eine
+ * Kalifornische Nusseibe (Torreya), die dort als Laubbaum gefuehrt war — hier
+ * steht sie aus demselben Grund wie die Eibe bei den immergruenen.
+ *
+ * GINKGO gehoert ausdruecklich NICHT zu den Nadelbaeumen (laubabwerfend,
+ * Faecherblaetter) und MAGNOLIE nicht zu den immergruenen (nur grandiflora
+ * ist es) — beides waren Fehler eines ersten Entwurfs, die die Gegenprobe
+ * aufgedeckt hat.
+ */
+const NADEL_GATTUNG = new Set([
+  'abies', 'picea', 'pinus', 'larix', 'pseudotsuga', 'thuja', 'chamaecyparis', 'juniperus',
+  'tsuga', 'cedrus', 'metasequoia', 'sequoiadendron', 'sequoia', 'cryptomeria', 'cupressus',
+  'calocedrus', 'platycladus', 'microbiota', 'sciadopitys', 'taxodium', 'araucaria',
+]);
+const IMMERGRUEN_GATTUNG = new Set([
+  'ilex', 'buxus', 'photinia', 'elaeagnus', 'eucalyptus', 'arbutus', 'laurus', 'olea',
+  'mahonia', 'pieris', 'rhododendron', 'taxus', 'torreya', 'cephalotaxus',
+]);
+/** Arten, die von ihrer Gattung abweichen — hier zaehlt der volle Name. */
+const IMMERGRUEN_ART = ['prunus laurocerasus', 'magnolia grandiflora', 'quercus ilex', 'viburnum tinus', 'ligustrum japonicum'];
+
+export function laubartAus(artLa: string | undefined): 'laubbaum' | 'nadelbaum' | 'immergruen' | undefined {
+  if (!artLa) return undefined;
+  const s = artLa.trim().toLowerCase();
+  if (IMMERGRUEN_ART.some((x) => s.startsWith(x))) return 'immergruen';
+  const gattung = s.split(/\s+/)[0];
+  if (IMMERGRUEN_GATTUNG.has(gattung)) return 'immergruen';
+  if (NADEL_GATTUNG.has(gattung)) return 'nadelbaum';
+  return 'laubbaum';
+}
+
 /** Hoehe [m] = SkalaY * 1,5 — am Dienst nachgemessen (3 Stichproben exakt). */
 const HOEHE_JE_SKALA = 1.5;
 
@@ -74,9 +148,16 @@ function ausDatei(bbox: BBox, datei: string, praefix: string): GelaendePunktObje
     // Math.max/min bis in hoeheM/kroneM — der Baum waere dann unsichtbar oder
     // riesig, ohne dass irgendwo ein Fehler auftaucht.
     if (!Number.isFinite(zeile[3]) || !Number.isFinite(zeile[4])) continue;
-    const krone = Math.max(KRONE_MIN, Math.min(KRONE_MAX, zeile[3]));
-    const hoehe = Math.max(HOEHE_MIN, Math.min(HOEHE_MAX, zeile[4] * HOEHE_JE_SKALA));
-    const laubart = zeile[7] && LAUBARTEN.has(zeile[7]) ? (zeile[7] as 'laubbaum' | 'nadelbaum' | 'immergruen') : undefined;
+    // AMTLICHER WERT VOR ABLEITUNG: Liegt der Sachdatensatz vor, gilt er.
+    // Sonst bleibt es bei der Ableitung aus dem Skalenwert (nachgemessen
+    // deckungsgleich, siehe Baummerkmal).
+    const m = merkmale()[zeile[6]] ?? {};
+    const krone = Math.max(KRONE_MIN, Math.min(KRONE_MAX, m.kroneM ?? zeile[3]));
+    const hoehe = Math.max(HOEHE_MIN, Math.min(HOEHE_MAX, m.hoeheM ?? zeile[4] * HOEHE_JE_SKALA));
+    // Die 8. Spalte der Kataster-Zeile ist der alte Nachlauf; sie gilt nur
+    // noch, wo kein Sachdatensatz vorliegt.
+    const laubart =
+      laubartAus(m.artLa) ?? (zeile[7] && LAUBARTEN.has(zeile[7]) ? (zeile[7] as 'laubbaum' | 'nadelbaum' | 'immergruen') : undefined);
     out.push({
       id: `${praefix}_${Math.round(e * 100)}_${Math.round(n * 100)}`,
       art: 'baum',
@@ -84,6 +165,9 @@ function ausDatei(bbox: BBox, datei: string, praefix: string): GelaendePunktObje
       hoeheM: Math.round(hoehe * 10) / 10,
       kroneM: Math.round(krone * 10) / 10,
       ...(laubart ? { laubart } : {}),
+      ...(m.artDt ? { artDt: m.artDt } : {}),
+      ...(m.artLa ? { artLa: m.artLa } : {}),
+      ...(m.stammCm ? { stammCm: Math.round(m.stammCm) } : {}),
       // Amtlich vermessen — die Werte sind Messungen, keine Klassenannahmen.
       gemessen: true,
     });

@@ -457,6 +457,16 @@ export interface GelaendePunktObjekt {
   /** Kronendurchmesser in Metern (nur Baeume). */
   kroneM?: number;
   laubart?: 'laubbaum' | 'nadelbaum' | 'immergruen';
+  /**
+   * Baumart im Klartext, wie das amtliche Kataster sie fuehrt — deutsch und
+   * lateinisch (z. B. „Spitz-Ahorn" / „Acer platanoides"). Der lateinische
+   * Name ist die belastbare Angabe: aus ihm wird `laubart` abgeleitet, der
+   * deutsche schwankt zwischen Katastern.
+   */
+  artDt?: string;
+  artLa?: string;
+  /** Stammdurchmesser in Zentimetern (nur Baeume, amtlich gemessen). */
+  stammCm?: number;
   name?: string;
   /** Ausrichtung in Grad, wo sie bekannt ist (Baenke, Haltestellen). */
   drehungGrad?: number;
