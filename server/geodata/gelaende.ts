@@ -2185,8 +2185,27 @@ async function ausfuehren(
         const text =
           `Unter ${b.brueckenOhneMessung} von ${b.bruecken} Bruecken laesst sich keine lichte Hoehe messen: Das Hoehenmodell ` +
           `zeigt dort keine Senke. DGM1 ist ein GELAENDEmodell — Brueckenbauwerke sind darin nicht durchgaengig entfernt, und ` +
-          `ein Bauwerk, das im Hoehenmodell als Boden steht, kann nichts ueberspannen. Belastbar waere hier nur eine Angabe ` +
-          `aus der Quelle (OpenStreetMap maxheight) oder ein Hoehenmodell mit Bauwerksfreistellung.`;
+          `ein Bauwerk, das im Hoehenmodell als Boden steht, kann nichts ueberspannen. ` +
+          /*
+           * DIE ZWEITE QUELLE WURDE GEPRUEFT UND TAUGT HIER NICHT — nachgemessen
+           * am 13.08.2026 ueber das ganze Stadtgebiet (39.313 Wege):
+           *   `maxheight:physical` (die BAULICHE Hoehe):        0 Mal
+           *   `maxheight` (das Verkehrszeichen):              282 Mal,
+           *      davon 149 mit einer Zahl; die uebrigen 133 sagen „default"
+           *      bzw. „below_default" und sind damit keine Angabe.
+           *   Bruecken im Stadtgebiet:                        589
+           *      davon mit einem kreuzenden Weg darunter:     158
+           *      davon mit einer ZAHL an diesem Weg:            7
+           * Ein angeschriebenes Verkehrszeichen ist ausserdem eine
+           * Rechtsgrenze, keine Bauwerksmessung — es liegt regelmaessig unter
+           * der wirklichen lichten Hoehe. Es taugt als untere Schranke, nicht
+           * als Mass. Der Satz sagt das dem Leser, statt eine Zahl vorzugeben,
+           * die es nicht gibt.
+           */
+          `Auch die zweite Quelle traegt sie nicht: Im Stadtgebiet fuehrt OpenStreetMap KEINEN einzigen ` +
+          `\`maxheight:physical\` (bauliche Hoehe); von 589 Bruecken haben 7 ein angeschriebenes Verkehrszeichen ` +
+          `am kreuzenden Weg, und das ist eine Rechtsgrenze unterhalb der wirklichen Hoehe, kein Mass. ` +
+          `Belastbar waere nur ein Hoehenmodell MIT Bauwerksfreistellung oder das Brueckenbuch des Baulasttraegers.`;
         datenluecken.push({ elementart: 'bruecke', bezeichnung: 'Bruecke', art: 'unter_erwartung', text, orte: [] });
         melde(a, 'Hoehenband', 0.9943, text);
       }
