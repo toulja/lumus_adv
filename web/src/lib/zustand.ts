@@ -230,6 +230,27 @@ export const nutzeZustand = create<Zustand>((set, get) => ({
     set({ laedt: true, fehler: null });
     try {
       const d = await api.projekt(id);
+      /*
+       * EIN PROJEKT OHNE SEIN GELAENDE IST EIN FEHLER, KEIN LEERER PLATZ.
+       *
+       * BEFUND 13.08.2026: Nach dem Aufraeumen der Gelaendeordner zeigten 26
+       * Projekte auf Gelaende, die beiseitegelegt worden waren. Der Server
+       * antwortet darauf mit `gelaende: null`, und diese Zeile machte daraus
+       * ein stilles `null` — die Anwendung oeffnete das Projekt, zeigte
+       * „Kein Gelaende geladen" und meldete NICHTS. Weder in der Fehlerleiste
+       * noch in der Konsole stand, dass ein Gelaende FEHLT.
+       *
+       * Unterschieden wird darum sauber: Ein Projekt OHNE `gelaendeId` hat
+       * bewusst keins. Ein Projekt MIT `gelaendeId`, zu der der Server nichts
+       * liefert, hat ein Loch — und das gehoert gesagt, mit der Kennung, damit
+       * man es wiederfindet.
+       */
+      if (d.projekt.gelaendeId && !d.gelaende) {
+        throw new Error(
+          `Das Gelaende „${d.projekt.gelaendeId}" dieses Projekts ist nicht mehr vorhanden. ` +
+            `Wahrscheinlich wurde es aufgeraeumt (data/gelaende-abgelegt) oder der Import ist fehlgeschlagen.`,
+        );
+      }
       const g = d.gelaende ? await api.gelaende(d.gelaende.id) : null;
       set({
         projektId: id,
