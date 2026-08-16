@@ -26,6 +26,12 @@ Danach im Browser: **http://localhost:5273**
 
 Unter Windows genügt ein Doppelklick auf **`Heinerfest starten.bat`** im Projektordner.
 
+> **Auf einen anderen Rechner umziehen?** `git pull` bringt nur den Programmtext — alles
+> unter `data/` (Geodaten, Gelände, Projekte) ist bewusst nicht in der Versionsverwaltung.
+> Der vollständige Weg mit beiden Möglichkeiten (Daten mitkopieren oder neu aufbauen) und
+> den Prüfzahlen für die Gegenprobe steht in [`docs/NEUER-RECHNER.md`](docs/NEUER-RECHNER.md).
+> Was heute wie lange dauert und warum, steht gemessen in [`docs/LEISTUNG.md`](docs/LEISTUNG.md).
+
 | Dienst | Port |
 |---|---|
 | API + WebSocket | 4720 |
