@@ -75,7 +75,7 @@ Zielwerte für „läuft flüssig":
 
 ---
 
-## Stufe A — Messzeug (zuerst, sonst ist „perfekt" nicht prüfbar)
+## Stufe A — Messzeug ✅ erledigt am 16.08.2026
 
 **Warum:** Ohne wiederholbare Messung ist jede Aussage über Leistung eine
 Meinung. Alle folgenden Stufen berufen sich auf dieselben Zahlen.
@@ -96,6 +96,24 @@ Meinung. Alle folgenden Stufen berufen sich auf dieselben Zahlen.
 
 **Fertig wenn:** ein Befehl plus ein Seitenaufruf einen vergleichbaren Bericht
 erzeugen, und der Ist-Zustand als Bezugspunkt abgelegt ist.
+
+**Erledigt.** `npm run leistung` (Server) und `web/src/scene/messung.ts`
+(Aufbau je Gruppe, Bildzeiten, Speicher) schreiben nach
+`data/cache/leistung/`. Ergebnis siehe `docs/LEISTUNG.md` Abschnitt 3a.
+
+**Der Befund der ersten Messung ändert die Rangfolge:** Nicht das Geländenetz
+ist der Brocken (0,9 s), sondern die **Bodenzeichnung mit 64,7 s von
+insgesamt 77,7 s Bauzeit**. Deshalb gilt ab jetzt:
+
+* Stufe B bleibt (holt 8 s), ist aber nicht der große Hebel.
+* **Stufe D beginnt mit der Bodenzeichnung**, nicht mit den Gebäuden.
+* Zeitscheiben (Stufe C) verteilen 65 s, sie verkürzen sie nicht — beide
+  Stufen zusammen ergeben erst das Ziel.
+
+**Messfallstrick, sofort aufgetreten:** In einem verborgenen Fenster wurde in
+30 s genau **ein** Bild gezeichnet. Bild- und Bereitzeiten brauchen ein
+sichtbares Fenster; der Bericht führt dafür jetzt `bereitGrund` und `bilder`,
+damit ein Messfehler nicht als Leistungsbefund gelesen wird.
 
 ---
 
@@ -161,6 +179,16 @@ Vorstufe zu Kacheln.
 
 **Schritte**
 
+0. **Zuerst die Bodenzeichnung** (Befund aus Stufe A: 64,7 s von 77,7 s).
+   Erst nachweisen, wo die Zeit steckt (`flaechengeometrie` mit sofortigem
+   `PolygonGeometry.createGeometry`? `verdichteRing` auf 2 m? die Höhenabfrage
+   je Eckpunkt?), dann gezielt eingreifen. Naheliegende Wege, in dieser
+   Reihenfolge zu prüfen: Flächen erst bauen, wenn sie im Blick sind; die
+   Unterteilung (`granularity`) an die Flächengröße koppeln statt fest; die
+   Verdichtung nur dort, wo das Gelände es verlangt (Höhenunterschied statt
+   Länge als Kriterium). **Die gezeichnete Fläche muss die gerechnete
+   bleiben** — Vereinfachungen dürfen nur die Darstellung betreffen, nie
+   `GelaendeFlaeche`.
 1. Gebäude nach **Kameraentfernung** einsortieren; die Warteschlange arbeitet
    von innen nach außen.
 2. **Grobe Ferne:** jenseits einer Entfernung zunächst ein Klotz aus dem
@@ -274,4 +302,22 @@ Speicher nach 10 min: vorher      MB   nachher      MB
 typecheck:            grün / rot
 abnahme:              __ / 59
 Bemerkung:
+```
+
+### Ausgefüllt
+
+```
+Stufe:            A — Messzeug
+Rechner:          PCK03, Intel i5-9500T (6 Kerne, 2,2 GHz), 8 GB RAM
+Datum:            16.08.2026
+/api/projekte:        vorher  4.121 ms   nachher  4.121 ms  (Stufe A ändert nichts)
+/api/gelaende:        vorher  3.811 ms   nachher  3.811 ms
+Erste Ansicht:        vorher  Bauzeit 77,7 s (Bodenzeichnung 64,7 s davon)
+Längster Frame:       vorher 18.588 ms (erstes Bild nach dem Bau)
+Speicher:             570 MB nach dem Aufbau
+typecheck:            grün
+abnahme:              59 / 59
+Bemerkung:            Bereitzeit nicht messbar — Vorschaufenster zeichnete
+                      1 Bild in 30 s. Bild- und Bereitzeiten brauchen ein
+                      sichtbares Fenster; Bauzeiten sind davon unberührt.
 ```

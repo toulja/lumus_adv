@@ -23,6 +23,7 @@
     "gelaende:gebiet": "node scripts/gelaende-gebiet.ts",
     "gelaende:innenstadt": "node scripts/gelaende-gebiet.ts 474700 5524150 476510 5525150 \"Darmstadt Innenstadt + Mathildenhoehe\"",
     "gelaende:aufraeumen": "node scripts/gelaende-aufraeumen.ts",
+    "leistung": "node scripts/leistung-messen.ts",
     "palette:pruefen": "node scripts/palette-pruefen.ts",
     "palette:rechnen": "node scripts/palette-rechnen.ts",
     "flaechen:nachbarschaft": "node scripts/flaechen-nachbarschaft.ts",

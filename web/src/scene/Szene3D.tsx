@@ -32,6 +32,7 @@ import {
 import { LICHT } from './palette.ts';
 import { baueBaeume, baueHecken } from './vegetation.ts';
 import { baueKanten, kantenBilanz } from './kanten.ts';
+import { aufbauEnde, aufbauStarten, berichtSenden, letzterBericht, messeGruppe } from './messung.ts';
 import { baueTreppen } from './treppen.ts';
 import { baueHaltestellen, baueBarrieren, bauePortale, baueStrassenmoebel, baueVerkehrszeichen } from './verkehr.ts';
 // Gleise kommen seit 09.08.2026 aus einem eigenen Modul: sie werden nicht mehr
@@ -129,6 +130,9 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
       Cesium,
       hoehen: () => hoehenRef.current,
       zustand: nutzeZustand,
+      // Messzeug (Stufe A): letzte Messung ansehen bzw. ablegen.
+      messung: () => letzterBericht(),
+      messen: (kennung?: string) => berichtSenden(letzterBericht(), kennung),
       abzug: async (name = 'szene') => {
         viewer.render();
         const bild = viewer.canvas.toDataURL('image/png');
@@ -329,7 +333,20 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
     // die ganze Stadt einmal auf dem groben Ersatzgelaende gebaut und Sekunden
     // spaeter noch einmal auf dem echten.
     if (hoehenDaten?.gelaendeId !== gelaende.id) return;
-    const aufbau = hoehenDaten.raster ? gelaendeAufbauen(gelaende, hoehenDaten.raster) : null;
+    // Messung des ganzen Aufbaus (Stufe A, docs/PLAN-DARMSTADT.md). Sie kostet
+    // nichts ausser einem performance.now() je Gruppe und laeuft deshalb immer
+    // mit — eine Messung, die man erst einschalten muss, hat man im Ernstfall
+    // nicht.
+    aufbauStarten(gelaende.id, gelaende.name, {
+      gebaeude: gelaende.gebaeude?.length ?? 0,
+      flaechen: gelaende.flaechen?.length ?? 0,
+      punkte: gelaende.punkte?.length ?? 0,
+      linien: gelaende.linien?.length ?? 0,
+      bruchkanten: gelaende.bruchkanten?.length ?? 0,
+    });
+    const aufbau = hoehenDaten.raster
+      ? messeGruppe('gelaendenetz', () => gelaendeAufbauen(gelaende, hoehenDaten.raster!), (a) => a?.dreiecke ?? 0)
+      : null;
     hoehenRef.current = new Hoehenlage(gelaende, aufbau?.flaeche);
     const h = hoehenRef.current;
     if (aufbau) {
@@ -396,11 +413,13 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
       viewer,
       gruppen.current,
       'gelaende',
-      ebenen.gelaende
-        ? aufbau
-          ? baueGelaendeAusNetz(gelaende, aufbau, ebenen.luftbild)
-          : baueGelaende(gelaende, ebenen.luftbild)
-        : [],
+      messeGruppe('gelaende', () =>
+        ebenen.gelaende
+          ? aufbau
+            ? baueGelaendeAusNetz(gelaende, aufbau, ebenen.luftbild)
+            : baueGelaende(gelaende, ebenen.luftbild)
+          : [],
+      ),
     );
 
     // Bodenzeichnung nach tatsaechlicher Nutzung — das massgetreue Abbild.
@@ -408,18 +427,22 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
     // Parkplatz-Beschriftung — beide lesen dieselben Flaechendaten.
     if (ebenen.nutzung && !ebenen.luftbild && gelaende.flaechen?.length) {
       const nutzungPrims: (Cesium.Primitive | Cesium.LabelCollection)[] = [
-        ...baueBodenzeichnung(gelaende.flaechen, h),
+        ...messeGruppe('bodenzeichnung', () => baueBodenzeichnung(gelaende.flaechen, h)),
         // Kantenkoerper (Bordstein, Boeschung, Stuetzmauer) gehoeren zur
         // Bodenzeichnung: sie sind das, was aus zwei Farbfeldern eine Strasse
         // mit Rand macht. Sie stammen aus dem Modell, nicht aus dem Renderer
         // (Gelaende.bruchkanten, abgeleitet beim Import).
-        ...baueKanten(gelaende.bruchkanten, h),
-        ...baueFahrbahnmarkierungen(gelaende.linien ?? [], h),
+        ...messeGruppe('kanten', () => baueKanten(gelaende.bruchkanten, h)),
+        ...messeGruppe('markierungen', () => baueFahrbahnmarkierungen(gelaende.linien ?? [], h)),
       ];
       // Bruecken: Ueberbau und Widerlager. Die Fahrbahn darauf zeichnet
       // baueBodenzeichnung bereits auf ihrer Hoehenebene; hier kommt der
       // Koerper darunter dazu — und damit die lichte Hoehe als BILD.
-      const bruecken = baueBrueckenkoerper(gelaende.flaechen, h);
+      const bruecken = messeGruppe(
+        'bruecken',
+        () => baueBrueckenkoerper(gelaende.flaechen, h),
+        (b) => b.prims.length,
+      );
       nutzungPrims.push(...bruecken.prims);
       if (bruecken.bericht.bruecken) {
         console.info(
@@ -434,7 +457,11 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
       // Das Stufenmass kommt aus den BAUKLASSEN und reist mit dem Gelaende mit
       // (`gelaende.stufenmass`). Damit rechnet der Browser mit genau denselben
       // Eingaben wie der Import, der daraus die Gelaender abgeleitet hat.
-      const treppen = baueTreppen(gelaende.flaechen, h, gelaende.stufenmass);
+      const treppen = messeGruppe(
+        'treppen',
+        () => baueTreppen(gelaende.flaechen, h, gelaende.stufenmass),
+        (t) => t.prims.length,
+      );
       nutzungPrims.push(...treppen.prims);
       if (treppen.bericht.flaechen) {
         const t = treppen.bericht;
@@ -455,9 +482,9 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
 
     // Gebaeude aus den ECHTEN LoD2-Dach- und Wandflaechen
     if (ebenen.gebaeude) {
-      const stadt = baueStadt(gelaende);
-      const kanten = baueGebaeudeKanten(gelaende);
-      const baender = baueGeschossbaender(gelaende);
+      const stadt = messeGruppe('gebaeude', () => baueStadt(gelaende), (s) => s.prims.length);
+      const kanten = messeGruppe('gebaeudekanten', () => baueGebaeudeKanten(gelaende));
+      const baender = messeGruppe('geschossbaender', () => baueGeschossbaender(gelaende), (b) => (b ? 1 : 0));
       const gebPrims = [...stadt.prims, ...kanten];
       if (baender) gebPrims.push(baender);
       ersetze(viewer, gruppen.current, 'gebaeude', gebPrims);
@@ -476,7 +503,7 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
     const barrieren = linien.filter((l) => l.art !== 'hecke' && l.art !== 'gleis' && l.art !== 'markierung');
 
     if (ebenen.nutzung) {
-      const gleisBau = baueGleise(gleise, h);
+      const gleisBau = messeGruppe('gleise', () => baueGleise(gleise, h), (g) => g.prims.length);
       ersetze(viewer, gruppen.current, 'gleise', gleisBau.prims);
       const b = gleisBau.bericht;
       console.info(
@@ -486,16 +513,30 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
     } else {
       ersetze(viewer, gruppen.current, 'gleise', []);
     }
-    ersetze(viewer, gruppen.current, 'barrieren', ebenen.nutzung ? baueBarrieren(barrieren, h) : []);
+    ersetze(viewer, gruppen.current, 'barrieren', messeGruppe('barrieren', () => (ebenen.nutzung ? baueBarrieren(barrieren, h) : [])));
     // Portale: die Waende, in denen Rampen und Unterfuehrungen verschwinden.
     // Sie stammen aus dem Hoehenband (server/geodata/hoehenband.ts) und tragen
     // ihre lichte Hoehe als Angabe des Modells, nicht als Zierrat.
-    ersetze(viewer, gruppen.current, 'portale', ebenen.nutzung ? bauePortale(linien, h) : []);
-    ersetze(viewer, gruppen.current, 'vegetation', ebenen.gebaeude ? [...baueBaeume(punkte, h), ...baueHecken(hecken, h)] : []);
-    ersetze(viewer, gruppen.current, 'moebel', ebenen.nutzung ? baueStrassenmoebel(punkte, h) : []);
-    ersetze(viewer, gruppen.current, 'verkehrszeichen', ebenen.nutzung ? baueVerkehrszeichen(punkte, h) : []);
+    ersetze(viewer, gruppen.current, 'portale', messeGruppe('portale', () => (ebenen.nutzung ? bauePortale(linien, h) : [])));
+    ersetze(
+      viewer,
+      gruppen.current,
+      'vegetation',
+      messeGruppe('vegetation', () => (ebenen.gebaeude ? [...baueBaeume(punkte, h), ...baueHecken(hecken, h)] : [])),
+    );
+    ersetze(viewer, gruppen.current, 'moebel', messeGruppe('moebel', () => (ebenen.nutzung ? baueStrassenmoebel(punkte, h) : [])));
+    ersetze(
+      viewer,
+      gruppen.current,
+      'verkehrszeichen',
+      messeGruppe('verkehrszeichen', () => (ebenen.nutzung ? baueVerkehrszeichen(punkte, h) : [])),
+    );
 
-    const halte = ebenen.nutzung ? baueHaltestellen(punkte, h) : { prims: [], labels: [] };
+    const halte = messeGruppe(
+      'haltestellen',
+      () => (ebenen.nutzung ? baueHaltestellen(punkte, h) : { prims: [], labels: [] }),
+      (x) => x.prims.length,
+    );
     ersetze(viewer, gruppen.current, 'haltestellen', halte.prims);
     if (labelsRef.current) {
       // Haltestellennamen dauerhaft in einer eigenen Sammlung fuehren
@@ -531,6 +572,14 @@ export function Szene3D({ sichtbar }: { sichtbar: boolean }) {
         orientation: { heading: 0, pitch: Cesium.Math.toRadians(-42), roll: 0 },
       });
     }
+    // Ab hier laufen nur noch die Bilder: der Bau ist beauftragt, die
+    // Primitives uebersetzen ihre Geometrie im ersten update(). Die Messung
+    // beobachtet deshalb weiter, bis die Szene ruhig ist (siehe messung.ts).
+    aufbauEnde(viewer.scene, (b) => {
+      // Mit ?mess=1 wandert jeder Aufbau von allein in data/cache/leistung/ —
+      // fuer Laeufe, bei denen niemand vor dem Fenster sitzt.
+      if (new URLSearchParams(location.search).has('mess')) void berichtSenden(b);
+    });
     // `hoehenDaten` gehoert in die Abhaengigkeiten: der Aufbau wartet oben
     // darauf und muss laufen, sobald das Raster da ist.
   }, [gelaende, hoehenDaten, ebenen.gelaende, ebenen.luftbild, ebenen.gebaeude, ebenen.nutzung]);

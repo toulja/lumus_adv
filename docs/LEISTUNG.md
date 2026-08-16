@@ -155,6 +155,79 @@ gehört (Stufe 4).
 
 ---
 
+## 3a. Stufe A ist umgesetzt — und hat die Prioritäten verschoben
+
+Seit 16.08.2026 misst sich die Anwendung selbst:
+
+* `npm run leistung` misst die Serverseite (drei Läufe je Aufruf, Median,
+  Bericht nach `data/cache/leistung/`).
+* Der Browser misst jeden Szenenaufbau (`web/src/scene/messung.ts`), meldet ihn
+  in der Konsole und legt ihn mit `?mess=1` oder `window.EP3D.messen()` neben
+  den Serverberichten ab.
+
+### Erste vollständige Messung (PCK03, i5-9500T, 6 Kerne, 8 GB, 1280×720)
+
+Serverseite:
+
+| Aufruf | Median | Umfang | Kodierung |
+|---|---|---|---|
+| `/api/projekte` | 4.121 ms | 20 kB | keine |
+| `/api/gelaende` | 3.811 ms | 4 kB | keine |
+| `/api/gelaende/:id` | 459 ms | 14,3 MB | keine |
+| `/api/gelaende/:id/hoehen.bin` | 50 ms | 10,0 MB | keine |
+
+Szenenaufbau, Pilotgebiet (5.471 Gebäude, 3.192 Flächen, 3.941 Punkte):
+
+| Gruppe | Bauzeit | Anteil |
+|---|---|---|
+| **bodenzeichnung** | **64.736 ms** | **83 %** |
+| gelaende (Netz → Primitives) | 4.172 ms | 5 % |
+| gebaeude | 2.197 ms | 3 % |
+| gleise | 1.551 ms | 2 % |
+| kanten (1.873 Bruchkanten) | 1.260 ms | 2 % |
+| gelaendenetz (1,85 Mio. Dreiecke) | 898 ms | 1 % |
+| geschossbaender, vegetation, barrieren, moebel, treppen, rest | je < 610 ms | 4 % |
+| **Summe** | **77.714 ms** | |
+
+Dazu: längstes Einzelbild **18.588 ms** (das erste Bild nach dem Bau — dort
+übergibt Cesium die Geometrie an die GPU), Speicher 570 MB.
+
+### Was das ändert
+
+Die bisherige Annahme war, das Geländenetz mit seinen 1,85 Mio. Dreiecken sei
+der Brocken. **Das ist falsch.** Das Netz kostet 0,9 s. Der Brocken ist die
+**Bodenzeichnung**: 65 der 78 Sekunden.
+
+Die wahrscheinliche Ursache steht in `web/src/scene/stadt.ts`
+(`baueBodenzeichnung` → `flaechengeometrie`): je Fläche läuft
+`Cesium.PolygonGeometry.createGeometry` **sofort im Erzeuger** — also die volle
+Triangulierung des Straßenraums samt Löchern, dazu die Unterteilung nach
+`granularity`, davor `verdichteRing` auf 2 m und je Eckpunkt eine
+Höhenabfrage. Bei 3.192 Flächen, von denen einzelne der vereinigte Straßenraum
+mit hunderten Löchern sind, summiert sich das. **Das ist eine Hypothese aus der
+Messung, kein Beweis** — der Nachweis gehört an den Anfang von Stufe C/D.
+
+Folgen für den Plan:
+
+1. Stufe B (Server) bleibt richtig, ist aber nicht mehr der größte Hebel: sie
+   holt 8 Sekunden, die Bodenzeichnung 65.
+2. Der Zielwert „erste Ansicht < 2 s" ist **ohne** einen Eingriff bei der
+   Bodenzeichnung unerreichbar — Zeitscheiben allein verteilen die 65 Sekunden
+   nur, sie verkürzen sie nicht.
+3. Genau diese Arbeit ist es, die eine Kachel-Backerei später auf den Server
+   verlegen würde. Was hier gespart wird, spart dort ein zweites Mal.
+
+### Messfallstrick, gleich bei der ersten Messung aufgetreten
+
+`bereitMs` (Zeit bis zur ruhigen Szene) kam als `null` zurück, weil das
+Vorschaufenster in 30 Sekunden **ein einziges Bild** gezeichnet hat: ein
+verborgenes oder gedrosseltes Fenster rendert kaum. Der Bericht führt dafür
+jetzt `bereitGrund` und die Zahl der Bilder — sonst liest man einen Messfehler
+als Leistungsbefund. **Für Bild- und Bereitzeiten muss das Fenster sichtbar
+sein**; Bauzeiten sind davon unberührt.
+
+---
+
 ## 4. Bekannte Größenordnungen (Stand 16.08.2026)
 
 | Größe | Wert |

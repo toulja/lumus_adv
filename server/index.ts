@@ -9,6 +9,7 @@
 import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
@@ -111,6 +112,33 @@ app.post('/api/debug/snapshot', anmeldungNoetig, (req, res) => {
   // Nur den Dateinamen zurueckgeben — der absolute Serverpfad gehoert nicht in
   // eine API-Antwort.
   res.json({ ok: true, datei, bytes: daten.length });
+});
+
+/**
+ * Leistungsbericht ablegen (Stufe A aus docs/PLAN-DARMSTADT.md).
+ *
+ * Der Browser misst seinen Szenenaufbau selbst (web/src/scene/messung.ts) und
+ * schickt das Ergebnis hierher. Ohne Ablage waere jede Messung nach dem
+ * naechsten Neuladen verloren — und damit unvergleichbar. Die Datei traegt
+ * Zeitstempel und Rechnername, weil genau der Vergleich zweier Maschinen der
+ * Zweck der Uebung ist.
+ */
+app.post('/api/debug/leistung', anmeldungNoetig, (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    res.status(404).end();
+    return;
+  }
+  const { bericht, kennung } = req.body as { bericht?: Record<string, unknown>; kennung?: string };
+  if (!bericht || typeof bericht !== 'object') {
+    res.status(400).json({ fehler: 'Kein Bericht empfangen.' });
+    return;
+  }
+  const stempel = new Date().toISOString().replace(/[:.]/g, '-');
+  const teil = (kennung ?? 'aufbau').replace(/[^\w-]/g, '') || 'aufbau';
+  const datei = `${stempel}_${teil}.json`;
+  const voll = { ...bericht, rechner: os.hostname(), cpu: os.cpus()[0]?.model ?? 'k. A.', kerne: os.cpus().length, ramGb: Math.round(os.totalmem() / 1073741824) };
+  cache.jsonSchreiben(voll, 'leistung', datei);
+  res.json({ ok: true, datei });
 });
 
 // Gebaute Oberflaeche ausliefern, falls vorhanden (Produktionsbetrieb)
