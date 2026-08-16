@@ -117,7 +117,7 @@ damit ein Messfehler nicht als Leistungsbefund gelesen wird.
 
 ---
 
-## Stufe B — Server aufräumen (Stufe 0 aus `docs/LEISTUNG.md`)
+## Stufe B — Server aufräumen ✅ erledigt am 16.08.2026
 
 **Warum:** 10 Sekunden Wartezeit in der Oberfläche, die niemand braucht.
 
@@ -139,6 +139,15 @@ damit ein Messfehler nicht als Leistungsbefund gelesen wird.
 
 **Fertig wenn:** beide Namenslisten unter 100 ms; zweites Öffnen desselben
 Geländes ohne erneuten Download der 24 MB; `npm run abnahme` unverändert grün.
+
+**Erledigt, alle drei Kriterien erfüllt:** 28 ms und 19 ms statt 4.121 ms und
+3.811 ms; zweiter Abruf beider großer Dateien = HTTP 304 mit 0 Byte in 2–3 ms;
+Abnahme 59/59. Auf der Leitung 2,4 MB statt 14,3 MB. Einzelheiten und
+Begründungen in `docs/LEISTUNG.md` Abschnitt 3b.
+
+Bestehende Gelände zieht `npm run gelaende:koepfe` nach (29 Stück, 8 s
+zusammen) — nötig ist das nicht, der erste Zugriff heilt sich selbst, aber
+dann zahlt es der Nutzer als Wartezeit.
 
 ---
 
@@ -320,4 +329,25 @@ abnahme:              59 / 59
 Bemerkung:            Bereitzeit nicht messbar — Vorschaufenster zeichnete
                       1 Bild in 30 s. Bild- und Bereitzeiten brauchen ein
                       sichtbares Fenster; Bauzeiten sind davon unberührt.
+```
+
+```
+Stufe:            B — Server aufräumen
+Rechner:          PCK03, Intel i5-9500T (6 Kerne, 2,2 GHz), 8 GB RAM
+Datum:            16.08.2026
+/api/projekte:        vorher  4.121 ms   nachher     28 ms   (147x)
+/api/gelaende:        vorher  3.811 ms   nachher     19 ms   (200x)
+/api/gelaende/:id:    vorher    459 ms   nachher    119 ms   (2,4 MB statt 14,3 MB)
+zweiter Abruf:        vorher    459 ms   nachher      2 ms   (304, 0 Byte)
+hoehen.bin 2. Abruf:  vorher     50 ms   nachher      3 ms   (304, 0 Byte)
+Erste Ansicht:        unverändert — Stufe B fasst den Aufbaupfad nicht an
+Längster Frame:       unverändert
+typecheck:            grün
+abnahme:              59 / 59
+Bemerkung:            Client-Bauzeiten schwankten am selben Tag zwischen 77,7 s
+                      und 119,5 s, gleichmäßig über ALLE 17 Gruppen — die
+                      Maschine, nicht der Code. Der Bericht misst deshalb jetzt
+                      den Takt; Client-Zeiten werden ab sofort in Takten
+                      verglichen. Bezugswert: Bau 2.153 Takte, davon
+                      Bodenzeichnung 1.667 (77 %).
 ```

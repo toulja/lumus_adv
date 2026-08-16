@@ -59,6 +59,37 @@ export interface Aufbaubericht {
   speicherMb: number | null;
   browser: string;
   bildschirm: string;
+  /**
+   * TEMPO DER MASCHINE IM AUGENBLICK DER MESSUNG, in Millisekunden fuer eine
+   * feste Rechenaufgabe.
+   *
+   * WARUM (Befund 16.08.2026): Zwei Messungen desselben Aufbaus auf demselben
+   * Rechner ergaben 77,7 s und 119,5 s — und zwar in ALLEN 17 Gruppen
+   * gleichmaessig um denselben Faktor. Das war kein Code, das war der Rechner:
+   * ein 35-W-Prozessor unter Dauerlast, 8 GB Arbeitsspeicher, nebenher Vite und
+   * ein Abnahmelauf. Ohne diesen Wert haette man daraus einen Rueckschritt
+   * gelesen, den es nie gab.
+   *
+   * Mit ihm sind Laeufe vergleichbar: `bauSummeMs / taktMs` ist von der
+   * Tagesform weitgehend unabhaengig — und macht auch den Vergleich ZWEIER
+   * Rechner erst ehrlich.
+   */
+  taktMs: number;
+  kerne: number;
+}
+
+/**
+ * Feste Rechenaufgabe als Tempomesser. Bewusst simpel und ohne Speicherbedarf:
+ * gemessen werden soll die Rechenleistung im Augenblick, nicht der Zwischen-
+ * speicher. Rund 30–60 ms auf heutigen Rechnern.
+ */
+function taktMessen(): number {
+  const t = performance.now();
+  let x = 0;
+  for (let i = 1; i < 3_000_000; i++) x += Math.sqrt(i) / (i % 7 + 1);
+  // Ergebnis benutzen, damit kein Optimierer die Schleife wegwirft
+  if (!Number.isFinite(x)) console.warn('[Messung] Taktmessung entartet.');
+  return Math.round((performance.now() - t) * 10) / 10;
 }
 
 let laufend: {
@@ -93,6 +124,8 @@ export function aufbauStarten(gelaendeId: string, gelaendeName: string, mengen: 
       speicherMb: null,
       browser: navigator.userAgent,
       bildschirm: `${window.innerWidth}x${window.innerHeight} @ ${window.devicePixelRatio}x`,
+      taktMs: taktMessen(),
+      kerne: navigator.hardwareConcurrency ?? 0,
     },
   };
 }
@@ -144,7 +177,7 @@ export function aufbauEnde(scene: Cesium.Scene, fertig?: (b: Aufbaubericht) => v
     b.speicherMb = sp ? Math.round(sp.usedJSHeapSize / 1048576) : null;
     letzter = b;
     console.info(
-      `[Messung] Aufbau ${b.gelaendeName}: Bau ${b.bauSummeMs} ms, ` +
+      `[Messung] Aufbau ${b.gelaendeName} (Takt ${b.taktMs} ms, ${b.bauSummeMs && b.taktMs ? Math.round(b.bauSummeMs / b.taktMs) : '—'} Takte): Bau ${b.bauSummeMs} ms, ` +
         `bereit nach ${b.bereitMs ?? '—'} ms, laengstes Bild ${b.laengsterFrameMs} ms, ` +
         `${b.frames50} von ${b.bilder} Bildern ueber 50 ms${b.speicherMb !== null ? `, Speicher ${b.speicherMb} MB` : ''}.` +
         (b.bereitGrund ? ` ${b.bereitGrund}` : ''),

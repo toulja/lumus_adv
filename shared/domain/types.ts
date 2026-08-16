@@ -657,6 +657,15 @@ export interface Gelaende {
   quellennachweis: Quellennachweis[];
   erstelltAm: string;
   erstelltVon: string;
+  /**
+   * Die Bbox in Grad — abgeleitet aus `bbox`, aber MITGESPEICHERT.
+   *
+   * Grund (16.08.2026): Frueher hat die Route sie bei jeder Anfrage angehaengt
+   * und musste dafuer die ganze Datei parsen und neu serialisieren. Steht sie
+   * in der Datei, darf die Route sie roh streamen. Fehlt sie, stammt das
+   * Gelaende aus einem Import davor; dann greift der alte Weg.
+   */
+  bbox4326?: { minLon: number; minLat: number; maxLon: number; maxLat: number };
 }
 
 // ---------------------------------------------------------------------------

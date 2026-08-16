@@ -118,7 +118,9 @@ router.get('/', anmeldungNoetig, (req: AuthRequest, res) => {
     const bericht = letzterBericht(projekt.id);
     return {
       projekt,
-      gelaendeName: gelaendeStore.laden(projekt.gelaendeId)?.name ?? 'k. A.',
+      // NUR den Kopf lesen: fuer einen Namen die ganze Gelaendedatei zu parsen
+      // hat die Uebersicht 5,2 s gekostet (gemessen 16.08.2026).
+      gelaendeName: gelaendeStore.kopf(projekt.gelaendeId)?.name ?? 'k. A.',
       veranstalterName: organisationen.finde(projekt.veranstalterOrgId)?.name ?? 'k. A.',
       rolle,
       objekteAnzahl: inhalt.objekte.length,
@@ -143,7 +145,8 @@ router.post('/', anmeldungNoetig, (req: AuthRequest, res) => {
     res.status(400).json({ fehler: 'Name und Gelaende sind erforderlich.' });
     return;
   }
-  if (!gelaendeStore.laden(b.gelaendeId)) {
+  // Existenzpruefung ueber den Kopf — dafuer muss niemand 14 MB parsen.
+  if (!gelaendeStore.kopf(b.gelaendeId)) {
     res.status(400).json({ fehler: 'Das angegebene Gelaende existiert nicht.' });
     return;
   }

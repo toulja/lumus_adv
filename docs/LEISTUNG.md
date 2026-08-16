@@ -228,6 +228,71 @@ sein**; Bauzeiten sind davon unberührt.
 
 ---
 
+## 3b. Stufe B ist umgesetzt — die Oberfläche wartet nicht mehr auf den Server
+
+Umgesetzt am 16.08.2026, gemessen auf demselben Rechner (PCK03):
+
+| Aufruf | vorher | nachher | Faktor |
+|---|---|---|---|
+| `GET /api/projekte` | 4.121 ms | **28 ms** | 147× |
+| `GET /api/gelaende` | 3.811 ms | **19 ms** | 200× |
+| `GET /api/gelaende/:id` | 459 ms | **119 ms** | 3,9× |
+| zweiter Abruf desselben Geländes | 459 ms / 14,3 MB | **2 ms / 0 Byte** (304) | — |
+| `hoehen.bin`, zweiter Abruf | 50 ms / 10 MB | **3 ms / 0 Byte** (304) | — |
+
+Auf der Leitung sind aus 14,3 MB **2,4 MB** geworden (gzip).
+
+**Was dafür nötig war**
+
+1. **`kopf.json` je Gelände** (id, Name, Zeitpunkt, bbox, Mengen, 428 Byte).
+   `gelaende.liste()` und die Projektübersicht lesen nur noch ihn. Fehlt er,
+   erzeugt ihn der erste Zugriff aus der großen Datei und legt ihn ab — kein
+   Bestand braucht eine Wanderung, `npm run gelaende:koepfe` zieht ihn trotzdem
+   für alle 29 Gelände auf einmal nach.
+2. **Zwischenspeicher für `laden()`**, bewusst nur zwei Einträge mit
+   mtime-Prüfung: ein geparstes Gelände belegt ein Vielfaches seiner
+   Dateigröße, alle 29 zu halten wäre ein Speicherleck mit Ansage.
+3. **`bbox4326` steht jetzt IN der Datei.** Erst dadurch darf die Route die
+   Datei streamen, statt 14 MB zu parsen, ein Feld anzuhängen und alles
+   zurückzuserialisieren.
+4. **Vorkomprimierte `gelaende.json.gz`** wird beim Speichern einmal erzeugt.
+   Kein Rechenaufwand je Anfrage, keine neue Abhängigkeit (`zlib` ist in Node).
+   Eine `.gz`, die älter ist als ihre Quelle, wird nicht benutzt.
+5. **ETag statt langer Verfallszeit.** Gelände sind fast unveränderlich — aber
+   eben nur fast (`POST /:id/dachfarben` schreibt sie neu). Mit ETag kostet das
+   zweite Öffnen 304 statt 14 MB, und eine echte Änderung kommt trotzdem sofort
+   an.
+6. **`hoehen.bin`: `no-store` → `no-cache`.** Der alte Grund war richtig — ein
+   unter derselben Id neu eingesetztes Gelände darf kein altes Höhenmodell aus
+   dem Zwischenspeicher bekommen, das fällt niemandem auf. Revalidierung
+   erfüllt beides. Der frühere Browser-Fehlschlag beim Wegschreiben
+   (`ERR_CACHE_WRITE_FAILURE`) ist jetzt ein ausdrücklicher zweiter Versuch
+   ohne Zwischenspeicher, nicht mehr ein stiller Rückfall aufs grobe Gitter.
+
+### Nebenbefund: Client-Messungen brauchen einen Bezug
+
+Zwei Aufbauten desselben Geländes auf demselben Rechner ergaben 77,7 s und
+119,5 s — und zwar **in allen 17 Gruppen gleichmäßig um denselben Faktor**
+(Geländenetz 0,9 → 1,9 s, Bodenzeichnung 64,7 → 93,5 s, Gleise 1,6 → 2,8 s).
+Eine Serveränderung kann nicht 17 unabhängige Bauteile gleichzeitig bremsen;
+das war der Rechner: 35-W-Prozessor unter Dauerlast, 8 GB Arbeitsspeicher,
+nebenher Vite, ein Abnahmelauf und der Browser mit inzwischen 905 MB.
+
+Der Bericht misst deshalb jetzt den **Takt** — eine feste Rechenaufgabe
+unmittelbar vor dem Aufbau. Client-Zeiten werden ab sofort **in Takten**
+verglichen, nicht in Millisekunden:
+
+| Lauf | Takt | Bau | in Takten |
+|---|---|---|---|
+| nach Stufe B, ruhiger Rechner | 49 ms | 105,5 s | **2.153** |
+| davon Bodenzeichnung | | 81,7 s | **1.667 (77 %)** |
+
+Damit wird auch der Vergleich mit der stärkeren Maschine ehrlich: dort zählt
+nicht, dass alles schneller ist, sondern **um welchen Faktor mehr** als der
+Takt allein erklärt.
+
+---
+
 ## 4. Bekannte Größenordnungen (Stand 16.08.2026)
 
 | Größe | Wert |

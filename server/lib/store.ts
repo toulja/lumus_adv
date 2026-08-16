@@ -16,6 +16,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import zlib from 'node:zlib';
+import { bboxNachWgs } from '../../shared/geo/proj.ts';
 import type {
   AenderungsEvent,
   Benachrichtigung,
@@ -198,24 +200,145 @@ export const benachrichtigungen = {
 
 const GELAENDE_DIR = path.join(WURZEL, 'gelaende');
 
+/**
+ * Der KOPF eines Gelaendes: alles, was eine Liste braucht, und nichts, was sie
+ * teuer macht.
+ *
+ * WARUM (gemessen 16.08.2026): `liste()` hat jede der 29 Gelaendedateien
+ * vollstaendig geparst — 0,3 GB, groesste Datei 58 MB — um daraus drei Felder
+ * zu lesen. Die Projektuebersicht tat dasselbe je Zeile. Ergebnis: 4,1 s bzw.
+ * 3,8 s fuer zwei blosse Namenslisten, waehrend derer der einthreadige Server
+ * fuer alle stillsteht.
+ *
+ * Der Kopf liegt als eigene kleine Datei neben dem Gelaende und wird bei jedem
+ * Speichern mitgeschrieben. Fehlt er (Gelaende von vor dem 16.08.2026), wird er
+ * beim ersten Zugriff aus der grossen Datei erzeugt — einmal teuer, danach nie
+ * wieder.
+ */
+export interface GelaendeKopf {
+  id: string;
+  name: string;
+  erstelltAm: string;
+  erstelltVon: string;
+  bbox: Gelaende['bbox'];
+  epsg: number;
+  hoeheMittel: number;
+  mengen: { gebaeude: number; flaechen: number; punkte: number; linien: number; bruchkanten: number };
+  /** Traegt die grosse Datei bereits `bbox4326`? Dann darf sie roh gestreamt werden. */
+  hatBbox4326: boolean;
+}
+
+function kopfAus(g: Gelaende): GelaendeKopf {
+  return {
+    id: g.id,
+    name: g.name,
+    erstelltAm: g.erstelltAm,
+    erstelltVon: g.erstelltVon,
+    bbox: g.bbox,
+    epsg: g.epsg,
+    hoeheMittel: g.hoeheMittel,
+    mengen: {
+      gebaeude: g.gebaeude?.length ?? 0,
+      flaechen: g.flaechen?.length ?? 0,
+      punkte: g.punkte?.length ?? 0,
+      linien: g.linien?.length ?? 0,
+      bruchkanten: g.bruchkanten?.length ?? 0,
+    },
+    hatBbox4326: !!g.bbox4326,
+  };
+}
+
+/**
+ * Zwischenspeicher fuer geladene Gelaende — BEWUSST NUR ZWEI.
+ *
+ * Ein geparstes Gelaende belegt ein Vielfaches seiner Dateigroesse im
+ * Arbeitsspeicher (das Pilotgebiet: 14 MB Datei). Alle 29 zu halten waere ein
+ * Speicherleck mit Ansage. Zwei genuegen: der uebliche Fall ist "dasselbe
+ * Gelaende mehrfach hintereinander" (Bericht, Lageplan, KI-Anfrage), nicht
+ * "alle Gelaende reihum".
+ */
+const GELAENDE_CACHE_MAX = 2;
+const gelaendeCache = new Map<string, { mtimeMs: number; daten: Gelaende }>();
+
 export const gelaende = {
   verzeichnis: (gid: string) => path.join(GELAENDE_DIR, gid),
+  datei: (gid: string) => path.join(GELAENDE_DIR, gid, 'gelaende.json'),
+  kopfDatei: (gid: string) => path.join(GELAENDE_DIR, gid, 'kopf.json'),
+  gzDatei: (gid: string) => path.join(GELAENDE_DIR, gid, 'gelaende.json.gz'),
+
   liste(): { id: string; name: string; erstelltAm: string; erstelltVon: string }[] {
     sicherstellen(GELAENDE_DIR);
     return fs
       .readdirSync(GELAENDE_DIR)
       .filter((d) => fs.existsSync(path.join(GELAENDE_DIR, d, 'gelaende.json')))
       .map((d) => {
-        const g = lies<Gelaende | null>(path.join(GELAENDE_DIR, d, 'gelaende.json'), null);
-        return g ? { id: g.id, name: g.name, erstelltAm: g.erstelltAm, erstelltVon: g.erstelltVon } : null;
+        const k = gelaende.kopf(d);
+        return k ? { id: k.id, name: k.name, erstelltAm: k.erstelltAm, erstelltVon: k.erstelltVon } : null;
       })
       .filter(Boolean) as { id: string; name: string; erstelltAm: string; erstelltVon: string }[];
   },
-  laden(gid: string): Gelaende | null {
-    return lies<Gelaende | null>(path.join(GELAENDE_DIR, gid, 'gelaende.json'), null);
+
+  /**
+   * Kopfdaten eines Gelaendes. Fehlt die Kopfdatei, wird sie aus der grossen
+   * Datei erzeugt und abgelegt (Selbstheilung) — so braucht kein Bestand ein
+   * Wanderungsskript, er wird beim ersten Zugriff nachgezogen.
+   */
+  kopf(gid: string): GelaendeKopf | null {
+    const k = lies<GelaendeKopf | null>(gelaende.kopfDatei(gid), null);
+    if (k && k.mengen) return k;
+    const g = gelaende.laden(gid);
+    if (!g) return null;
+    const neu = kopfAus(g);
+    try {
+      schreibeAtomar(gelaende.kopfDatei(gid), JSON.stringify(neu, null, 1));
+    } catch {
+      /* Kopf ist ein Beschleuniger, kein Muss */
+    }
+    return neu;
   },
+
+  laden(gid: string): Gelaende | null {
+    const datei = gelaende.datei(gid);
+    let mtimeMs = 0;
+    try {
+      mtimeMs = fs.statSync(datei).mtimeMs;
+    } catch {
+      return null;
+    }
+    const gemerkt = gelaendeCache.get(gid);
+    if (gemerkt && gemerkt.mtimeMs === mtimeMs) {
+      // Neu einsortieren, damit der Aelteste weicht und nicht der Meistgenutzte
+      gelaendeCache.delete(gid);
+      gelaendeCache.set(gid, gemerkt);
+      return gemerkt.daten;
+    }
+    const daten = lies<Gelaende | null>(datei, null);
+    if (!daten) return null;
+    gelaendeCache.set(gid, { mtimeMs, daten });
+    while (gelaendeCache.size > GELAENDE_CACHE_MAX) {
+      const aeltester = gelaendeCache.keys().next().value as string;
+      gelaendeCache.delete(aeltester);
+    }
+    return daten;
+  },
+
   speichern(g: Gelaende) {
-    schreibeAtomar(path.join(GELAENDE_DIR, g.id, 'gelaende.json'), JSON.stringify(g));
+    // `bbox4326` gehoert IN die Datei, nicht in die Antwort: nur dann darf die
+    // Route die Datei roh streamen, statt 14 MB zu parsen und sofort wieder zu
+    // serialisieren (gemessen 16.08.2026: 459 ms je Aufruf).
+    if (!g.bbox4326) g.bbox4326 = bboxNachWgs(g.bbox);
+    const text = JSON.stringify(g);
+    schreibeAtomar(gelaende.datei(g.id), text);
+    schreibeAtomar(gelaende.kopfDatei(g.id), JSON.stringify(kopfAus(g), null, 1));
+    // Vorkomprimiert ablegen statt je Anfrage zu komprimieren: das Gelaende
+    // aendert sich fast nie, wird aber bei jedem Projektwechsel geholt. Kostet
+    // einmal beim Import und spart jedes Mal Rechenzeit UND Leitung.
+    try {
+      fs.writeFileSync(gelaende.gzDatei(g.id), zlib.gzipSync(Buffer.from(text, 'utf8'), { level: 6 }));
+    } catch {
+      /* ohne .gz wird eben unkomprimiert ausgeliefert */
+    }
+    gelaendeCache.delete(g.id);
   },
   /**
    * Pfad einer Texturkachel.

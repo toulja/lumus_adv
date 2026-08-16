@@ -198,25 +198,39 @@ export function weltNachUtm(c: Cesium.Cartesian3): Punkt | null {
  * 09.08.2026) — der Aufrufer faellt dann auf das Kachelgitter zurueck.
  */
 export async function ladeHoehenraster(gelaendeId: string): Promise<Hoehenraster | null> {
-  // OHNE HTTP-ZWISCHENSPEICHER (09.08.2026): Das Raster ist zweistellig
-  // megabytegross und aendert sich, wenn ein Gelaende neu importiert und unter
-  // derselben Id eingesetzt wird — aus dem Zwischenspeicher kaeme dann das alte.
-  // Ausserdem scheiterte der Browser beim Wegschreiben dieser Groesse
-  // (ERR_CACHE_WRITE_FAILURE), und das Gelaende fiel danach STILL auf das grobe
-  // Kachelgitter zurueck. Ein Fehlschlag wird jetzt gemeldet, nicht verschwiegen.
-  try {
-    const antwort = await fetch(`/api/gelaende/${encodeURIComponent(gelaendeId)}/hoehen.bin`, {
-      credentials: 'same-origin',
-      cache: 'no-store',
-    });
+  // NACHFRAGEN STATT NEU HOLEN (16.08.2026, vorher `cache: 'no-store'`):
+  //
+  // Der alte Weg holte 10 MB bei JEDEM Oeffnen. Der Grund dafuer war richtig
+  // und bleibt gueltig — wird ein Gelaende unter derselben Id neu eingesetzt,
+  // waere ein alter Zwischenspeicher ein FALSCHES Hoehenmodell, und niemand
+  // merkt es. `no-cache` erfuellt beides: der Browser darf speichern, muss aber
+  // vor jeder Benutzung nachfragen; der Server antwortet bei unveraendertem
+  // Raster mit 304 und schickt keine Nutzdaten.
+  //
+  // Der zweite alte Grund war ein Browser-Fehlschlag beim Wegschreiben dieser
+  // Groesse (ERR_CACHE_WRITE_FAILURE) — damals fiel das Gelaende danach STILL
+  // auf das grobe Kachelgitter zurueck. Deshalb hier ein ausdruecklicher
+  // zweiter Versuch ohne Zwischenspeicher, bevor aufgegeben wird. Still ist
+  // dieser Weg nie: jeder Fehlschlag steht in der Konsole.
+  const url = `/api/gelaende/${encodeURIComponent(gelaendeId)}/hoehen.bin`;
+  const versuch = async (modus: RequestCache): Promise<Hoehenraster | null> => {
+    const antwort = await fetch(url, { credentials: 'same-origin', cache: modus });
     if (!antwort.ok) {
       console.warn(`[Gelaende] Hoehenraster nicht geladen (HTTP ${antwort.status}) — es wird das grobe Kachelgitter benutzt.`);
       return null;
     }
     return Hoehenraster.ausPuffer(await antwort.arrayBuffer());
+  };
+  try {
+    return await versuch('no-cache');
   } catch (e) {
-    console.warn(`[Gelaende] Hoehenraster nicht geladen (${(e as Error).message}) — es wird das grobe Kachelgitter benutzt.`);
-    return null;
+    console.warn(`[Gelaende] Hoehenraster ueber den Zwischenspeicher fehlgeschlagen (${(e as Error).message}) — zweiter Versuch ohne.`);
+    try {
+      return await versuch('no-store');
+    } catch (e2) {
+      console.warn(`[Gelaende] Hoehenraster nicht geladen (${(e2 as Error).message}) — es wird das grobe Kachelgitter benutzt.`);
+      return null;
+    }
   }
 }
 

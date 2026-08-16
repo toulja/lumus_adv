@@ -41,7 +41,68 @@ router.get('/', anmeldungNoetig, (_req, res) => {
   res.json(gelaendeStore.liste());
 });
 
+/**
+ * Ein Gelaende ausliefern.
+ *
+ * SCHNELLER WEG (seit 16.08.2026): Die Datei IST bereits die gewuenschte
+ * Antwort — sie wird gestreamt, nicht geparst. Vorher las die Route 14 MB,
+ * baute daraus ein Objekt, haengte `bbox4326` an und serialisierte alles
+ * zurueck: 459 ms je Aufruf, davon der groesste Teil blockierte den
+ * einthreadigen Server fuer alle anderen.
+ *
+ * Liegt eine vorkomprimierte `.gz` daneben und versteht der Browser gzip, geht
+ * sie raus — 14,3 MB werden zu rund 2 MB, ohne dass jemand dafuer rechnet.
+ * Die Frische wird ueber die Aenderungszeit geprueft: eine `.gz`, die aelter
+ * ist als die Quelle (etwa nach `POST /:id/dachfarben` mit altem Code), wird
+ * nicht benutzt.
+ *
+ * ETag statt langer Verfallszeit: Gelaende sind fast unveraenderlich, aber
+ * eben nur fast (die Dachfarben-Messung schreibt sie neu). Mit ETag kostet das
+ * zweite Oeffnen desselben Gelaendes einen 304 statt 14 MB — und eine
+ * Aenderung kommt trotzdem sofort an.
+ */
 router.get('/:id', anmeldungNoetig, (req, res) => {
+  if (!GELAENDE_ID.test(req.params.id)) {
+    res.status(400).json({ fehler: 'Ungueltiger Gelaende-Bezeichner.' });
+    return;
+  }
+  const kopf = gelaendeStore.kopf(req.params.id);
+  const datei = gelaendeStore.datei(req.params.id);
+  if (kopf?.hatBbox4326 && fs.existsSync(datei)) {
+    const gz = gelaendeStore.gzDatei(req.params.id);
+    const roh = fs.statSync(datei);
+    let gzFrisch = false;
+    try {
+      gzFrisch = fs.statSync(gz).mtimeMs >= roh.mtimeMs;
+    } catch {
+      gzFrisch = false;
+    }
+    res.type('application/json');
+    res.setHeader('Cache-Control', 'private, no-cache');
+    if (gzFrisch && /\bgzip\b/.test(req.headers['accept-encoding'] ?? '')) {
+      res.setHeader('Content-Encoding', 'gzip');
+      // Der ETag muss an der QUELLE haengen, nicht an der .gz — sonst haetten
+      // komprimierte und unkomprimierte Auslieferung verschiedene Marken fuer
+      // denselben Inhalt.
+      res.setHeader('ETag', `W/"${roh.size}-${Math.round(roh.mtimeMs)}"`);
+      if (req.headers['if-none-match'] === res.getHeader('ETag')) {
+        res.status(304).end();
+        return;
+      }
+      fs.createReadStream(gz).pipe(res);
+      return;
+    }
+    res.setHeader('ETag', `W/"${roh.size}-${Math.round(roh.mtimeMs)}"`);
+    if (req.headers['if-none-match'] === res.getHeader('ETag')) {
+      res.status(304).end();
+      return;
+    }
+    fs.createReadStream(datei).pipe(res);
+    return;
+  }
+
+  // Rueckfallweg fuer Gelaende aus Importen vor dem 16.08.2026: ihnen fehlt
+  // `bbox4326` in der Datei, also muss sie hier entstehen.
   const g = gelaendeStore.laden(req.params.id);
   if (!g) {
     res.status(404).json({ fehler: 'Gelaende nicht gefunden.' });
@@ -105,9 +166,19 @@ router.get('/:id/hoehen.bin', anmeldungNoetig, (req, res) => {
     res.status(404).json({ fehler: 'Fuer dieses Gelaende gibt es kein Hoehenraster (Import vor dem 09.08.2026).' });
     return;
   }
-  res.setHeader('Cache-Control', 'private, max-age=604800, immutable');
+  // NACHPRUEFEN STATT BLIND VERTRAUEN (16.08.2026): Frueher stand hier
+  // `immutable` mit einer Woche Gueltigkeit — und der Browser holte das Raster
+  // trotzdem jedes Mal neu, weil die Gegenseite `cache: 'no-store'` setzte. Der
+  // Grund dort war richtig: wird ein Gelaende unter derselben Id neu
+  // eingesetzt, waere ein alter Zwischenspeicher ein FALSCHES Hoehenmodell,
+  // und das faellt niemandem auf. `no-cache` loest beides: der Browser fragt
+  // kurz nach, der Server antwortet bei unveraendertem Raster mit 304 (ein
+  // paar Byte statt 10 MB) und bei geaendertem mit den neuen Daten.
+  // `res.sendFile` setzt ETag und Last-Modified und beantwortet bedingte
+  // Anfragen von allein.
+  res.setHeader('Cache-Control', 'private, no-cache');
   res.type('application/octet-stream');
-  fs.createReadStream(p).pipe(res);
+  res.sendFile(p);
 });
 
 /** Kartenkachel fuer die 2D-Ansicht (Liegenschaftskarte / Topo-Kaskade). */
